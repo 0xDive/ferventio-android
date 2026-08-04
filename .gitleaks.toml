@@ -2,3 +2,22 @@ title = "Ferventio secret scanning"
 
 [extend]
 useDefault = true
+
+# Twitch Client IDs are public identifiers. This exception applies only to the
+# explicitly named web client ID constant in the pinned-chat GQL client.
+[[rules]]
+id = "twitch-api-token"
+
+  [[rules.allowlists]]
+  description = "Public Twitch web Client ID"
+  condition = "AND"
+  regexTarget = "line"
+  paths = [
+    '''^app/src/main/kotlin/io/ferventio/app/twitch/TwitchPinnedChatGqlClient\.kt$'''
+  ]
+  regexes = [
+    '''kt$'''
+  ]
+  regexes = [
+    '''TWITCH_WEB_CLIENT_ID\s*='''
+  ]
