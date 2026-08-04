@@ -30,6 +30,9 @@ jobs:
 
       - uses: android-actions/setup-android@v4
 
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "platform-tools"
+
       - uses: gradle/actions/setup-gradle@v6.2.0
 
       - name: Enable KVM

@@ -64,7 +64,7 @@ val releaseSigningConfigured = listOf(
 
 android {
     namespace = "io.ferventio.app"
-    compileSdk = 37
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "io.ferventio.app"
@@ -325,9 +325,19 @@ tasks.configureEach {
 tasks.register<VerifyRuntimeClasspathTask>("verifyPlayCrashReportingDependency") {
     group = "verification"
     description = "Fails if the Play release runtime does not contain Firebase Crashlytics."
-    runtimeClasspath.from(
-        providers.provider { configurations.getByName("playReleaseRuntimeClasspath") },
-    )
+    resolvedModules.set(providers.provider {
+        configurations.getByName("playReleaseRuntimeClasspath")
+            .incoming
+            .resolutionResult
+            .allComponents
+            .mapNotNull { component ->
+                component.id as? ModuleComponentIdentifier
+            }
+            .map { identifier ->
+                "${identifier.module}-${identifier.version}"
+            }
+            .toSet()
+    })
     requiredArtifactPrefixes.set(setOf("firebase-crashlytics-"))
     forbiddenArtifactPrefixes.set(emptySet())
 }
@@ -335,9 +345,19 @@ tasks.register<VerifyRuntimeClasspathTask>("verifyPlayCrashReportingDependency")
 tasks.register<VerifyRuntimeClasspathTask>("verifyFossNoGooglePushDependencies") {
     group = "verification"
     description = "Fails if the FOSS runtime contains Firebase or Google Play Services artifacts."
-    runtimeClasspath.from(
-        providers.provider { configurations.getByName("fossReleaseRuntimeClasspath") },
-    )
+    resolvedModules.set(providers.provider {
+        configurations.getByName("fossReleaseRuntimeClasspath")
+            .incoming
+            .resolutionResult
+            .allComponents
+            .mapNotNull { component ->
+                component.id as? ModuleComponentIdentifier
+            }
+            .map { identifier ->
+                "${identifier.module}-${identifier.version}"
+            }
+            .toSet()
+    })
     requiredArtifactPrefixes.set(emptySet())
     forbiddenArtifactPrefixes.set(setOf("firebase-", "play-services-"))
 }

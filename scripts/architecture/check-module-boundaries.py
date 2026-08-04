@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import re
 import sys
 import tomllib
@@ -112,11 +113,15 @@ def main() -> int:
                 "when splitting Kotlin source files"
             )
 
-    gradle_files = [
-        *root.rglob("*.gradle.kts"),
-        *root.rglob("*.gradle"),
-    ]
-    for path in sorted(set(gradle_files)):
+    gradle_files = {
+        path
+        for pattern in ("*.gradle.kts", "*.gradle")
+        for path in root.rglob(pattern)
+        if path.is_file()
+        and ".gradle" not in path.relative_to(root).parts
+        and "build" not in path.relative_to(root).parts
+    }
+    for path in sorted(gradle_files):
         text = path.read_text(encoding="utf-8")
         for pattern in TOOLCHAIN_17_PATTERNS:
             if pattern in text:
@@ -135,31 +140,49 @@ def main() -> int:
         if line not in criteria:
             errors.append(f"gradle/gradle-daemon-jvm.properties is missing {line}")
 
-    # The Gradle distributions endpoint does not publish a wrapper JAR for every
-    # historical release. Bootstrap the verified JAR from Gradle's official
-    # source repository instead, while keeping the published SHA-256 check.
-    wrapper_scripts = (root / "gradlew", root / "gradlew.bat")
-    broken_wrapper_url = "services.gradle.org/distributions/gradle-9.3.1-wrapper.jar"
-    expected_wrapper_url = (
-        "raw.githubusercontent.com/gradle/gradle/v9.3.1/"
-        "gradle/wrapper/gradle-wrapper.jar"
+    wrapper_properties_path = root / "gradle/wrapper/gradle-wrapper.properties"
+    wrapper_jar_path = root / "gradle/wrapper/gradle-wrapper.jar"
+
+    expected_distribution_url = (
+        "distributionUrl=https\\://services.gradle.org/distributions/"
+        "gradle-9.6.1-bin.zip"
+    )
+    expected_distribution_sha256 = (
+        "distributionSha256Sum="
+        "9c0f7faeeb306cb14e4279a3e084ca6b596894089a0638e68a07c945a32c9e14"
     )
     expected_wrapper_sha256 = (
-        "b3a875ddc1f044746e1b1a55f645584505f4a10438c1afea9f15e92a7c42ec13"
+        "497c8c2a7e5031f6aa847f88104aa80a93532ec32ee17bdb8d1d2f67a194a9c7"
     )
-    for wrapper_script in wrapper_scripts:
-        wrapper_text = wrapper_script.read_text(encoding="utf-8")
-        if broken_wrapper_url in wrapper_text:
+
+    if not wrapper_properties_path.is_file():
+        errors.append("gradle/wrapper/gradle-wrapper.properties is missing")
+    else:
+        wrapper_properties = wrapper_properties_path.read_text(encoding="utf-8")
+        for expected_line in (
+            expected_distribution_url,
+            expected_distribution_sha256,
+        ):
+            if expected_line not in wrapper_properties:
+                errors.append(
+                    "gradle/wrapper/gradle-wrapper.properties is missing "
+                    f"{expected_line}"
+                )
+
+    if not wrapper_jar_path.is_file():
+        errors.append(
+            "gradle/wrapper/gradle-wrapper.jar is missing; "
+            "the verified Wrapper JAR must be committed"
+        )
+    else:
+        actual_wrapper_sha256 = hashlib.sha256(
+            wrapper_jar_path.read_bytes()
+        ).hexdigest()
+        if actual_wrapper_sha256 != expected_wrapper_sha256:
             errors.append(
-                f"{rel(wrapper_script, root)} uses the nonexistent Gradle 9.3.1 wrapper JAR URL"
-            )
-        if expected_wrapper_url not in wrapper_text:
-            errors.append(
-                f"{rel(wrapper_script, root)} does not use Gradle's official v9.3.1 wrapper JAR source"
-            )
-        if expected_wrapper_sha256 not in wrapper_text:
-            errors.append(
-                f"{rel(wrapper_script, root)} is missing the published Gradle 9.3.1 wrapper JAR checksum"
+                "gradle/wrapper/gradle-wrapper.jar checksum mismatch: "
+                f"expected {expected_wrapper_sha256}, "
+                f"found {actual_wrapper_sha256}"
             )
 
     catalog_path = root / "gradle/libs.versions.toml"

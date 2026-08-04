@@ -29,7 +29,7 @@ Both distributions use the same application ID. Sign them with the same app-sign
 Requirements:
 
 - Eclipse Temurin JDK 25
-- Android SDK Platform 37
+- Android SDK Platform 36
 - Git
 
 ```bash
