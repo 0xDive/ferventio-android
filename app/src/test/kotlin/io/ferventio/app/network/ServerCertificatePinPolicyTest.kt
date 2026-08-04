@@ -89,6 +89,13 @@ class ServerCertificatePinPolicyTest {
     }
 
     @Test
+    fun rejectsPinWithoutExplicitHost() {
+        assertThrows(IllegalArgumentException::class.java) {
+            ServerCertificatePinPolicy.parse(PIN_A)
+        }
+    }
+
+    @Test
     fun rejectsWildcardsSha1AndMalformedSha256Pins() {
         assertThrows(IllegalArgumentException::class.java) {
             ServerCertificatePinPolicy.parse("*.example.com=$PIN_A")

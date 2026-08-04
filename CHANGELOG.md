@@ -4,6 +4,13 @@ Notable user-facing changes are recorded here. Ferventio follows semantic versio
 
 ## [Unreleased]
 
+## [0.0.2] - 2026-08-04
+
+Certificate pinning hotfix.
+
+- Fixed release certificate pin configuration that prevented Ferventio web authentication.
+
+
 ## [0.0.1] - 2026-08-03
 
 Initial public beta.
@@ -15,5 +22,6 @@ Initial public beta.
 - FOSS WebSocket and Play/FCM distributions
 - Light, dark and AMOLED themes
 
-[Unreleased]: https://github.com/0xDive/ferventio-android/compare/android-v0.0.1...HEAD
+[Unreleased]: https://github.com/0xDive/ferventio-android/compare/android-v0.0.2...HEAD
+[0.0.2]: https://github.com/0xDive/ferventio-android/compare/android-v0.0.1...android-v0.0.2
 [0.0.1]: https://github.com/0xDive/ferventio-android/releases/tag/android-v0.0.1
