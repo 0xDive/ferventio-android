@@ -4,6 +4,15 @@ Notable user-facing changes are recorded here. Ferventio follows semantic versio
 
 ## [Unreleased]
 
+## [0.0.3] - 2026-08-04
+
+- Добавлены переводы интерфейса.
+- Исправлен переход к старым упоминаниям.
+- Улучшена работа клавиатуры в настройках.
+- Добавлены последние сообщения при открытии чата.
+
+## [Unreleased]
+
 ## [0.0.2] - 2026-08-04
 
 Certificate pinning hotfix.
@@ -23,5 +32,6 @@ Initial public beta.
 - Light, dark and AMOLED themes
 
 [Unreleased]: https://github.com/0xDive/ferventio-android/compare/android-v0.0.2...HEAD
+[0.0.3]: https://github.com/0xDive/ferventio-android/compare/android-v0.0.2...android-v0.0.3
 [0.0.2]: https://github.com/0xDive/ferventio-android/compare/android-v0.0.1...android-v0.0.2
 [0.0.1]: https://github.com/0xDive/ferventio-android/releases/tag/android-v0.0.1
