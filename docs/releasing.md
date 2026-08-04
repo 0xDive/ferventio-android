@@ -48,7 +48,6 @@ Back up the keystore, alias, passwords and certificate SHA-256 in at least two e
 Before building, set and validate:
 
 - production backend URL
-- current and backup certificate pins
 - privacy operator, contact and HTTPS policy URL
 - Play Firebase public configuration
 - release signing properties
@@ -69,7 +68,6 @@ Use [`gradle.properties.example`](../gradle.properties.example) as the property 
   :app:verifyFossNoGooglePushDependencies \
   :app:verifyPlayCrashReportingDependency \
   :app:verifyPrivacyPolicyConfiguration \
-  :app:verifyFerventioServerCertificatePins \
   --no-configuration-cache \
   --stacktrace
 

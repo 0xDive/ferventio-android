@@ -34,9 +34,6 @@ class FerventioBackendClient {
     private val json = Json { ignoreUnknownKeys = true }
     private val client: HttpClient by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         HttpClient(OkHttp) {
-            engine {
-                FerventioServerTransportSecurity.configure(this)
-            }
             install(HttpTimeout) {
                 requestTimeoutMillis = 20_000
                 connectTimeoutMillis = 15_000
@@ -374,7 +371,7 @@ class FerventioBackendClient {
     }
 
     private fun String.normalized(): String =
-        FerventioServerTransportSecurity.validateServerUrl(this).baseUrl
+        FerventioServerUrlPolicy.validate(this).baseUrl
 
     private companion object {
         const val INSTALLATION_ID_HEADER = "X-Installation-ID"

@@ -1,6 +1,5 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import io.ferventio.build.ExportOsvDependencyInventoryTask
-import io.ferventio.build.VerifyFerventioServerCertificatePinsTask
 import io.ferventio.build.VerifyPlayCrashReportingConfigurationTask
 import io.ferventio.build.VerifyPrivacyPolicyConfigurationTask
 import io.ferventio.build.VerifyRuntimeClasspathTask
@@ -22,10 +21,6 @@ val ferventioServerUrl = providers
     .gradleProperty("FERVENTIO_SERVER_URL")
     .orElse(providers.gradleProperty("FERVENTIO_PUSH_SERVER_URL"))
     .orElse(productionFerventioServerUrl)
-    .get()
-val ferventioServerCertificatePins = providers
-    .gradleProperty("FERVENTIO_SERVER_CERTIFICATE_PINS")
-    .orElse("")
     .get()
 val firebaseApplicationId = providers.gradleProperty("FERVENTIO_FIREBASE_APPLICATION_ID").orElse("").get()
 val firebaseProjectId = providers.gradleProperty("FERVENTIO_FIREBASE_PROJECT_ID").orElse("").get()
@@ -87,12 +82,6 @@ android {
             "DEFAULT_PUSH_SERVER_URL",
             ferventioServerUrl.asBuildConfigString(),
         )
-        buildConfigField(
-            "String",
-            "FERVENTIO_SERVER_CERTIFICATE_PINS",
-            ferventioServerCertificatePins.asBuildConfigString(),
-        )
-        buildConfigField("boolean", "REQUIRE_FERVENTIO_SERVER_PINNING", "true")
         buildConfigField("boolean", "PERFORMANCE_TESTING", "false")
         buildConfigField("String", "PRIVACY_OPERATOR_NAME", privacyOperatorName.asBuildConfigString())
         buildConfigField("String", "PRIVACY_CONTACT", configuredPrivacyContact.asBuildConfigString())
@@ -154,7 +143,6 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
-            buildConfigField("boolean", "REQUIRE_FERVENTIO_SERVER_PINNING", "false")
         }
         create("benchmark") {
             initWith(getByName("release"))
@@ -302,18 +290,8 @@ val verifyPrivacyPolicyConfiguration =
         privacyPolicyUrl.set(configuredPrivacyPolicyUrl)
     }
 
-val verifyFerventioServerCertificatePins =
-    tasks.register<VerifyFerventioServerCertificatePinsTask>("verifyFerventioServerCertificatePins") {
-        group = "verification"
-        description = "Validates build-time SPKI pins for the default Ferventio server."
-        configuredDefaultPushServerUrl.set(ferventioServerUrl)
-        configuredCertificatePins.set(ferventioServerCertificatePins)
-    }
 
 tasks.configureEach {
-    if (name.matches(Regex("pre(?:Foss|Play)(?:Release|Benchmark|BenchmarkRelease|NonMinifiedRelease)Build"))) {
-        dependsOn(verifyFerventioServerCertificatePins)
-    }
     if (name in setOf("preFossReleaseBuild", "prePlayReleaseBuild")) {
         dependsOn(verifyPrivacyPolicyConfiguration)
     }

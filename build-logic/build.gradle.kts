@@ -36,7 +36,6 @@ gradlePlugin {
 val requiredVerificationClasses = listOf(
     "FerventioVerificationPlugin",
     "ExportOsvDependencyInventoryTask",
-    "VerifyFerventioServerCertificatePinsTask",
     "VerifyPlayCrashReportingConfigurationTask",
     "VerifyPrivacyPolicyConfigurationTask",
     "VerifyRuntimeClasspathTask",
