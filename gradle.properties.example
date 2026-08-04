@@ -4,8 +4,8 @@
 # Optional build-time override for development/staging. Production already embeds
 # https://ferventio.godive.dev and never asks the end user for a server address.
 FERVENTIO_SERVER_URL=https://ferventio.godive.dev
-# Exact host-to-SPKI entries separated by semicolons. Keep a current and backup pin.
-FERVENTIO_SERVER_CERTIFICATE_PINS=ferventio.godive.dev=sha256/PRIMARY_BASE64;ferventio.godive.dev=sha256/BACKUP_BASE64
+# SPKI pins separated by semicolons. The host is derived from FERVENTIO_SERVER_URL. Keep a current and backup pin.
+FERVENTIO_SERVER_CERTIFICATE_PINS=sha256/PRIMARY_BASE64;sha256/BACKUP_BASE64
 
 # Required only for the play flavor. Values are taken from your Firebase Android app settings.
 FERVENTIO_FIREBASE_APPLICATION_ID=1:1234567890:android:abcdef0123456789
