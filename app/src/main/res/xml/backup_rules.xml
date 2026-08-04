@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <exclude domain="sharedpref" path="ferventio_token.xml" />
+    <exclude domain="sharedpref" path="ferventio_settings.xml" />
+    <exclude domain="sharedpref" path="ferventio_device_credentials.xml" />
+    <exclude domain="file" path="foss-crash-reports" />
+</full-backup-content>

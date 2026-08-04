@@ -1,0 +1,73 @@
+name: Android CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - uses: android-actions/setup-android@v4
+
+      - name: Install Android SDK packages
+        run: sdkmanager "platforms;android-37" "platform-tools"
+
+      - uses: gradle/actions/setup-gradle@v6.2.0
+        with:
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
+
+      - name: Bootstrap and verify Gradle Wrapper
+        run: |
+          ./gradlew --version
+          echo "b3a875ddc1f044746e1b1a55f645584505f4a10438c1afea9f15e92a7c42ec13  gradle/wrapper/gradle-wrapper.jar" | sha256sum --check --strict
+
+      - name: Repository secret scan
+        run: |
+          python3 scripts/security/check-repository-secrets.py --root .
+          python3 scripts/security/test-check-repository-secrets.py
+
+      - name: Architecture boundaries
+        run: python3 scripts/architecture/check-module-boundaries.py --root .
+
+      - name: Compile isolated build logic
+        run: ./gradlew -p build-logic clean check --no-configuration-cache --stacktrace
+
+      - name: Git history secret scan
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Unit tests, lint, flavor isolation and debug builds
+        run: |
+          ./gradlew \
+            :core:domain:testDebugUnitTest \
+            :core:database:testDebugUnitTest \
+            :core:domain:lintDebug \
+            :core:database:lintDebug \
+            :app:testFossDebugUnitTest \
+            :app:testPlayDebugUnitTest \
+            :app:lintFossDebug \
+            :app:lintPlayDebug \
+            :app:verifyFossNoGooglePushDependencies \
+            :app:assembleFossDebug \
+            :app:assemblePlayDebug \
+            --no-configuration-cache \
+            --stacktrace

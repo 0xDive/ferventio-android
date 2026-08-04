@@ -1,0 +1,33 @@
+# Copy the needed values into ~/.gradle/gradle.properties or the local gradle.properties.
+# Do not commit production secrets. The Android client uses public Firebase configuration only.
+
+# Optional build-time override for development/staging. Production already embeds
+# https://ferventio.godive.dev and never asks the end user for a server address.
+FERVENTIO_SERVER_URL=https://ferventio.godive.dev
+# Exact host-to-SPKI entries separated by semicolons. Keep a current and backup pin.
+FERVENTIO_SERVER_CERTIFICATE_PINS=ferventio.godive.dev=sha256/PRIMARY_BASE64;ferventio.godive.dev=sha256/BACKUP_BASE64
+
+# Required only for the play flavor. Values are taken from your Firebase Android app settings.
+FERVENTIO_FIREBASE_APPLICATION_ID=1:1234567890:android:abcdef0123456789
+FERVENTIO_FIREBASE_PROJECT_ID=ferventio-production
+FERVENTIO_FIREBASE_API_KEY=AIza...
+FERVENTIO_FIREBASE_SENDER_ID=1234567890
+# Generated uniquely for every Play release build. Prefer scripts/build/build-release.sh instead of storing it here.
+# FERVENTIO_CRASHLYTICS_MAPPING_ID=generated-per-release
+
+
+# Required for release privacy/about metadata.
+FERVENTIO_PRIVACY_OPERATOR_NAME=Example operator
+FERVENTIO_PRIVACY_CONTACT=privacy@example.com
+FERVENTIO_PRIVACY_POLICY_URL=https://example.com/ferventio/privacy
+FERVENTIO_APP_WEBSITE_URL=https://ferventio.godive.dev
+FERVENTIO_APP_GITHUB_URL=https://github.com/0xDive/ferventio-android
+FERVENTIO_APP_TELEGRAM_CHANNEL_URL=https://t.me/ferventio
+FERVENTIO_APP_TELEGRAM_CHAT_URL=https://t.me/ferventio_chat
+FERVENTIO_APP_TRANSLATIONS_URL=https://crowdin.com/project/ferventio
+
+# Optional release signing. Use the same keystore for play and foss so users can switch channels.
+FERVENTIO_KEYSTORE_FILE=/absolute/path/to/ferventio-release.jks
+FERVENTIO_KEYSTORE_PASSWORD=change-me
+FERVENTIO_KEY_ALIAS=ferventio
+FERVENTIO_KEY_PASSWORD=change-me

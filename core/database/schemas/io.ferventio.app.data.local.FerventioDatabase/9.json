@@ -1,0 +1,869 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 9,
+    "identityHash": "c9bd8a5b56bd3cf74781f77cb5a7bccd",
+    "entities": [
+      {
+        "tableName": "channels",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `login` TEXT NOT NULL, `display_name` TEXT NOT NULL, `profile_image_url` TEXT, `updated_at_millis` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "login",
+            "columnName": "login",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayName",
+            "columnName": "display_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "profileImageUrl",
+            "columnName": "profile_image_url",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "updatedAtMillis",
+            "columnName": "updated_at_millis",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_channels_login",
+            "unique": true,
+            "columnNames": [
+              "login"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_channels_login` ON `${TABLE_NAME}` (`login`)"
+          }
+        ]
+      },
+      {
+        "tableName": "users",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `login` TEXT NOT NULL, `display_name` TEXT NOT NULL, `color` TEXT, `profile_image_url` TEXT, `updated_at_millis` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "login",
+            "columnName": "login",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayName",
+            "columnName": "display_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "color",
+            "columnName": "color",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "profileImageUrl",
+            "columnName": "profile_image_url",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "updatedAtMillis",
+            "columnName": "updated_at_millis",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_users_login",
+            "unique": false,
+            "columnNames": [
+              "login"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_users_login` ON `${TABLE_NAME}` (`login`)"
+          }
+        ]
+      },
+      {
+        "tableName": "chat_messages",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `eventsub_message_id` TEXT, `channel_id` TEXT NOT NULL, `channel_login` TEXT NOT NULL, `author_id` TEXT NOT NULL, `author_login` TEXT NOT NULL, `author_display_name` TEXT NOT NULL, `author_color` TEXT, `text` TEXT NOT NULL, `timestamp` TEXT NOT NULL, `timestamp_millis` INTEGER NOT NULL, `message_type` TEXT NOT NULL, `is_deleted` INTEGER NOT NULL, `is_system` INTEGER NOT NULL, `is_action` INTEGER NOT NULL, `is_first_message` INTEGER NOT NULL, `is_returning_chatter` INTEGER NOT NULL, `reply_parent_message_id` TEXT, `reply_parent_message_body` TEXT, `reply_parent_user_id` TEXT, `reply_parent_user_login` TEXT, `reply_parent_user_name` TEXT, `reply_thread_message_id` TEXT, `reply_thread_user_id` TEXT, `reply_thread_user_login` TEXT, `reply_thread_user_name` TEXT, `moderation_action` TEXT, `moderation_actor_user_id` TEXT, `moderation_reason` TEXT, `moderation_at_millis` INTEGER, `notice_json` TEXT, `reward_id` TEXT, `reward_title` TEXT, `reward_cost` INTEGER, PRIMARY KEY(`id`), FOREIGN KEY(`channel_id`) REFERENCES `channels`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "eventSubMessageId",
+            "columnName": "eventsub_message_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "channelId",
+            "columnName": "channel_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "channelLogin",
+            "columnName": "channel_login",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "authorId",
+            "columnName": "author_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "authorLogin",
+            "columnName": "author_login",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "authorDisplayName",
+            "columnName": "author_display_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "authorColor",
+            "columnName": "author_color",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "text",
+            "columnName": "text",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestampMillis",
+            "columnName": "timestamp_millis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "messageType",
+            "columnName": "message_type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isDeleted",
+            "columnName": "is_deleted",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isSystem",
+            "columnName": "is_system",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isAction",
+            "columnName": "is_action",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isFirstMessage",
+            "columnName": "is_first_message",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isReturningChatter",
+            "columnName": "is_returning_chatter",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "replyParentMessageId",
+            "columnName": "reply_parent_message_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "replyParentMessageBody",
+            "columnName": "reply_parent_message_body",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "replyParentUserId",
+            "columnName": "reply_parent_user_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "replyParentUserLogin",
+            "columnName": "reply_parent_user_login",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "replyParentUserName",
+            "columnName": "reply_parent_user_name",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "replyThreadMessageId",
+            "columnName": "reply_thread_message_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "replyThreadUserId",
+            "columnName": "reply_thread_user_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "replyThreadUserLogin",
+            "columnName": "reply_thread_user_login",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "replyThreadUserName",
+            "columnName": "reply_thread_user_name",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "moderationAction",
+            "columnName": "moderation_action",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "moderationActorUserId",
+            "columnName": "moderation_actor_user_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "moderationReason",
+            "columnName": "moderation_reason",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "moderationAtMillis",
+            "columnName": "moderation_at_millis",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "noticeJson",
+            "columnName": "notice_json",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "rewardId",
+            "columnName": "reward_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "rewardTitle",
+            "columnName": "reward_title",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "rewardCost",
+            "columnName": "reward_cost",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_chat_messages_channel_id_timestamp_millis",
+            "unique": false,
+            "columnNames": [
+              "channel_id",
+              "timestamp_millis"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_chat_messages_channel_id_timestamp_millis` ON `${TABLE_NAME}` (`channel_id`, `timestamp_millis`)"
+          },
+          {
+            "name": "index_chat_messages_channel_id_timestamp_millis_id",
+            "unique": false,
+            "columnNames": [
+              "channel_id",
+              "timestamp_millis",
+              "id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_chat_messages_channel_id_timestamp_millis_id` ON `${TABLE_NAME}` (`channel_id`, `timestamp_millis`, `id`)"
+          },
+          {
+            "name": "index_chat_messages_channel_id_author_id_timestamp_millis",
+            "unique": false,
+            "columnNames": [
+              "channel_id",
+              "author_id",
+              "timestamp_millis"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_chat_messages_channel_id_author_id_timestamp_millis` ON `${TABLE_NAME}` (`channel_id`, `author_id`, `timestamp_millis`)"
+          },
+          {
+            "name": "index_chat_messages_channel_login_timestamp_millis",
+            "unique": false,
+            "columnNames": [
+              "channel_login",
+              "timestamp_millis"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_chat_messages_channel_login_timestamp_millis` ON `${TABLE_NAME}` (`channel_login`, `timestamp_millis`)"
+          },
+          {
+            "name": "index_chat_messages_author_id_timestamp_millis",
+            "unique": false,
+            "columnNames": [
+              "author_id",
+              "timestamp_millis"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_chat_messages_author_id_timestamp_millis` ON `${TABLE_NAME}` (`author_id`, `timestamp_millis`)"
+          },
+          {
+            "name": "index_chat_messages_author_login_timestamp_millis",
+            "unique": false,
+            "columnNames": [
+              "author_login",
+              "timestamp_millis"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_chat_messages_author_login_timestamp_millis` ON `${TABLE_NAME}` (`author_login`, `timestamp_millis`)"
+          },
+          {
+            "name": "index_chat_messages_message_type_timestamp_millis",
+            "unique": false,
+            "columnNames": [
+              "message_type",
+              "timestamp_millis"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_chat_messages_message_type_timestamp_millis` ON `${TABLE_NAME}` (`message_type`, `timestamp_millis`)"
+          },
+          {
+            "name": "index_chat_messages_is_deleted_timestamp_millis",
+            "unique": false,
+            "columnNames": [
+              "is_deleted",
+              "timestamp_millis"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_chat_messages_is_deleted_timestamp_millis` ON `${TABLE_NAME}` (`is_deleted`, `timestamp_millis`)"
+          },
+          {
+            "name": "index_chat_messages_moderation_action_timestamp_millis",
+            "unique": false,
+            "columnNames": [
+              "moderation_action",
+              "timestamp_millis"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_chat_messages_moderation_action_timestamp_millis` ON `${TABLE_NAME}` (`moderation_action`, `timestamp_millis`)"
+          },
+          {
+            "name": "index_chat_messages_timestamp_millis",
+            "unique": false,
+            "columnNames": [
+              "timestamp_millis"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_chat_messages_timestamp_millis` ON `${TABLE_NAME}` (`timestamp_millis`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "channels",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "channel_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "chat_badges",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`message_id` TEXT NOT NULL, `position` INTEGER NOT NULL, `set_id` TEXT NOT NULL, `badge_id` TEXT NOT NULL, `info` TEXT, PRIMARY KEY(`message_id`, `position`), FOREIGN KEY(`message_id`) REFERENCES `chat_messages`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "messageId",
+            "columnName": "message_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "position",
+            "columnName": "position",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "setId",
+            "columnName": "set_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "badgeId",
+            "columnName": "badge_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "info",
+            "columnName": "info",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "message_id",
+            "position"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_chat_badges_message_id",
+            "unique": false,
+            "columnNames": [
+              "message_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_chat_badges_message_id` ON `${TABLE_NAME}` (`message_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "chat_messages",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "message_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "chat_fragments",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`message_id` TEXT NOT NULL, `position` INTEGER NOT NULL, `type` TEXT NOT NULL, `text` TEXT NOT NULL, `emote_id` TEXT, `emote_set_id` TEXT, `owner_id` TEXT, `formats` TEXT, `mention_user_id` TEXT, `mention_user_login` TEXT, `mention_user_name` TEXT, `cheermote_prefix` TEXT, `cheermote_bits` INTEGER, `cheermote_tier` INTEGER, `url` TEXT, `raw_type` TEXT, PRIMARY KEY(`message_id`, `position`), FOREIGN KEY(`message_id`) REFERENCES `chat_messages`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "messageId",
+            "columnName": "message_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "position",
+            "columnName": "position",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "text",
+            "columnName": "text",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "emoteId",
+            "columnName": "emote_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "emoteSetId",
+            "columnName": "emote_set_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "ownerId",
+            "columnName": "owner_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "formats",
+            "columnName": "formats",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "mentionUserId",
+            "columnName": "mention_user_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "mentionUserLogin",
+            "columnName": "mention_user_login",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "mentionUserName",
+            "columnName": "mention_user_name",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "cheermotePrefix",
+            "columnName": "cheermote_prefix",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "cheermoteBits",
+            "columnName": "cheermote_bits",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "cheermoteTier",
+            "columnName": "cheermote_tier",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "url",
+            "columnName": "url",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "rawType",
+            "columnName": "raw_type",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "message_id",
+            "position"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_chat_fragments_message_id",
+            "unique": false,
+            "columnNames": [
+              "message_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_chat_fragments_message_id` ON `${TABLE_NAME}` (`message_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "chat_messages",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "message_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "moderation_actions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `channel_id` TEXT NOT NULL, `target_user_id` TEXT, `target_user_login` TEXT, `message_id` TEXT, `action` TEXT NOT NULL, `duration_seconds` INTEGER, `reason` TEXT, `created_at_millis` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "channelId",
+            "columnName": "channel_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "targetUserId",
+            "columnName": "target_user_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "targetUserLogin",
+            "columnName": "target_user_login",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "messageId",
+            "columnName": "message_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "action",
+            "columnName": "action",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "durationSeconds",
+            "columnName": "duration_seconds",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "reason",
+            "columnName": "reason",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "createdAtMillis",
+            "columnName": "created_at_millis",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_moderation_actions_channel_id_created_at_millis",
+            "unique": false,
+            "columnNames": [
+              "channel_id",
+              "created_at_millis"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_moderation_actions_channel_id_created_at_millis` ON `${TABLE_NAME}` (`channel_id`, `created_at_millis`)"
+          },
+          {
+            "name": "index_moderation_actions_target_user_id_created_at_millis",
+            "unique": false,
+            "columnNames": [
+              "target_user_id",
+              "created_at_millis"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_moderation_actions_target_user_id_created_at_millis` ON `${TABLE_NAME}` (`target_user_id`, `created_at_millis`)"
+          }
+        ]
+      },
+      {
+        "tableName": "channel_scroll_state",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`channel_id` TEXT NOT NULL, `anchor_message_id` TEXT, `first_visible_item_index` INTEGER NOT NULL, `first_visible_item_scroll_offset` INTEGER NOT NULL, `is_at_bottom` INTEGER NOT NULL, `updated_at_millis` INTEGER NOT NULL, PRIMARY KEY(`channel_id`))",
+        "fields": [
+          {
+            "fieldPath": "channelId",
+            "columnName": "channel_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "anchorMessageId",
+            "columnName": "anchor_message_id",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "firstVisibleItemIndex",
+            "columnName": "first_visible_item_index",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "firstVisibleItemScrollOffset",
+            "columnName": "first_visible_item_scroll_offset",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isAtBottom",
+            "columnName": "is_at_bottom",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtMillis",
+            "columnName": "updated_at_millis",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "channel_id"
+          ]
+        }
+      },
+      {
+        "tableName": "attention_entries",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`message_id` TEXT NOT NULL, `channel_id` TEXT NOT NULL, `channel_login` TEXT NOT NULL, `author_id` TEXT NOT NULL, `author_login` TEXT NOT NULL, `author_display_name` TEXT NOT NULL, `text` TEXT NOT NULL, `timestamp` TEXT NOT NULL, `timestamp_millis` INTEGER NOT NULL, `is_read` INTEGER NOT NULL, `is_direct_mention` INTEGER NOT NULL, `is_highlight` INTEGER NOT NULL, `highlight_reasons_json` TEXT NOT NULL, `highlight_color_argb` INTEGER, PRIMARY KEY(`message_id`))",
+        "fields": [
+          {
+            "fieldPath": "messageId",
+            "columnName": "message_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "channelId",
+            "columnName": "channel_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "channelLogin",
+            "columnName": "channel_login",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "authorId",
+            "columnName": "author_id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "authorLogin",
+            "columnName": "author_login",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "authorDisplayName",
+            "columnName": "author_display_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "text",
+            "columnName": "text",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestampMillis",
+            "columnName": "timestamp_millis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isRead",
+            "columnName": "is_read",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isDirectMention",
+            "columnName": "is_direct_mention",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isHighlight",
+            "columnName": "is_highlight",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "highlightReasonsJson",
+            "columnName": "highlight_reasons_json",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "highlightColorArgb",
+            "columnName": "highlight_color_argb",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "message_id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_attention_entries_is_read_timestamp_millis",
+            "unique": false,
+            "columnNames": [
+              "is_read",
+              "timestamp_millis"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_attention_entries_is_read_timestamp_millis` ON `${TABLE_NAME}` (`is_read`, `timestamp_millis`)"
+          },
+          {
+            "name": "index_attention_entries_channel_id_timestamp_millis",
+            "unique": false,
+            "columnNames": [
+              "channel_id",
+              "timestamp_millis"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_attention_entries_channel_id_timestamp_millis` ON `${TABLE_NAME}` (`channel_id`, `timestamp_millis`)"
+          }
+        ]
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'c9bd8a5b56bd3cf74781f77cb5a7bccd')"
+    ]
+  }
+}

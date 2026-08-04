@@ -1,0 +1,51 @@
+# Gradle / Kotlin / Android Studio
+.gradle/
+.gradle-dist/
+.kotlin/
+.idea/
+*.iml
+local.properties
+
+# Build outputs
+build/
+**/build/
+benchmark/build/
+
+# `build` is also the package name of the convention plugin. Keep those sources tracked.
+!build-logic/src/main/kotlin/io/ferventio/build/
+!build-logic/src/main/kotlin/io/ferventio/build/*.kt
+
+# Local release configuration and credentials
+gradle-local.properties
+gragle.properties
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.key
+.signing/
+app/.signing/*
+!app/.signing/.gitignore
+!app/.signing/README.md
+
+# Firebase local files
+google-services.json
+**/google-services.json
+*service-account*.json
+*firebase-admin*.json
+*firebase-credentials*.json
+*gcp-credentials*.json
+
+# Security reports and local tools
+.security-tools/
+security-reports/
+*.sarif
+.gitleaks-report.json
+
+# Editors / OS
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Generated Baseline Profile artifacts are produced by :benchmark and CI.
+app/src/*Release/generated/
