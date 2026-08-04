@@ -33,8 +33,8 @@ val firebaseApiKey = providers.gradleProperty("FERVENTIO_FIREBASE_API_KEY").orEl
 val firebaseSenderId = providers.gradleProperty("FERVENTIO_FIREBASE_SENDER_ID").orElse("").get()
 val crashlyticsMappingId = providers.gradleProperty("FERVENTIO_CRASHLYTICS_MAPPING_ID").orElse("").get()
 val privacyOperatorName = providers.gradleProperty("FERVENTIO_PRIVACY_OPERATOR_NAME").orElse("").get()
-val privacyContact = providers.gradleProperty("FERVENTIO_PRIVACY_CONTACT").orElse("").get()
-val privacyPolicyUrl = providers.gradleProperty("FERVENTIO_PRIVACY_POLICY_URL").orElse("").get()
+val configuredPrivacyContact = providers.gradleProperty("FERVENTIO_PRIVACY_CONTACT").orElse("").get()
+val configuredPrivacyPolicyUrl = providers.gradleProperty("FERVENTIO_PRIVACY_POLICY_URL").orElse("").get()
 val showPrivacyPolicyInApp = providers
     .gradleProperty("FERVENTIO_SHOW_PRIVACY_POLICY_IN_APP")
     .orElse("false")
@@ -95,8 +95,8 @@ android {
         buildConfigField("boolean", "REQUIRE_FERVENTIO_SERVER_PINNING", "true")
         buildConfigField("boolean", "PERFORMANCE_TESTING", "false")
         buildConfigField("String", "PRIVACY_OPERATOR_NAME", privacyOperatorName.asBuildConfigString())
-        buildConfigField("String", "PRIVACY_CONTACT", privacyContact.asBuildConfigString())
-        buildConfigField("String", "PRIVACY_POLICY_URL", privacyPolicyUrl.asBuildConfigString())
+        buildConfigField("String", "PRIVACY_CONTACT", configuredPrivacyContact.asBuildConfigString())
+        buildConfigField("String", "PRIVACY_POLICY_URL", configuredPrivacyPolicyUrl.asBuildConfigString())
         buildConfigField("boolean", "SHOW_PRIVACY_POLICY_IN_APP", showPrivacyPolicyInApp.toString())
         buildConfigField("String", "APP_WEBSITE_URL", appWebsiteUrl.asBuildConfigString())
         buildConfigField("String", "APP_GITHUB_URL", appGithubUrl.asBuildConfigString())
@@ -298,8 +298,8 @@ val verifyPrivacyPolicyConfiguration =
         group = "verification"
         description = "Validates operator, contact and published HTTPS privacy-policy URL for release builds."
         operatorName.set(privacyOperatorName)
-        privacyContact.set(privacyContact)
-        privacyPolicyUrl.set(privacyPolicyUrl)
+        privacyContact.set(configuredPrivacyContact)
+        privacyPolicyUrl.set(configuredPrivacyPolicyUrl)
     }
 
 val verifyFerventioServerCertificatePins =
