@@ -1,5 +1,7 @@
 package io.ferventio.app.push
 
+import io.ferventio.app.network.FerventioServerUrlPolicy
+
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -11,7 +13,6 @@ import android.os.IBinder
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import io.ferventio.app.FerventioApplication
-import io.ferventio.app.network.FerventioServerTransportSecurity
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.websocket.WebSockets
@@ -44,9 +45,7 @@ class FerventioPushConnectionService : Service() {
     }
     private val networkSignal = Channel<Unit>(Channel.CONFLATED)
     private val client = HttpClient(OkHttp) {
-        engine {
-            FerventioServerTransportSecurity.configure(this)
-        }
+
         install(WebSockets)
         expectSuccess = false
     }
@@ -204,7 +203,7 @@ class FerventioPushConnectionService : Service() {
     }
 
     private fun socketUrl(serverUrl: String): String {
-        val normalized = FerventioServerTransportSecurity.validateServerUrl(serverUrl).baseUrl
+        val normalized = FerventioServerUrlPolicy.validate(serverUrl).baseUrl
         return when {
             normalized.startsWith("https://") -> "wss://${normalized.removePrefix("https://")}/v1/push/socket"
             normalized.startsWith("http://") -> "ws://${normalized.removePrefix("http://")}/v1/push/socket"

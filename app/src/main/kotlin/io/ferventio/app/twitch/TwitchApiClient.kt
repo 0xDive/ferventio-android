@@ -1,5 +1,7 @@
 package io.ferventio.app.twitch
 
+import io.ferventio.app.network.FerventioServerUrlPolicy
+
 import io.ferventio.app.domain.ChatBadgeAsset
 import io.ferventio.app.domain.ChatFragment
 import io.ferventio.app.domain.ChatSendResult
@@ -23,7 +25,6 @@ import io.ferventio.app.domain.ModerationChatSettings
 import io.ferventio.app.domain.ModerationUser
 import io.ferventio.app.domain.BannedChatUser
 import io.ferventio.app.domain.ThirdPartyEmoteAsset
-import io.ferventio.app.network.FerventioServerTransportSecurity
 import io.ferventio.app.domain.ChatAssetResolver
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
@@ -59,9 +60,6 @@ class TwitchApiClient : Closeable {
 
     private val client: HttpClient by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         HttpClient(OkHttp) {
-            engine {
-                FerventioServerTransportSecurity.configure(this)
-            }
             install(HttpTimeout) {
                 requestTimeoutMillis = 20_000
                 connectTimeoutMillis = 15_000
@@ -240,7 +238,7 @@ class TwitchApiClient : Closeable {
     }
 
     suspend fun getPublicGlobalChatBadges(serverUrl: String): Map<String, ChatBadgeAsset> {
-        val baseUrl = FerventioServerTransportSecurity.validateServerUrl(serverUrl).baseUrl
+        val baseUrl = FerventioServerUrlPolicy.validate(serverUrl).baseUrl
         return getPublicChatBadges("$baseUrl/v1/twitch/badges/global")
     }
 
@@ -249,7 +247,7 @@ class TwitchApiClient : Closeable {
         broadcasterId: String,
     ): Map<String, ChatBadgeAsset> {
         if (broadcasterId.isBlank()) return emptyMap()
-        val baseUrl = FerventioServerTransportSecurity.validateServerUrl(serverUrl).baseUrl
+        val baseUrl = FerventioServerUrlPolicy.validate(serverUrl).baseUrl
         return getPublicChatBadges("$baseUrl/v1/twitch/badges/$broadcasterId")
     }
 

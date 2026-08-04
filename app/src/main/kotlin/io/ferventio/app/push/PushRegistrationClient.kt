@@ -1,6 +1,7 @@
 package io.ferventio.app.push
 
-import io.ferventio.app.network.FerventioServerTransportSecurity
+import io.ferventio.app.network.FerventioServerUrlPolicy
+
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.request.delete
@@ -20,9 +21,6 @@ class PushRegistrationClient {
     private val json = Json { ignoreUnknownKeys = true }
     private val http: HttpClient by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         HttpClient(OkHttp) {
-            engine {
-                FerventioServerTransportSecurity.configure(this)
-            }
         }
     }
 
@@ -62,7 +60,7 @@ class PushRegistrationClient {
     }
 
     private fun String.normalized(): String =
-        FerventioServerTransportSecurity.validateServerUrl(this).baseUrl
+        FerventioServerUrlPolicy.validate(this).baseUrl
 
     private companion object {
         const val DEVICE_SECRET_HEADER = "X-Device-Secret"

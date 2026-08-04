@@ -1,5 +1,7 @@
 package io.ferventio.app.application
 
+import io.ferventio.app.network.FerventioServerUrlPolicy
+
 import io.ferventio.app.domain.*
 import io.ferventio.app.BuildConfig
 import io.ferventio.app.data.ImageCacheManager
@@ -25,7 +27,6 @@ import io.ferventio.app.twitch.EventSubSetupException
 import io.ferventio.app.twitch.TwitchEventSubClient
 import io.ferventio.app.twitch.TwitchChatSendException
 import io.ferventio.app.network.FerventioBackendClient
-import io.ferventio.app.network.FerventioServerTransportSecurity
 import io.ferventio.app.network.FerventioBackendException
 import io.ferventio.app.network.BackendSettingsPutResult
 import io.ferventio.app.network.BackendSettingsSnapshot
@@ -241,7 +242,7 @@ class FerventioController(
 
     fun startServerAuthorization() {
         val serverUrl = runCatching {
-            FerventioServerTransportSecurity.validateServerUrl(BuildConfig.FERVENTIO_SERVER_URL).baseUrl
+            FerventioServerUrlPolicy.validate(BuildConfig.FERVENTIO_SERVER_URL).baseUrl
         }.getOrElse { error ->
             showError("В этой сборке неверно настроен сервер Ferventio: ${error.userMessage()}")
             return

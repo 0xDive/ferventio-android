@@ -2,7 +2,6 @@ package io.ferventio.app.twitch
 
 import io.ferventio.app.domain.ChatFragment
 import io.ferventio.app.domain.PinnedChatMessage
-import io.ferventio.app.network.FerventioServerTransportSecurity
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
@@ -33,9 +32,6 @@ import java.io.Closeable
 class TwitchPinnedChatGqlClient : Closeable {
     private val clientDelegate = lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         HttpClient(OkHttp) {
-            engine {
-                FerventioServerTransportSecurity.configure(this)
-            }
             install(HttpTimeout) {
                 requestTimeoutMillis = 12_000
                 connectTimeoutMillis = 10_000
