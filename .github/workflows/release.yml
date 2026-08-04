@@ -1,0 +1,528 @@
+name: Android Release
+
+run-name: Android release from ${{ github.ref_name }} by @${{ github.actor }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      prerelease:
+        description: Mark the GitHub Release as a prerelease
+        required: true
+        type: boolean
+        default: true
+      draft:
+        description: Create the GitHub Release as a draft
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+  artifact-metadata: write
+
+concurrency:
+  group: android-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    name: Build and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: release
+
+    env:
+      # Required production configuration.
+      ORG_GRADLE_PROJECT_FERVENTIO_SERVER_URL: ${{ vars.FERVENTIO_SERVER_URL }}
+      ORG_GRADLE_PROJECT_FERVENTIO_SERVER_CERTIFICATE_PINS: ${{ vars.FERVENTIO_SERVER_CERTIFICATE_PINS }}
+
+      ORG_GRADLE_PROJECT_FERVENTIO_FIREBASE_APPLICATION_ID: ${{ vars.FERVENTIO_FIREBASE_APPLICATION_ID }}
+      ORG_GRADLE_PROJECT_FERVENTIO_FIREBASE_PROJECT_ID: ${{ vars.FERVENTIO_FIREBASE_PROJECT_ID }}
+      ORG_GRADLE_PROJECT_FERVENTIO_FIREBASE_API_KEY: ${{ vars.FERVENTIO_FIREBASE_API_KEY }}
+      ORG_GRADLE_PROJECT_FERVENTIO_FIREBASE_SENDER_ID: ${{ vars.FERVENTIO_FIREBASE_SENDER_ID }}
+
+      ORG_GRADLE_PROJECT_FERVENTIO_PRIVACY_OPERATOR_NAME: ${{ vars.FERVENTIO_PRIVACY_OPERATOR_NAME }}
+      ORG_GRADLE_PROJECT_FERVENTIO_PRIVACY_CONTACT: ${{ vars.FERVENTIO_PRIVACY_CONTACT }}
+      ORG_GRADLE_PROJECT_FERVENTIO_PRIVACY_POLICY_URL: ${{ vars.FERVENTIO_PRIVACY_POLICY_URL }}
+      ORG_GRADLE_PROJECT_FERVENTIO_SHOW_PRIVACY_POLICY_IN_APP: 'true'
+
+      # Optional About screen links.
+      ORG_GRADLE_PROJECT_FERVENTIO_APP_WEBSITE_URL: ${{ vars.FERVENTIO_APP_WEBSITE_URL }}
+      ORG_GRADLE_PROJECT_FERVENTIO_APP_GITHUB_URL: https://github.com/0xDive/ferventio-android
+      ORG_GRADLE_PROJECT_FERVENTIO_APP_TELEGRAM_CHANNEL_URL: ${{ vars.FERVENTIO_APP_TELEGRAM_CHANNEL_URL }}
+      ORG_GRADLE_PROJECT_FERVENTIO_APP_TELEGRAM_CHAT_URL: ${{ vars.FERVENTIO_APP_TELEGRAM_CHAT_URL }}
+      ORG_GRADLE_PROJECT_FERVENTIO_APP_TRANSLATIONS_URL: ${{ vars.FERVENTIO_APP_TRANSLATIONS_URL }}
+
+      # Signing credentials.
+      ORG_GRADLE_PROJECT_FERVENTIO_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ORG_GRADLE_PROJECT_FERVENTIO_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ORG_GRADLE_PROJECT_FERVENTIO_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install Android SDK packages
+        run: |
+          sdkmanager \
+            "platforms;android-36" \
+            "build-tools;36.0.0" \
+            "platform-tools"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6.2.0
+
+      - name: Verify Gradle Wrapper
+        run: |
+          set -euo pipefail
+
+          ./gradlew --version
+
+          echo \
+            "497c8c2a7e5031f6aa847f88104aa80a93532ec32ee17bdb8d1d2f67a194a9c7  gradle/wrapper/gradle-wrapper.jar" \
+            | sha256sum --check --strict
+
+      - name: Determine release metadata
+        id: metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "Releases can only be created from main." >&2
+            exit 1
+          fi
+
+          VERSION="$(
+            python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          text = Path("app/build.gradle.kts").read_text(encoding="utf-8")
+
+          match = re.search(r'versionName\s*=\s*"([^"]+)"', text)
+          if not match:
+              raise SystemExit("versionName was not found")
+
+          version = match.group(1)
+
+          if not re.fullmatch(r"\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?", version):
+              raise SystemExit(f"Invalid release version: {version}")
+
+          print(version)
+          PY
+          )"
+
+          VERSION_CODE="$(
+            python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          text = Path("app/build.gradle.kts").read_text(encoding="utf-8")
+
+          match = re.search(r"versionCode\s*=\s*(\d+)", text)
+          if not match:
+              raise SystemExit("versionCode was not found")
+
+          print(match.group(1))
+          PY
+          )"
+
+          TAG="android-v${VERSION}"
+
+          python3 - "$VERSION" <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          version = sys.argv[1]
+          changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
+
+          if not re.search(
+              rf"^## \[{re.escape(version)}\](?:\s|$)",
+              changelog,
+              re.MULTILINE,
+          ):
+              raise SystemExit(
+                  f"CHANGELOG.md does not contain a section for {version}"
+              )
+          PY
+
+          if gh release view "$TAG" \
+            --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1
+          then
+            echo "GitHub Release ${TAG} already exists." >&2
+            exit 1
+          fi
+
+          git fetch --force --tags origin
+
+          TAG_EXISTS=false
+
+          if git show-ref \
+            --verify \
+            --quiet \
+            "refs/tags/${TAG}"
+          then
+            TAG_EXISTS=true
+            TAG_COMMIT="$(git rev-list -n 1 "$TAG")"
+
+            if [[ "$TAG_COMMIT" != "$GITHUB_SHA" ]]; then
+              echo \
+                "Existing tag ${TAG} points to ${TAG_COMMIT}, not ${GITHUB_SHA}." \
+                >&2
+              exit 1
+            fi
+          fi
+
+          {
+            echo "version=$VERSION"
+            echo "version_code=$VERSION_CODE"
+            echo "tag=$TAG"
+            echo "tag_exists=$TAG_EXISTS"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## Android release"
+            echo
+            echo "- Version: \`${VERSION}\`"
+            echo "- Version code: \`${VERSION_CODE}\`"
+            echo "- Tag: \`${TAG}\`"
+            echo "- Commit: \`${GITHUB_SHA}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Restore release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "$KEYSTORE_BASE64" ]]; then
+            echo "ANDROID_KEYSTORE_BASE64 is empty." >&2
+            exit 1
+          fi
+
+          KEYSTORE_PATH="$RUNNER_TEMP/ferventio-release.p12"
+
+          printf '%s' "$KEYSTORE_BASE64" \
+            | base64 --decode \
+            > "$KEYSTORE_PATH"
+
+          chmod 600 "$KEYSTORE_PATH"
+          test -s "$KEYSTORE_PATH"
+
+          echo \
+            "ORG_GRADLE_PROJECT_FERVENTIO_KEYSTORE_FILE=$KEYSTORE_PATH" \
+            >> "$GITHUB_ENV"
+
+      - name: Generate Crashlytics mapping ID
+        run: |
+          set -euo pipefail
+
+          MAPPING_ID="$(
+            python3 - <<'PY'
+          import uuid
+          print(uuid.uuid4())
+          PY
+          )"
+
+          echo \
+            "ORG_GRADLE_PROJECT_FERVENTIO_CRASHLYTICS_MAPPING_ID=$MAPPING_ID" \
+            >> "$GITHUB_ENV"
+
+          echo "Crashlytics mapping ID generated."
+
+      - name: Repository checks
+        run: |
+          set -euo pipefail
+
+          python3 \
+            scripts/security/check-repository-secrets.py \
+            --root .
+
+          python3 \
+            scripts/security/test-check-repository-secrets.py
+
+          python3 \
+            scripts/architecture/check-module-boundaries.py \
+            --root .
+
+          ./gradlew \
+            -p build-logic \
+            clean \
+            check \
+            --no-configuration-cache \
+            --stacktrace
+
+      - name: Release validation
+        run: |
+          set -euo pipefail
+
+          ./gradlew \
+            :core:domain:testDebugUnitTest \
+            :core:database:testDebugUnitTest \
+            :app:testFossDebugUnitTest \
+            :app:testPlayDebugUnitTest \
+            :app:lintFossRelease \
+            :app:lintPlayRelease \
+            :app:verifyFossNoGooglePushDependencies \
+            :app:verifyPlayCrashReportingDependency \
+            :app:verifyPlayCrashReportingConfiguration \
+            :app:verifyPrivacyPolicyConfiguration \
+            :app:verifyFerventioServerCertificatePins \
+            --no-configuration-cache \
+            --stacktrace
+
+      - name: Build FOSS and Play release APKs
+        run: |
+          set -euo pipefail
+
+          ./gradlew \
+            :app:assembleFossRelease \
+            :app:assemblePlayRelease \
+            --no-configuration-cache \
+            --stacktrace
+
+      - name: Verify and prepare release assets
+        id: assets
+        env:
+          VERSION: ${{ steps.metadata.outputs.version }}
+          TAG: ${{ steps.metadata.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          FOSS_SOURCE="app/build/outputs/apk/foss/release/app-foss-release.apk"
+          PLAY_SOURCE="app/build/outputs/apk/play/release/app-play-release.apk"
+
+          test -f "$FOSS_SOURCE"
+          test -f "$PLAY_SOURCE"
+
+          APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt"
+
+          test -x "$APKSIGNER"
+          test -x "$AAPT"
+
+          "$APKSIGNER" verify \
+            --verbose \
+            --print-certs \
+            "$FOSS_SOURCE"
+
+          "$APKSIGNER" verify \
+            --verbose \
+            --print-certs \
+            "$PLAY_SOURCE"
+
+          certificate_digest() {
+            "$APKSIGNER" verify \
+              --print-certs \
+              "$1" 2>/dev/null \
+              | awk -F': ' \
+                '/Signer #1 certificate SHA-256 digest/ {
+                  print $2
+                  exit
+                }'
+          }
+
+          FOSS_CERT="$(certificate_digest "$FOSS_SOURCE")"
+          PLAY_CERT="$(certificate_digest "$PLAY_SOURCE")"
+
+          test -n "$FOSS_CERT"
+          test -n "$PLAY_CERT"
+
+          if [[ "$FOSS_CERT" != "$PLAY_CERT" ]]; then
+            echo \
+              "FOSS and Play APKs use different signing certificates." \
+              >&2
+            exit 1
+          fi
+
+          FOSS_BADGING="$("$AAPT" dump badging "$FOSS_SOURCE" | head -n 1)"
+          PLAY_BADGING="$("$AAPT" dump badging "$PLAY_SOURCE" | head -n 1)"
+
+          [[ "$FOSS_BADGING" == *"name='io.ferventio.app'"* ]]
+          [[ "$FOSS_BADGING" == *"versionName='${VERSION}-foss'"* ]]
+
+          [[ "$PLAY_BADGING" == *"name='io.ferventio.app'"* ]]
+          [[ "$PLAY_BADGING" == *"versionName='${VERSION}-play'"* ]]
+
+          mkdir -p dist
+
+          FOSS_ASSET="dist/ferventio-${VERSION}-foss.apk"
+          PLAY_ASSET="dist/ferventio-${VERSION}-play.apk"
+
+          install -m 0644 "$FOSS_SOURCE" "$FOSS_ASSET"
+          install -m 0644 "$PLAY_SOURCE" "$PLAY_ASSET"
+
+          (
+            cd dist
+
+            sha256sum \
+              "ferventio-${VERSION}-foss.apk" \
+              "ferventio-${VERSION}-play.apk" \
+              > SHA256SUMS
+          )
+
+          {
+            echo "foss_asset=$FOSS_ASSET"
+            echo "play_asset=$PLAY_ASSET"
+            echo "checksums=dist/SHA256SUMS"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo
+            echo "### Signing"
+            echo
+            echo "Both APKs use certificate SHA-256:"
+            echo
+            echo "\`${FOSS_CERT}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Generate release notes
+        env:
+          VERSION: ${{ steps.metadata.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          python3 - "$VERSION" dist/RELEASE_NOTES.md <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          version = sys.argv[1]
+          output = Path(sys.argv[2])
+          changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
+
+          match = re.search(
+              rf"^## \[{re.escape(version)}\][^\n]*\n"
+              rf"(.*?)(?=^## |\Z)",
+              changelog,
+              re.MULTILINE | re.DOTALL,
+          )
+
+          if not match:
+              raise SystemExit(
+                  f"CHANGELOG section {version} was not found"
+              )
+
+          changes = match.group(1).strip()
+
+          notes = f"""## Downloads
+
+          - `ferventio-{version}-foss.apk` — FOSS distribution without Google runtime dependencies
+          - `ferventio-{version}-play.apk` — Play distribution with Firebase Cloud Messaging and Crashlytics
+          - `SHA256SUMS` — SHA-256 checksums
+
+          Both APKs use the same application ID and signing certificate.
+
+          ## Changes
+
+          {changes}
+          """
+
+          output.write_text(notes, encoding="utf-8")
+          PY
+
+      - name: Store private R8 mapping files
+        uses: actions/upload-artifact@v4
+        with:
+          name: r8-mappings-${{ steps.metadata.outputs.tag }}
+          path: |
+            app/build/outputs/mapping/fossRelease/mapping.txt
+            app/build/outputs/mapping/playRelease/mapping.txt
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Attest APK provenance
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            ${{ steps.assets.outputs.foss_asset }}
+            ${{ steps.assets.outputs.play_asset }}
+
+      - name: Create annotated release tag
+        if: steps.metadata.outputs.tag_exists != 'true'
+        env:
+          TAG: ${{ steps.metadata.outputs.tag }}
+          VERSION: ${{ steps.metadata.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          git config \
+            user.name \
+            "github-actions[bot]"
+
+          git config \
+            user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git tag \
+            --annotate \
+            "$TAG" \
+            "$GITHUB_SHA" \
+            --message "Ferventio Android ${VERSION}"
+
+          git push origin "refs/tags/${TAG}"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.metadata.outputs.tag }}
+          VERSION: ${{ steps.metadata.outputs.version }}
+          FOSS_ASSET: ${{ steps.assets.outputs.foss_asset }}
+          PLAY_ASSET: ${{ steps.assets.outputs.play_asset }}
+          CHECKSUMS: ${{ steps.assets.outputs.checksums }}
+          PRERELEASE: ${{ inputs.prerelease }}
+          DRAFT: ${{ inputs.draft }}
+        run: |
+          set -euo pipefail
+
+          FLAGS=()
+
+          if [[ "$PRERELEASE" == "true" ]]; then
+            FLAGS+=(--prerelease)
+          fi
+
+          if [[ "$DRAFT" == "true" ]]; then
+            FLAGS+=(--draft)
+          fi
+
+          gh release create \
+            "$TAG" \
+            "${FOSS_ASSET}#FOSS APK" \
+            "${PLAY_ASSET}#Play APK" \
+            "${CHECKSUMS}#SHA-256 checksums" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Ferventio ${VERSION}" \
+            --notes-file dist/RELEASE_NOTES.md \
+            --verify-tag \
+            "${FLAGS[@]}"
+
+      - name: Release summary
+        env:
+          TAG: ${{ steps.metadata.outputs.tag }}
+        run: |
+          {
+            echo
+            echo "### Published"
+            echo
+            echo "Release: \`${TAG}\`"
+            echo
+            echo \
+              "https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
+          } >> "$GITHUB_STEP_SUMMARY"
