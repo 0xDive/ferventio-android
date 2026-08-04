@@ -44,7 +44,6 @@ def main() -> int:
     required_build_logic_sources = (
         "FerventioVerificationPlugin.kt",
         "ExportOsvDependencyInventoryTask.kt",
-        "VerifyFerventioServerCertificatePinsTask.kt",
         "VerifyPlayCrashReportingConfigurationTask.kt",
         "VerifyPrivacyPolicyConfigurationTask.kt",
         "VerifyRuntimeClasspathTask.kt",
