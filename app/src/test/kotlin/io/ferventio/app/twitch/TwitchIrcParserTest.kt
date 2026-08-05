@@ -2,6 +2,7 @@ package io.ferventio.app.twitch
 
 import io.ferventio.app.domain.ChatEvent
 import io.ferventio.app.domain.ChatFragment
+import io.ferventio.app.domain.ModerationAction
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -55,6 +56,32 @@ class TwitchIrcParserTest {
         assertTrue(message.flags.isAction)
         assertEquals("Kappa", (message.fragments[0] as ChatFragment.TwitchEmote).text)
         assertEquals(" waves", (message.fragments[1] as ChatFragment.Text).text)
+    }
+
+    @Test
+    fun `uses recent message receive timestamp when Twitch timestamp is absent`() {
+        val line = "@display-name=Viewer;id=message-recent;login=viewer;rm-received-ts=1720000000000;" +
+            "room-id=1234;user-id=55 :viewer!viewer@viewer.tmi.twitch.tv " +
+            "PRIVMSG #channel :history"
+
+        val message = ((TwitchIrcParser.parse(line) { null }
+            .filterIsInstance<TwitchIrcEvent.Chat>().single().event) as ChatEvent.Message).message
+
+        assertEquals(1720000000000L, message.timestampMillis)
+        assertEquals("2024-07-03T09:46:40Z", message.timestamp)
+    }
+
+    @Test
+    fun `marks message deleted when recent messages snapshot carries rm deleted tag`() {
+        val line = "@display-name=Viewer;id=message-deleted;login=viewer;rm-deleted=1;" +
+            "rm-received-ts=1720000000000;room-id=1234;user-id=55 " +
+            ":viewer!viewer@viewer.tmi.twitch.tv PRIVMSG #channel :removed"
+
+        val message = ((TwitchIrcParser.parse(line) { null }
+            .filterIsInstance<TwitchIrcEvent.Chat>().single().event) as ChatEvent.Message).message
+
+        assertTrue(message.isDeleted)
+        assertEquals(ModerationAction.DELETE, message.moderation.action)
     }
 
     @Test

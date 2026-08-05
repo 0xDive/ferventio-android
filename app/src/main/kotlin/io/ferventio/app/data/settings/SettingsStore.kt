@@ -463,6 +463,10 @@ class SettingsStore(context: Context) {
             else putString(KEY_LAST_IMPORT_BACKUP_JSON, value)
         }.apply()
 
+    var recentMessagesEnabled: Boolean
+        get() = preferences.getBoolean(KEY_RECENT_MESSAGES_ENABLED, false)
+        set(value) = preferences.edit().putBoolean(KEY_RECENT_MESSAGES_ENABLED, value).apply()
+
     var localHistoryEnabled: Boolean
         get() = preferences.getBoolean(KEY_LOCAL_HISTORY_ENABLED, true)
         set(value) = preferences.edit().putBoolean(KEY_LOCAL_HISTORY_ENABLED, value).apply()
@@ -639,6 +643,7 @@ class SettingsStore(context: Context) {
         const val KEY_SETTINGS_SYNC_LAST_CONTENT_HASH = "settings_sync_last_content_hash"
         const val KEY_SETTINGS_SYNC_LAST_SYNCED_AT = "settings_sync_last_synced_at"
         const val KEY_LAST_IMPORT_BACKUP_JSON = "last_import_backup_json"
+        const val KEY_RECENT_MESSAGES_ENABLED = "recent_messages_enabled"
         const val KEY_LOCAL_HISTORY_ENABLED = "local_history_enabled"
         const val KEY_LOCAL_HISTORY_LIMIT = "local_history_limit"
         const val KEY_LOCAL_HISTORY_RETENTION_DAYS = "local_history_retention_days"
@@ -684,6 +689,7 @@ class SettingsStore(context: Context) {
             KEY_MESSAGE_FILTERS_JSON,
             KEY_CUSTOM_COMMANDS_JSON,
             KEY_FAVORITE_EMOTE_KEYS,
+            KEY_RECENT_MESSAGES_ENABLED,
             KEY_LOCAL_HISTORY_ENABLED,
             KEY_LOCAL_HISTORY_LIMIT,
             KEY_LOCAL_HISTORY_RETENTION_DAYS,

@@ -314,6 +314,8 @@
     <string name="ui_zagruzhat_globalnye_i_kanalnye_frankerfacez_emotes_a2b6d932">Загружать глобальные и канальные FrankerFaceZ emotes.</string>
     <string name="ui_zagruzhat_globalnye_kanalnye_i_shared_betterttv_emot_ddf75ab5">Загружать глобальные, канальные и shared BetterTTV emotes.</string>
     <string name="ui_zagruzhat_globalnyy_i_kanalnyy_nabor_7tv_0362a0a6">Загружать глобальный и канальный набор 7TV.</string>
+    <string name="ui_zagruzhat_soobscheniya_do_otkrytiya_chata_6c95aa13">Загружать сообщения до открытия чата</string>
+    <string name="ui_zagruzka_poslednih_soobscheniy_otklyuchena_5c76c945">Загрузка последних сообщений отключена</string>
     <string name="ui_zaderzhka_mezhdu_soobscheniyami_sekund_ca0cece3">Задержка между сообщениями, секунд</string>
     <string name="ui_zakrepit_kanal_e3b24675">Закрепить канал</string>
     <string name="ui_zakrepit_soobschenie_b4bab2d4">Закрепить сообщение</string>
@@ -541,6 +543,7 @@
     <string name="ui_neizvestnyy_yazyk_prilozheniya_6a593544">Неизвестный язык приложения</string>
     <string name="ui_nekorrektnaya_data_rezervnoy_kopii_93c2cff6">Некорректная дата резервной копии</string>
     <string name="ui_nekorrektnaya_reviziya_nastroek_31583589">Некорректная ревизия настроек</string>
+    <string name="ui_nekorrektnoe_imya_twitch_kanala_8ea2ecb0">Некорректное имя Twitch-канала</string>
     <string name="ui_nekorrektnoe_kolichestvo_oauth_scopes_c005f2d2">Некорректное количество OAuth scopes</string>
     <string name="ui_nekorrektnoe_prezhnee_oauth_hranilische_9bed8bbf">Некорректное прежнее OAuth-хранилище</string>
     <string name="ui_nekorrektnoe_regulyarnoe_vyrazhenie_14148ee0">Некорректное регулярное выражение</string>
@@ -644,6 +647,7 @@
     <string name="ui_otkryvaem_eventsub_websocket_07d7c9b5">Открываем EventSub WebSocket…</string>
     <string name="ui_otkrytie_websocket_20b3fff3">открытие WebSocket…</string>
     <string name="ui_otkryt_vetku_otvetov_d6712473">Открыть ветку ответов</string>
+    <string name="ui_otkryt_informaciyu_o_servise_38803f2d">Открыть информацию о сервисе</string>
     <string name="ui_otkryt_kartochku_polzovatelya_2868825f">Открыть карточку пользователя</string>
     <string name="ui_otkryt_profil_polzovatelya_537d2c08">Открыть профиль пользователя</string>
     <string name="ui_otkryt_stranicu_proekta_e988679b">Открыть страницу проекта</string>
@@ -770,6 +774,7 @@
     <string name="ui_poslednee_uvedomlenie_polucheno_a95359d6">Последнее уведомление получено</string>
     <string name="ui_poslednie_ispolzovannye_emouty_0fa776dd">Последние использованные эмоуты</string>
     <string name="ui_poslednie_soobscheniya_0f965c1b">Последние сообщения</string>
+    <string name="ui_poslednie_soobscheniya_budut_zagruzhatsya_pri_otkryt_f07ee5fc">Последние сообщения будут загружаться при открытии чата</string>
     <string name="ui_posledniy_heartbeat_arg_51504531">Последний heartbeat: %1$s</string>
     <string name="ui_poslednyaya_sinhronizaciya_arg_01a32a8b">Последняя синхронизация: %1$s</string>
     <string name="ui_postoyannaya_blokirovka_uchastvuet_v_nastraivaemom_p_e4cc9790">Постоянная блокировка участвует в настраиваемом порядке.</string>
@@ -782,6 +787,7 @@
     <string name="ui_predupredit_bdbb0566">Предупредить</string>
     <string name="ui_predupredit_arg_9c97c8ca">Предупредить @%1$s</string>
     <string name="ui_pri_vklyuchennoy_sinhronizacii_nastroek_versioned_ba_eeb69ba0">При включённой синхронизации настроек versioned backup передаётся на выбранный Ferventio Server. </string>
+    <string name="ui_pri_otkrytii_kanala_prilozhenie_zaprosit_do_100_posl_9e11ae35">При открытии канала приложение запросит до 100 последних публичных сообщений у стороннего сервиса Recent Messages.</string>
     <string name="ui_prilozhenie_avtomaticheski_vernetsya_k_chatam_83cf426d">приложение автоматически вернётся к чатам.</string>
     <string name="ui_prilozhenie_snova_aktivno_e354175a">Приложение снова активно</string>
     <string name="ui_primenena_servernaya_reviziya_arg_deefe092">Применена серверная ревизия %1$s</string>
@@ -861,6 +867,10 @@
     <string name="ui_servernaya_reviziya_izmenilas_vo_vremya_sinhronizaci_753b0dad">Серверная ревизия изменилась во время синхронизации</string>
     <string name="ui_servernaya_sessiya_ferventio_istekla_ad63cf82">Серверная сессия Ferventio истекла</string>
     <string name="ui_servernaya_sinhronizaciya_85e9787e">Серверная синхронизация</string>
+    <string name="ui_servis_vremenno_hranit_publichnye_soobscheniya_twitc_82096b7f">Сервис временно хранит публичные сообщения Twitch и получает IP-адрес при запросе. Функция выключена по умолчанию.</string>
+    <string name="ui_servis_istorii_vernul_neozhidannyy_json_143f5449">Сервис истории вернул неожиданный JSON</string>
+    <string name="ui_servis_istorii_vernul_slishkom_bolshoy_otvet_1e6e8037">Сервис истории вернул слишком большой ответ</string>
+    <string name="ui_servis_istorii_ne_vernul_messages_0cdaad23">Сервис истории не вернул messages</string>
     <string name="ui_serye_stroki_o_banah_taymautah_udalenii_soobscheniy_868b740d">Серые строки о банах, таймаутах, удалении сообщений, очистке чата и действиях модераторов.</string>
     <string name="ui_sessiya_ferventio_zavershena_arg_2d70de7c">Сессия Ferventio завершена: %1$s</string>
     <string name="ui_set_nedostupna_ozhidaem_vosstanovleniya_246991d9">Сеть недоступна; ожидаем восстановления…</string>

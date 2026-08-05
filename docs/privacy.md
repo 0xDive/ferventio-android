@@ -1,6 +1,6 @@
 # Ferventio Privacy Policy
 
-**Effective date:** 1 August 2026
+**Effective date:** 5 August 2026
 **App:** Ferventio for Android
 
 The authoritative policy is published at the configured HTTPS privacy-policy URL. An offline in-app copy can optionally be exposed under **Settings → About → Privacy Policy** for builds that enable it.
@@ -28,17 +28,19 @@ FOSS builds do not automatically upload crash reports. Sanitized reports are kep
 
 Ferventio communicates with Twitch IRC, EventSub and Helix for chat, account metadata and moderation. It may also request public emote, badge and metadata resources from BetterTTV, FrankerFaceZ, 7TV, IVR.fi and their CDNs. Those providers receive normal network metadata such as the requesting IP address.
 
+When the user explicitly enables **Recent Messages** under Settings → History, the app requests a public chat snapshot from `recent-messages.robotty.de`. The service receives the requested Twitch channel login and normal network metadata such as the requesting IP address. It may temporarily retain public Twitch chat messages under its own published policy. The integration is disabled by default and can be turned off at any time.
+
 Depending on the build, push notifications use Firebase Cloud Messaging or an embedded socket transport. A configured Ferventio Server may process an installation ID, device-bound credentials, push registration, selected channels, Twitch access-token leases, settings-sync snapshots and security/audit metadata.
 
 ## Sharing and sale
 
-Ferventio does not sell personal data, display advertising or use the Android Advertising ID. Data is shared only with services required for selected features: Twitch, the configured Ferventio Server, public emote/metadata providers and, for Play releases, Firebase Cloud Messaging and Crashlytics.
+Ferventio does not sell personal data, display advertising or use the Android Advertising ID. Data is shared only with services required for selected features: Twitch, the configured Ferventio Server, public emote/metadata providers, the optional Recent Messages service and, for Play releases, Firebase Cloud Messaging and Crashlytics.
 
 A file manually exported through the Android system picker is sent to the app or storage provider selected by the user. Ferventio does not control that provider's subsequent handling.
 
 ## User controls
 
-The app provides controls for clearing history and caches, exporting/importing settings, deleting local FOSS crash reports, signing out, revoking the current device and revoking all server sessions. Revoking all sessions removes server auth sessions, credentials, push registrations and pending deliveries; local data remains until deleted separately.
+The app provides controls for enabling or disabling Recent Messages, clearing history and caches, exporting/importing settings, deleting local FOSS crash reports, signing out, revoking the current device and revoking all server sessions. Revoking all sessions removes server auth sessions, credentials, push registrations and pending deliveries; local data remains until deleted separately.
 
 For access, correction or deletion of data retained by a specific Ferventio Server, contact that server's operator using the privacy contact displayed in the app or on the distribution page.
 

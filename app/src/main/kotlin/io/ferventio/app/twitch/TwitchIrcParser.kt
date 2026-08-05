@@ -8,6 +8,8 @@ import io.ferventio.app.domain.ChatMessage
 import io.ferventio.app.domain.ChatMessageType
 import io.ferventio.app.domain.ChatReward
 import io.ferventio.app.domain.MessageFlags
+import io.ferventio.app.domain.ModerationAction
+import io.ferventio.app.domain.ModerationState
 import io.ferventio.app.domain.ReplyContext
 import java.time.Instant
 
@@ -69,7 +71,8 @@ object TwitchIrcParser {
                 val displayName = line.tags["display-name"]
                     ?.takeIf(String::isNotBlank)
                     ?: userLogin
-                val sentAtMillis = line.tags["tmi-sent-ts"]?.toLongOrNull() ?: System.currentTimeMillis()
+                val sentAtMillis = line.receivedAtMillis() ?: System.currentTimeMillis()
+                val wasDeletedBeforeSnapshot = line.tags["rm-deleted"] == "1"
                 val messageId = line.tags["id"]
                     ?.takeIf(String::isNotBlank)
                     ?: "irc:$channelId:$sentAtMillis:${rawText.hashCode()}"
@@ -114,10 +117,19 @@ object TwitchIrcParser {
                         else -> ChatMessageType.CHAT
                     },
                     flags = MessageFlags(
+                        isDeleted = wasDeletedBeforeSnapshot,
                         isAction = isAction,
                         isFirstMessage = line.tags["first-msg"] == "1",
                         isReturningChatter = line.tags["returning-chatter"] == "1",
                     ),
+                    moderation = if (wasDeletedBeforeSnapshot) {
+                        ModerationState(
+                            action = ModerationAction.DELETE,
+                            atMillis = sentAtMillis,
+                        )
+                    } else {
+                        ModerationState()
+                    },
                     serverMessageId = messageId,
                 )
                 events += TwitchIrcEvent.Chat(ChatEvent.Message(message))
@@ -133,7 +145,7 @@ object TwitchIrcParser {
                         channelId = channelId,
                         messageId = targetMessageId,
                         eventId = "irc:clearmsg:$targetMessageId",
-                        createdAt = line.tags["tmi-sent-ts"]?.toLongOrNull()
+                        createdAt = line.receivedAtMillis()
                             ?.let { Instant.ofEpochMilli(it).toString() },
                     ),
                 )
@@ -148,9 +160,9 @@ object TwitchIrcParser {
                     events += TwitchIrcEvent.Chat(
                         ChatEvent.ChatCleared(
                             channelId = channelId,
-                            eventId = line.tags["tmi-sent-ts"]?.takeIf(String::isNotBlank)
+                            eventId = line.receivedAtMillis()
                                 ?.let { "irc:clearchat:$channelId:$it" },
-                            createdAt = line.tags["tmi-sent-ts"]?.toLongOrNull()
+                            createdAt = line.receivedAtMillis()
                                 ?.let { Instant.ofEpochMilli(it).toString() },
                         ),
                     )
@@ -162,9 +174,9 @@ object TwitchIrcParser {
                             userLogin = targetLogin,
                             durationSeconds = line.tags["ban-duration"]?.toIntOrNull(),
                             isPermanent = line.tags["ban-duration"].isNullOrBlank(),
-                            eventId = line.tags["tmi-sent-ts"]?.takeIf(String::isNotBlank)
+                            eventId = line.receivedAtMillis()
                                 ?.let { "irc:clearchat:$channelId:${targetUserId.orEmpty()}:$it" },
-                            createdAt = line.tags["tmi-sent-ts"]?.toLongOrNull()
+                            createdAt = line.receivedAtMillis()
                                 ?.let { Instant.ofEpochMilli(it).toString() },
                         ),
                     )
@@ -178,6 +190,10 @@ object TwitchIrcParser {
 
         return events
     }
+
+    private fun ParsedIrcLine.receivedAtMillis(): Long? =
+        tags["tmi-sent-ts"]?.toLongOrNull()
+            ?: tags["rm-received-ts"]?.toLongOrNull()
 
     private fun parseBadges(raw: String?): List<ChatBadge> = raw
         ?.split(',')

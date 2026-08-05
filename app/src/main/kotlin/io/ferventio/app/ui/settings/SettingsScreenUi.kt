@@ -879,53 +879,75 @@ internal fun SettingsScreen(
                     }
 
                     SettingsPage.HISTORY -> item {
-                        SettingsSection("Room") {
-                            SettingsSwitchRow(
-                                title = "Сохранять сообщения",
-                                description = "История хранится только на этом устройстве.",
-                                checked = state.localHistoryEnabled,
-                                onCheckedChange = controller::setLocalHistoryEnabled,
-                            )
-                            if (state.isHistoryLoading) {
-                                LinearProgressIndicator(Modifier.fillMaxWidth())
-                                Text("Восстанавливаем сообщения…", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            SettingsSection("Последние сообщения") {
+                                SettingsSwitchRow(
+                                    title = "Загружать сообщения до открытия чата",
+                                    description = "При открытии канала приложение запросит до 100 последних публичных сообщений у стороннего сервиса Recent Messages.",
+                                    checked = state.recentMessagesEnabled,
+                                    onCheckedChange = controller::setRecentMessagesEnabled,
+                                )
                                 Text(
-                                    "Восстановлено сообщений: ${state.restoredHistoryMessageCount}",
+                                    "Сервис временно хранит публичные сообщения Twitch и получает IP-адрес при запросе. Функция выключена по умолчанию.",
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
+                                TextButton(
+                                    onClick = { uriHandler.openUri("https://recent-messages.robotty.de/") },
+                                ) {
+                                    Icon(Icons.Default.Public, contentDescription = null)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Открыть информацию о сервисе")
+                                }
                             }
-                            state.historyErrorMessage?.let { error ->
-                                Text(error, color = MaterialTheme.colorScheme.error)
-                            }
-                            if (state.localHistoryEnabled) {
-                                Text("Сообщений на канал", fontWeight = FontWeight.SemiBold)
-                                ChoiceButtons(
-                                    values = listOf(250, 500, 1_000),
-                                    selected = state.localHistoryLimit,
-                                    label = Int::toString,
-                                    onSelect = controller::setLocalHistoryLimit,
+                            SettingsSection("Room") {
+                                SettingsSwitchRow(
+                                    title = "Сохранять сообщения",
+                                    description = "История хранится только на этом устройстве.",
+                                    checked = state.localHistoryEnabled,
+                                    onCheckedChange = controller::setLocalHistoryEnabled,
                                 )
-                                Text("Срок хранения", fontWeight = FontWeight.SemiBold)
-                                ChoiceButtons(
-                                    values = listOf(1, 7, 30, 0),
-                                    selected = state.localHistoryRetentionDays,
-                                    label = { days -> if (days == 0) "Без ограничения" else "$days дн." },
-                                    onSelect = controller::setLocalHistoryRetentionDays,
-                                )
-                                Text("Максимальный размер базы", fontWeight = FontWeight.SemiBold)
-                                ChoiceButtons(
-                                    values = listOf(50, 100, 250, 0),
-                                    selected = state.localHistoryMaxSizeMb,
-                                    label = { sizeMb -> if (sizeMb == 0) "Без ограничения" else "$sizeMb МБ" },
-                                    onSelect = controller::setLocalHistoryMaxSizeMb,
-                                )
+                                if (state.isHistoryLoading) {
+                                    LinearProgressIndicator(Modifier.fillMaxWidth())
+                                    Text("Восстанавливаем сообщения…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                } else {
+                                    Text(
+                                        "Восстановлено сообщений: ${state.restoredHistoryMessageCount}",
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                                state.historyErrorMessage?.let { error ->
+                                    Text(error, color = MaterialTheme.colorScheme.error)
+                                }
+                                if (state.localHistoryEnabled) {
+                                    Text("Сообщений на канал", fontWeight = FontWeight.SemiBold)
+                                    ChoiceButtons(
+                                        values = listOf(250, 500, 1_000),
+                                        selected = state.localHistoryLimit,
+                                        label = Int::toString,
+                                        onSelect = controller::setLocalHistoryLimit,
+                                    )
+                                    Text("Срок хранения", fontWeight = FontWeight.SemiBold)
+                                    ChoiceButtons(
+                                        values = listOf(1, 7, 30, 0),
+                                        selected = state.localHistoryRetentionDays,
+                                        label = { days -> if (days == 0) "Без ограничения" else "$days дн." },
+                                        onSelect = controller::setLocalHistoryRetentionDays,
+                                    )
+                                    Text("Максимальный размер базы", fontWeight = FontWeight.SemiBold)
+                                    ChoiceButtons(
+                                        values = listOf(50, 100, 250, 0),
+                                        selected = state.localHistoryMaxSizeMb,
+                                        label = { sizeMb -> if (sizeMb == 0) "Без ограничения" else "$sizeMb МБ" },
+                                        onSelect = controller::setLocalHistoryMaxSizeMb,
+                                    )
+                                }
+                                TextButton(onClick = { confirmClearHistory = true }) {
+                                    Icon(Icons.Default.Delete, contentDescription = null)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text("Очистить локальную историю")
+                                }
                             }
-                            TextButton(onClick = { confirmClearHistory = true }) {
-                                Icon(Icons.Default.Delete, contentDescription = null)
-                                Spacer(Modifier.width(6.dp))
-                                Text("Очистить локальную историю")
-                            }
+
                         }
                     }
 

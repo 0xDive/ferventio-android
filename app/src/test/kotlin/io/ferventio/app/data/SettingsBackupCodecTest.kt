@@ -25,6 +25,7 @@ class SettingsBackupCodecTest {
         assertEquals(listOf("channel_a", "channel_b"), decoded.content.channels.logins)
         assertTrue("provider:emote" in decoded.content.favouriteEmotes)
         assertEquals(false, decoded.content.settings.showSystemMessages)
+        assertTrue(decoded.content.settings.recentMessagesEnabled)
     }
 
     @Test
@@ -64,6 +65,30 @@ class SettingsBackupCodecTest {
         assertTrue(decoded.content.settings.showSystemMessages)
     }
 
+    @Test
+    fun legacyBackupWithoutRecentMessagesFieldUsesDisabledDefault() {
+        val content = sampleContent()
+        val document = SettingsBackupDocument(
+            createdAt = "2026-07-25T12:00:00Z",
+            appVersion = "0.0.1-test",
+            contentHash = SettingsBackupCodec.contentHash(content),
+            content = content,
+        )
+        val legacyContent = content.copy(
+            settings = content.settings.copy(recentMessagesEnabled = false),
+        )
+        val legacyDocument = document.copy(
+            content = legacyContent,
+            contentHash = SettingsBackupCodec.contentHash(legacyContent),
+        )
+        val legacyJson = SettingsBackupCodec.encode(legacyDocument)
+            .replace(Regex("""\s*"recentMessagesEnabled"\s*:\s*false\s*,?"""), "")
+
+        val decoded = SettingsBackupCodec.decode(legacyJson)
+
+        assertEquals(false, decoded.content.settings.recentMessagesEnabled)
+    }
+
     private fun sampleContent(): SettingsBackupContent = SettingsBackupContent(
         settings = BackupSettings(
             themeMode = "AMOLED",
@@ -94,6 +119,7 @@ class SettingsBackupCodecTest {
             userCardTimeoutPresetsSeconds = listOf(10, 60, 600),
             userCardShowBanAction = true,
             userCardModerationActionOrder = listOf("timeout:10", "ban", "unban"),
+            recentMessagesEnabled = true,
         ),
         channels = BackupChannels(
             logins = listOf("channel_a", "channel_b"),

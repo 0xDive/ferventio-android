@@ -16,6 +16,7 @@ import io.ferventio.app.emote.EmoteRepository
 import io.ferventio.app.twitch.TwitchApiClient
 import io.ferventio.app.twitch.TwitchPinnedChatGqlClient
 import io.ferventio.app.twitch.TwitchPinnedChatGqlException
+import io.ferventio.app.twitch.TwitchRecentMessagesClient
 import io.ferventio.app.twitch.TwitchApiException
 import io.ferventio.app.twitch.TwitchAnonymousChatClient
 import io.ferventio.app.twitch.EventSubActivity
@@ -61,6 +62,7 @@ import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
+import kotlin.random.Random
 import kotlin.time.Duration.Companion.seconds
 
 class FerventioController(
@@ -69,6 +71,8 @@ class FerventioController(
     private val tokenStore: SecureTokenStore,
     private val api: TwitchApiClient,
     private val pinnedChatClient: TwitchPinnedChatGqlClient = TwitchPinnedChatGqlClient(),
+    private val recentMessagesClient: TwitchRecentMessagesClient =
+        TwitchRecentMessagesClient(BuildConfig.RECENT_MESSAGES_URL),
     private val backend: FerventioBackendClient,
     private val emoteRepository: EmoteRepository,
     private val imageCacheManager: ImageCacheManager,
@@ -91,6 +95,10 @@ class FerventioController(
     private var eventSubJob: Job? = null
     private val pinnedMessageRefreshJobs = ConcurrentHashMap<String, Job>()
     private val pinnedMessageRequestGenerations = ConcurrentHashMap<String, AtomicLong>()
+    private val recentMessagesJobs = ConcurrentHashMap<String, Job>()
+    private val recentMessagesLastAttemptAtMillis = ConcurrentHashMap<String, Long>()
+    private val recentMessagesLoadedLogins = ConcurrentHashMap.newKeySet<String>()
+    private val recentMessagesSemaphore = Semaphore(RECENT_MESSAGES_MAX_CONCURRENT_REQUESTS)
     private var anonymousChatClient: TwitchAnonymousChatClient? = null
     private var anonymousChatJob: Job? = null
     private val anonymousRestoreMutex = Mutex()
@@ -461,6 +469,7 @@ class FerventioController(
         val current = mutableState.value
         val removedIndex = current.channels.indexOfFirst { it.id == channelId }
         if (removedIndex < 0) return
+        val removed = current.channels[removedIndex]
         val session = current.session
         val accessToken = credentials?.accessToken
         val updated = current.channels.filterNot { it.id == channelId }
@@ -502,6 +511,7 @@ class FerventioController(
             )
         }
         parsedThirdPartyEmotesByChannel.remove(channelId)
+        cancelRecentMessagesLoad(removed.login)
         normalizeChannelPreferences(updated, nextSelectedId)
         if (session != null && accessToken != null) {
             refreshTwitchChatAssets(session, accessToken, updated)
@@ -533,6 +543,7 @@ class FerventioController(
         if (mutableState.value.isAuthenticated) {
             refreshSelectedTwitchChannelEmotes(channelId)
         }
+        scheduleRecentMessagesLoad(listOf(channel))
     }
 
     fun moveChannel(channelId: String, targetIndex: Int) {
@@ -560,6 +571,9 @@ class FerventioController(
         mutableState.update { state ->
             if (state.visibleChannelIds == visible) state else state.copy(visibleChannelIds = visible)
         }
+        scheduleRecentMessagesLoad(
+            mutableState.value.channels.filter { channel -> channel.id in visible },
+        )
     }
 
 
@@ -1440,6 +1454,20 @@ class FerventioController(
                     )
                 }
             }
+        }
+    }
+
+    fun setRecentMessagesEnabled(enabled: Boolean) {
+        settingsStore.recentMessagesEnabled = enabled
+        mutableState.update { state -> state.copy(recentMessagesEnabled = enabled) }
+        recentMessagesLoadedLogins.clear()
+        recentMessagesLastAttemptAtMillis.clear()
+        if (enabled) {
+            scheduleRecentMessagesLoad(activeRecentMessageChannels(), force = true)
+            showNotice("Последние сообщения будут загружаться при открытии чата")
+        } else {
+            stopRecentMessagesLoads()
+            showNotice("Загрузка последних сообщений отключена")
         }
     }
 
@@ -2469,6 +2497,7 @@ class FerventioController(
                 moderation = state.moderation.copy(
                     autoModNotificationsEnabled = settingsStore.autoModNotificationsEnabled,
                 ),
+                recentMessagesEnabled = settingsStore.recentMessagesEnabled,
                 localHistoryEnabled = settingsStore.localHistoryEnabled,
                 localHistoryLimit = settingsStore.localHistoryLimit,
                 localHistoryRetentionDays = settingsStore.localHistoryRetentionDays,
@@ -2499,6 +2528,13 @@ class FerventioController(
                 settingsSyncErrorMessage = null,
                 settingsSyncConflict = null,
             )
+        }
+        recentMessagesLoadedLogins.clear()
+        recentMessagesLastAttemptAtMillis.clear()
+        if (settingsStore.recentMessagesEnabled) {
+            scheduleRecentMessagesLoad(activeRecentMessageChannels(), force = true)
+        } else {
+            stopRecentMessagesLoads()
         }
         rebuildMessageRuleEvaluation()
     }
@@ -2896,6 +2932,7 @@ class FerventioController(
             reconnectCurrentTransport(force = false, reason = "Приложение снова активно")
         }
         mutableState.value.selectedChannelId?.let(::refreshPinnedMessage)
+        scheduleRecentMessagesLoad(activeRecentMessageChannels(), force = true)
         if (settingsStore.settingsSyncEnabled) scheduleSettingsSync(immediate = true)
     }
 
@@ -2908,6 +2945,7 @@ class FerventioController(
             reconnectCurrentTransport(force = false, reason = "Сеть снова доступна")
         }
         mutableState.value.selectedChannelId?.let(::refreshPinnedMessage)
+        scheduleRecentMessagesLoad(activeRecentMessageChannels(), force = true)
     }
 
     fun onNetworkLost() {
@@ -2916,6 +2954,7 @@ class FerventioController(
         val current = mutableState.value
         if (current.channels.isEmpty()) return
 
+        stopRecentMessagesLoads()
         stopAllChatTransports()
         mutableState.update {
             it.copy(
@@ -3600,6 +3639,7 @@ class FerventioController(
             appendLine("Malformed envelopes: ${current.eventSubMalformedEnvelopeCount}")
             appendLine("Notice subscriptions ready: ${current.eventSubNoticeChannelIds.size}/${current.channels.size}")
             appendLine("Notice subscription failures: ${current.eventSubNoticeFailures.entries.joinToString { "${it.key}=${it.value}" }}")
+            appendLine("Recent messages enabled: ${current.recentMessagesEnabled}")
             appendLine("Local history enabled: ${current.localHistoryEnabled}")
             appendLine("Local history limit: ${current.localHistoryLimit}")
             appendLine("Local history retention days: ${current.localHistoryRetentionDays}")
@@ -3963,6 +4003,7 @@ class FerventioController(
         restoreAttentionEntries()
         refreshAnonymousChatAssets(channels)
         connectAnonymousChat(channels)
+        selected?.let { channel -> scheduleRecentMessagesLoad(listOf(channel)) }
     }
 
     private fun refreshAnonymousChatAssets(
@@ -4401,6 +4442,7 @@ class FerventioController(
                 )
             }
             normalizeChannelPreferences(cachedChannels, cachedSelected?.id)
+            cachedSelected?.let { channel -> scheduleRecentMessagesLoad(listOf(channel)) }
         }
 
         val refreshedChannels = runCatching {
@@ -4476,6 +4518,183 @@ class FerventioController(
             if (message.author.profileImageUrl.isNullOrBlank()) queueUserProfileHydration(message.userId)
         }
         connectEventSub(session, accessToken)
+        selected?.let { channel -> scheduleRecentMessagesLoad(listOf(channel)) }
+    }
+
+    private fun activeRecentMessageChannels(): List<ChatChannel> {
+        val state = mutableState.value
+        val activeIds = buildSet {
+            addAll(state.visibleChannelIds)
+            state.selectedChannelId?.let(::add)
+        }
+        return state.channels.filter { channel -> channel.id in activeIds }
+    }
+
+    private fun scheduleRecentMessagesLoad(
+        channels: Collection<ChatChannel>,
+        force: Boolean = false,
+    ) {
+        if (performanceScenarioActive || !settingsStore.recentMessagesEnabled || channels.isEmpty()) return
+        val now = System.currentTimeMillis()
+        channels.distinctBy { channel -> channel.login.lowercase() }.forEach { requestedChannel ->
+            val login = requestedChannel.login.trim().lowercase()
+            if (login.isBlank()) return@forEach
+            if (!force && login in recentMessagesLoadedLogins) return@forEach
+            if (recentMessagesJobs[login]?.isActive == true) return@forEach
+            val previousAttempt = recentMessagesLastAttemptAtMillis[login] ?: 0L
+            if (!force && now - previousAttempt < RECENT_MESSAGES_RETRY_COOLDOWN_MILLIS) return@forEach
+            recentMessagesLastAttemptAtMillis[login] = now
+
+            lateinit var job: Job
+            job = scope.launch(start = CoroutineStart.LAZY) {
+                try {
+                    recentMessagesSemaphore.withPermit {
+                        delay(Random.nextLong(RECENT_MESSAGES_JITTER_MILLIS + 1L))
+                        val channel = mutableState.value.channels.firstOrNull { candidate ->
+                            candidate.login.equals(login, ignoreCase = true)
+                        } ?: return@withPermit
+                        val result = recentMessagesClient.load(
+                            channel = channel,
+                            limit = RECENT_MESSAGES_LIMIT,
+                        )
+                        mergeRecentMessages(channel.login, result.messages)
+                        if (result.errorCode == null || result.messages.isNotEmpty()) {
+                            recentMessagesLoadedLogins += login
+                        }
+                        if (result.errorCode == "channel_not_joined" && result.messages.isNotEmpty()) {
+                            SafeLog.w(
+                                "RecentMessages",
+                                "History service is recovering #$login; the snapshot may contain a gap",
+                            )
+                        }
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Throwable) {
+                    SafeLog.w(
+                        "RecentMessages",
+                        "Unable to load public recent messages for #$login",
+                        error,
+                    )
+                } finally {
+                    recentMessagesJobs.remove(login, job)
+                }
+            }
+            recentMessagesJobs[login] = job
+            job.start()
+        }
+    }
+
+    private suspend fun mergeRecentMessages(
+        channelLogin: String,
+        recentMessages: List<ChatMessage>,
+    ) {
+        if (recentMessages.isEmpty()) return
+        val snapshot = mutableState.value
+        val channel = snapshot.channels.firstOrNull { candidate ->
+            candidate.login.equals(channelLogin, ignoreCase = true)
+        } ?: return
+        val normalized = recentMessages.map { message ->
+            enrichThirdPartyEmotes(
+                message.copy(
+                    channelId = channel.id,
+                    channelLogin = channel.login,
+                ),
+                snapshot,
+            )
+        }
+        normalized.forEach { message ->
+            seenMessageIds.addIfNew(message.id, System.currentTimeMillis())
+        }
+        ChatMessageTextPreparation.warm(normalized)
+
+        val beforeIds = snapshot.messagesByChannel[channel.id].orEmpty()
+            .asSequence()
+            .map(ChatMessage::id)
+            .toHashSet()
+        val candidatesForHistory = normalized.filter { message -> message.id !in beforeIds }
+
+        mutableState.update { state ->
+            val currentChannel = state.channels.firstOrNull { candidate ->
+                candidate.login.equals(channelLogin, ignoreCase = true)
+            } ?: return@update state
+            val remapped = normalized.map { message ->
+                if (message.channelId == currentChannel.id && message.channelLogin == currentChannel.login) {
+                    message
+                } else {
+                    message.copy(
+                        channelId = currentChannel.id,
+                        channelLogin = currentChannel.login,
+                    )
+                }
+            }
+            val existing = state.messagesByChannel[currentChannel.id].orEmpty()
+            val memoryLimit = if (state.localHistoryEnabled) {
+                minOf(MAX_MESSAGES_PER_CHANNEL, state.localHistoryLimit)
+            } else {
+                MAX_MESSAGES_PER_CHANNEL
+            }
+            val merged = RecentMessagesMerge.merge(
+                existing = existing,
+                recent = remapped,
+                limit = memoryLimit,
+            )
+            if (merged.addedMessages.isEmpty()) {
+                state
+            } else {
+                state.copy(
+                    messagesByChannel = state.messagesByChannel +
+                        (currentChannel.id to merged.messages),
+                    restoredHistoryMessageCount = state.restoredHistoryMessageCount +
+                        merged.addedMessages.size,
+                )
+            }
+        }
+
+        if (settingsStore.localHistoryEnabled && candidatesForHistory.isNotEmpty()) {
+            val persistedChannel = mutableState.value.channels.firstOrNull { candidate ->
+                candidate.login.equals(channelLogin, ignoreCase = true)
+            }
+            val persistedMessages = persistedChannel?.let { currentChannel ->
+                candidatesForHistory.map { message ->
+                    message.copy(
+                        channelId = currentChannel.id,
+                        channelLogin = currentChannel.login,
+                    )
+                }
+            }.orEmpty()
+            runCatching {
+                historyRepository.saveMessages(
+                    messages = persistedMessages,
+                    enabled = true,
+                    limitPerChannel = settingsStore.localHistoryLimit,
+                    retentionDays = settingsStore.localHistoryRetentionDays,
+                    maxDatabaseSizeMb = settingsStore.localHistoryMaxSizeMb,
+                )
+            }.onFailure { error ->
+                SafeLog.w("RecentMessages", "Unable to cache recent message snapshot", error)
+            }
+        }
+        if (mutableState.value.isAuthenticated && mutableState.value.showAvatars) {
+            candidatesForHistory.forEach { message ->
+                if (message.author.profileImageUrl.isNullOrBlank()) {
+                    queueUserProfileHydration(message.userId)
+                }
+            }
+        }
+        rebuildMessageRuleEvaluation()
+    }
+
+    private fun cancelRecentMessagesLoad(channelLogin: String) {
+        val login = channelLogin.trim().lowercase()
+        recentMessagesJobs.remove(login)?.cancel()
+        recentMessagesLoadedLogins.remove(login)
+        recentMessagesLastAttemptAtMillis.remove(login)
+    }
+
+    private fun stopRecentMessagesLoads() {
+        recentMessagesJobs.values.forEach(Job::cancel)
+        recentMessagesJobs.clear()
     }
 
     private fun refreshSelectedTwitchChannelEmotes(
@@ -6069,6 +6288,7 @@ class FerventioController(
         durationSeconds: Int = 0,
     ) {
         performanceScenarioActive = true
+        stopRecentMessagesLoads()
         authRestoreJob?.cancel()
         authRestoreJob = null
         serverAuthorizationJob?.cancel()
@@ -6187,6 +6407,7 @@ class FerventioController(
         moderation = ModerationUiState(
             autoModNotificationsEnabled = settingsStore.autoModNotificationsEnabled,
         ),
+        recentMessagesEnabled = settingsStore.recentMessagesEnabled,
         localHistoryEnabled = settingsStore.localHistoryEnabled,
         localHistoryLimit = settingsStore.localHistoryLimit,
         localHistoryRetentionDays = settingsStore.localHistoryRetentionDays,
@@ -6252,6 +6473,10 @@ class FerventioController(
             "#B89CFF", "#FFB4A7", "#7CDBA3", "#FFC66F", "#80CBC4", "#90CAF9",
         )
         const val MAX_MESSAGES_PER_CHANNEL = 5_000
+        const val RECENT_MESSAGES_LIMIT = 100
+        const val RECENT_MESSAGES_MAX_CONCURRENT_REQUESTS = 3
+        const val RECENT_MESSAGES_JITTER_MILLIS = 100L
+        const val RECENT_MESSAGES_RETRY_COOLDOWN_MILLIS = 60_000L
         const val MAX_SEEN_IDS = 4_000
         const val SEEN_ID_TTL_MILLIS = 10 * 60 * 1_000L
         const val MAX_CHANNELS = 20
