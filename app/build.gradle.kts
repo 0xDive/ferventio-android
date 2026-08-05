@@ -17,10 +17,15 @@ fun String.asBuildConfigString(): String =
     "\"" + replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
 val productionFerventioServerUrl = "https://ferventio.godive.dev"
+val productionRecentMessagesUrl = "https://recent-messages.robotty.de/api/v2/recent-messages"
 val ferventioServerUrl = providers
     .gradleProperty("FERVENTIO_SERVER_URL")
     .orElse(providers.gradleProperty("FERVENTIO_PUSH_SERVER_URL"))
     .orElse(productionFerventioServerUrl)
+    .get()
+val recentMessagesUrl = providers
+    .gradleProperty("FERVENTIO_RECENT_MESSAGES_URL")
+    .orElse(productionRecentMessagesUrl)
     .get()
 val firebaseApplicationId = providers.gradleProperty("FERVENTIO_FIREBASE_APPLICATION_ID").orElse("").get()
 val firebaseProjectId = providers.gradleProperty("FERVENTIO_FIREBASE_PROJECT_ID").orElse("").get()
@@ -83,6 +88,7 @@ android {
             ferventioServerUrl.asBuildConfigString(),
         )
         buildConfigField("boolean", "PERFORMANCE_TESTING", "false")
+        buildConfigField("String", "RECENT_MESSAGES_URL", recentMessagesUrl.asBuildConfigString())
         buildConfigField("String", "PRIVACY_OPERATOR_NAME", privacyOperatorName.asBuildConfigString())
         buildConfigField("String", "PRIVACY_CONTACT", configuredPrivacyContact.asBuildConfigString())
         buildConfigField("String", "PRIVACY_POLICY_URL", configuredPrivacyPolicyUrl.asBuildConfigString())

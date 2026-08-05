@@ -518,6 +518,7 @@ data class FerventioUiState(
     val eventSubMalformedEnvelopeCount: Int = 0,
     val eventSubNoticeChannelIds: Set<String> = emptySet(),
     val eventSubNoticeFailures: Map<String, String> = emptyMap(),
+    val recentMessagesEnabled: Boolean = false,
     val localHistoryEnabled: Boolean = true,
     val localHistoryLimit: Int = 500,
     val localHistoryRetentionDays: Int = 7,

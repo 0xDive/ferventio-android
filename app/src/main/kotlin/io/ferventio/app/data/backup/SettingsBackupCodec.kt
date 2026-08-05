@@ -67,6 +67,7 @@ data class BackupSettings(
     val showComposerEmoteImages: Boolean,
     val replyNotificationsEnabled: Boolean,
     val autoModNotificationsEnabled: Boolean,
+    val recentMessagesEnabled: Boolean = false,
     val localHistoryEnabled: Boolean,
     val localHistoryLimit: Int,
     val localHistoryRetentionDays: Int,
@@ -140,6 +141,7 @@ object SettingsBackupCodec {
                 userCardTimeoutPresetsSeconds = store.userCardTimeoutPresetsSeconds,
                 userCardShowBanAction = store.userCardShowBanAction,
                 userCardModerationActionOrder = store.userCardModerationActionOrder,
+                recentMessagesEnabled = store.recentMessagesEnabled,
             ),
             channels = BackupChannels(
                 logins = store.channelLogins,
@@ -224,6 +226,7 @@ object SettingsBackupCodec {
             store.userCardTimeoutPresetsSeconds = settings.userCardTimeoutPresetsSeconds
             store.userCardShowBanAction = settings.userCardShowBanAction
             store.userCardModerationActionOrder = settings.userCardModerationActionOrder
+            store.recentMessagesEnabled = settings.recentMessagesEnabled
 
             store.channelLogins = channels.logins
             store.markChannelsExplicitlyEmpty(channels.logins.isEmpty())

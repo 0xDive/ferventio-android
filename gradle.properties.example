@@ -5,6 +5,9 @@
 # https://ferventio.godive.dev and never asks the end user for a server address.
 FERVENTIO_SERVER_URL=https://ferventio.godive.dev
 
+# Optional public Recent Messages endpoint override. Keep the trailing channel name out of the URL.
+FERVENTIO_RECENT_MESSAGES_URL=https://recent-messages.robotty.de/api/v2/recent-messages
+
 # Required only for the play flavor. Values are taken from your Firebase Android app settings.
 FERVENTIO_FIREBASE_APPLICATION_ID=1:1234567890:android:abcdef0123456789
 FERVENTIO_FIREBASE_PROJECT_ID=ferventio-production

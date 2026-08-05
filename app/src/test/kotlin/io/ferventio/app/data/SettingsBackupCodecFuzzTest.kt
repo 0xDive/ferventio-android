@@ -84,6 +84,7 @@ class SettingsBackupCodecFuzzTest {
             userCardTimeoutPresetsSeconds = listOf(10, 60, 600),
             userCardShowBanAction = true,
             userCardModerationActionOrder = listOf("timeout:10", "ban"),
+            recentMessagesEnabled = true,
         ),
         channels = BackupChannels(
             logins = listOf("channel_a", "channel_b"),
