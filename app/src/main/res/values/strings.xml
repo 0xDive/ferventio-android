@@ -92,4 +92,28 @@
     <string name="ferventio_duration_minutes_format">%1$dm</string>
     <string name="ferventio_duration_seconds_format">%1$ds</string>
     <string name="ferventio_remove_timeout_preset_format">Remove timeout preset %1$s</string>
+
+    <string name="ferventio_auto_scroll_new_messages">Follow new messages</string>
+    <string name="ferventio_auto_scroll_new_messages_summary">Keep the chat at the newest message until you scroll away. Use the live-chat button to resume.</string>
+    <string name="ferventio_recent_messages_section">Recent messages</string>
+    <string name="ferventio_recent_messages_enabled">Load messages sent before opening the chat</string>
+    <string name="ferventio_recent_messages_enabled_summary">When a channel opens, request up to 100 recent public messages from the third-party Recent Messages service.</string>
+    <string name="ferventio_recent_messages_privacy_note">The service temporarily stores public Twitch messages and receives your IP address when a request is made. This feature is disabled by default.</string>
+    <string name="ferventio_recent_messages_service_info">Open service information</string>
+    <string name="ferventio_local_history_section">On-device history</string>
+    <string name="ferventio_local_history_save_messages">Save messages</string>
+    <string name="ferventio_local_history_device_only">History is stored only on this device.</string>
+    <string name="ferventio_local_history_restoring">Restoring messages…</string>
+    <string name="ferventio_local_history_restored_count">Messages restored: %1$d</string>
+    <string name="ferventio_local_history_messages_per_channel">Messages per channel</string>
+    <string name="ferventio_local_history_retention">Retention period</string>
+    <string name="ferventio_local_history_unlimited">Unlimited</string>
+    <plurals name="ferventio_local_history_retention_days">
+        <item quantity="one">%1$d day</item>
+        <item quantity="other">%1$d days</item>
+    </plurals>
+    <string name="ferventio_local_history_max_database_size">Maximum database size</string>
+    <string name="ferventio_local_history_size_megabytes">%1$d MB</string>
+    <string name="ferventio_local_history_clear">Clear local history</string>
+    <string name="ferventio_jump_to_live_chat">Jump to live chat</string>
 </resources>

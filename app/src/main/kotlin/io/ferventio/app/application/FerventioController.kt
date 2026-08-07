@@ -6438,8 +6438,7 @@ class FerventioController(
     )
 
     private fun cachedLeaseWarningOrNull(): String? = if (accessLeaseFallbackActive) {
-        "Сервер Ferventio временно недоступен. Используется сохранённый Twitch access token; " +
-            "обновление продолжится автоматически."
+        "Сервер Ferventio временно недоступен. Используется сохранённый Twitch access token; обновление продолжится автоматически."
     } else {
         null
     }

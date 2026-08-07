@@ -103,7 +103,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -257,15 +256,15 @@ internal fun SystemMessageRow(
         verticalAlignment = Alignment.Top,
     ) {
         if (showTimestamp) {
-            Text(
+            VerbatimText(
                 text = formatChatTimestamp(message.timestampMillis),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f),
                 maxLines = 1,
             )
         }
-        Text(
-            text = "• ${message.text}",
+        VerbatimText(
+            text = "• ${localizedString(message.text)}",
             modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.88f),
@@ -548,7 +547,7 @@ internal fun FallbackBadgeIcon(
         modifier = modifier,
         contentAlignment = Alignment.Center,
     ) {
-        Text(
+        VerbatimText(
             text = appearance.symbol,
             maxLines = 1,
             color = appearance.background,
@@ -600,13 +599,13 @@ internal fun UserAvatar(
         if (!imageUrl.isNullOrBlank()) {
             AsyncImage(
                 model = imageUrl,
-                contentDescription = "Аватар $displayName",
+                contentDescription = localizedString("Аватар ${verbatimArgument(displayName)}"),
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
         } else {
             Box(contentAlignment = Alignment.Center) {
-                Text(
+                VerbatimText(
                     text = displayName.firstOrNull()?.uppercase() ?: "?",
                     fontWeight = FontWeight.Bold,
                     color = color,
@@ -656,34 +655,34 @@ internal fun NoticeMessageRow(
             verticalAlignment = Alignment.Top,
         ) {
             if (showTimestamp) {
-                Text(
+                VerbatimText(
                     text = formatChatTimestamp(message.timestampMillis),
                     modifier = Modifier.padding(end = 8.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
                 )
             }
-            Text(
+            VerbatimText(
                 text = noticeSymbol(message.type),
                 modifier = Modifier.padding(end = 8.dp),
                 style = MaterialTheme.typography.titleMedium,
             )
             Column(Modifier.weight(1f)) {
-                Text(
+                LocalizedText(
                     text = ChatNoticeTextFormatter.title(message),
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Bold,
                     color = accent,
                 )
                 ChatNoticeTextFormatter.body(message)?.let { body ->
-                    Text(
+                    VerbatimText(
                         text = body,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                 }
                 ChatNoticeTextFormatter.userMessage(message)?.let { userMessage ->
-                    Text(
+                    VerbatimText(
                         text = userMessage,
                         modifier = Modifier.padding(top = 3.dp),
                         style = MaterialTheme.typography.bodyMedium,
@@ -692,7 +691,7 @@ internal fun NoticeMessageRow(
                     )
                 }
                 if (notice.type.startsWith("shared_chat_")) {
-                    Text(
+                    LocalizedText(
                         text = "Shared Chat",
                         modifier = Modifier.padding(top = 2.dp),
                         style = MaterialTheme.typography.labelSmall,

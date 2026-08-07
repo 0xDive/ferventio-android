@@ -103,7 +103,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -275,7 +274,7 @@ internal fun IgnoredMessageRow(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (showTimestamp && !masked) {
-                Text(
+                VerbatimText(
                     formatChatTimestamp(message.timestampMillis),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -283,7 +282,7 @@ internal fun IgnoredMessageRow(
                 Spacer(Modifier.width(6.dp))
             }
             if (!masked) {
-                Text(
+                VerbatimText(
                     message.userDisplayName,
                     fontWeight = FontWeight.SemiBold,
                     maxLines = 1,
@@ -291,8 +290,12 @@ internal fun IgnoredMessageRow(
                 )
                 Spacer(Modifier.width(6.dp))
             }
-            Text(
-                if (masked) "Сообщение скрыто. Нажмите, чтобы показать" else "Свернуто правилом: $reason",
+            LocalizedText(
+                if (masked) {
+                    "Сообщение скрыто. Нажмите, чтобы показать"
+                } else {
+                    "Свернуто правилом: ${verbatimArgument(reason)}"
+                },
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -457,7 +460,7 @@ internal fun MessageRow(
                     },
                 )
                 Spacer(Modifier.width(5.dp))
-                Text(
+                VerbatimText(
                     text = preparedText.replyPreview.orEmpty(),
                     modifier = Modifier
                         .weight(1f)
@@ -473,7 +476,7 @@ internal fun MessageRow(
                 )
                 Icon(
                     imageVector = Icons.Default.Forum,
-                    contentDescription = "Открыть ветку ответов",
+                    contentDescription = localizedString("Открыть ветку ответов"),
                     modifier = Modifier
                         .size(18.dp)
                         .clickable { onOpenReplyThread(message) },
@@ -627,7 +630,7 @@ internal fun MessageRow(
             }
         }
 
-        Text(
+        VerbatimText(
             text = line.text,
             modifier = Modifier
                 .fillMaxWidth()

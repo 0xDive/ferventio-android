@@ -103,7 +103,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -296,7 +295,7 @@ internal fun SettingsHomePage(
                     }
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(
+                        VerbatimText(
                             profile?.displayName
                                 ?: state.session?.login ?: strings.noAccount,
                             style = MaterialTheme.typography.titleMedium,
@@ -304,7 +303,7 @@ internal fun SettingsHomePage(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        Text(
+                        VerbatimText(
                             state.session?.login?.let { "@$it" }
                                 ?: if (state.isAuthenticated) strings.twitchAccount else strings.readOnlyChats,
                             style = MaterialTheme.typography.bodySmall,
@@ -314,7 +313,7 @@ internal fun SettingsHomePage(
                         )
                     }
                     TextButton(onClick = onLogout) {
-                        Text(if (state.isAuthenticated) strings.signOut else strings.signIn)
+                        LocalizedText(if (state.isAuthenticated) strings.signOut else strings.signIn)
                     }
                 }
             }
@@ -492,12 +491,12 @@ internal fun LanguageSelectionRow(
             onClick = null,
         )
         Column(Modifier.weight(1f)) {
-            Text(
+            LocalizedText(
                 appLanguageLabel(language, strings),
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium,
             )
-            Text(
+            LocalizedText(
                 appLanguageSummary(language, strings),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -515,7 +514,7 @@ internal fun SettingsHomeGroup(
         modifier = Modifier.padding(horizontal = 14.dp),
         verticalArrangement = Arrangement.spacedBy(5.dp),
     ) {
-        Text(
+        LocalizedText(
             title,
             modifier = Modifier.padding(start = 6.dp),
             style = MaterialTheme.typography.labelMedium,
@@ -590,7 +589,7 @@ internal fun SettingsMenuRow(
         )
         Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(
+            LocalizedText(
                 title,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold,
@@ -598,7 +597,7 @@ internal fun SettingsMenuRow(
                 else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f),
             )
             summary?.let {
-                Text(
+                LocalizedText(
                     it,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -640,12 +639,12 @@ internal fun SettingsSwitchRow(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(3.dp),
         ) {
-            Text(
+            LocalizedText(
                 title,
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.SemiBold,
             )
-            Text(
+            LocalizedText(
                 description,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -678,11 +677,11 @@ internal fun <T> ChoiceButtons(
                 .heightIn(min = 48.dp)
             if (value == selected) {
                 FilledTonalButton(onClick = { onSelect(value) }, modifier = modifier) {
-                    Text(label(value), maxLines = 1)
+                    LocalizedText(label(value), maxLines = 1)
                 }
             } else {
                 OutlinedButton(onClick = { onSelect(value) }, modifier = modifier) {
-                    Text(label(value), maxLines = 1)
+                    LocalizedText(label(value), maxLines = 1)
                 }
             }
         }
@@ -718,7 +717,7 @@ internal fun MentionColorPicker(
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             Icons.Default.Check,
-                            contentDescription = "Выбранный цвет",
+                            contentDescription = localizedString("Выбранный цвет"),
                             tint = if (color.luminance() > 0.55f) Color.Black else Color.White,
                         )
                     }
@@ -765,7 +764,7 @@ internal fun SettingsSection(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(
+            LocalizedText(
                 title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,

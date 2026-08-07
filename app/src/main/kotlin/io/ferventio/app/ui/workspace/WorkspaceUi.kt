@@ -70,7 +70,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -311,7 +310,7 @@ private fun ChatsWorkspaceScreen(
                             onClick = openChannelDrawer,
                             modifier = Modifier.size(38.dp),
                         ) {
-                            Icon(Icons.Default.Menu, contentDescription = "Каналы")
+                            Icon(Icons.Default.Menu, contentDescription = localizedString("Каналы"))
                         }
                         Column(
                             modifier = Modifier
@@ -327,7 +326,7 @@ private fun ChatsWorkspaceScreen(
                             verticalArrangement = Arrangement.Center,
                         ) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
+                                VerbatimText(
                                     text = if (selectedChannel == null) "Ferventio" else "#$selectedTitle",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
@@ -336,10 +335,10 @@ private fun ChatsWorkspaceScreen(
                                 )
                                 if ((selectedAttention?.mentionCount ?: 0) > 0) {
                                     Spacer(Modifier.width(6.dp))
-                                    Badge { Text(compactCount(selectedAttention?.mentionCount ?: 0)) }
+                                    Badge { VerbatimText(compactCount(selectedAttention?.mentionCount ?: 0)) }
                                 } else if ((selectedAttention?.unreadCount ?: 0) > 0) {
                                     Spacer(Modifier.width(6.dp))
-                                    Badge { Text(compactCount(selectedAttention?.unreadCount ?: 0)) }
+                                    Badge { VerbatimText(compactCount(selectedAttention?.unreadCount ?: 0)) }
                                 }
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -353,7 +352,7 @@ private fun ChatsWorkspaceScreen(
                                     },
                                 ) {}
                                 Spacer(Modifier.width(5.dp))
-                                Text(
+                                LocalizedText(
                                     text = when (state.connectionStatus) {
                                         io.ferventio.app.domain.ConnectionStatus.CONNECTED -> "чат подключён"
                                         io.ferventio.app.domain.ConnectionStatus.CONNECTING,
@@ -381,7 +380,7 @@ private fun ChatsWorkspaceScreen(
                             enabled = selectedChannel != null,
                             modifier = Modifier.size(38.dp),
                         ) {
-                            Icon(Icons.Default.People, contentDescription = "Пользователи чата")
+                            Icon(Icons.Default.People, contentDescription = localizedString("Пользователи чата"))
                         }
                         if (canModerateSelected) {
                             IconButton(
@@ -392,7 +391,7 @@ private fun ChatsWorkspaceScreen(
                                 },
                                 modifier = Modifier.size(38.dp),
                             ) {
-                                Icon(Icons.Default.Tune, contentDescription = "Режимы чата")
+                                Icon(Icons.Default.Tune, contentDescription = localizedString("Режимы чата"))
                             }
                         }
                         Box {
@@ -403,7 +402,7 @@ private fun ChatsWorkspaceScreen(
                                 },
                                 modifier = Modifier.size(38.dp),
                             ) {
-                                Icon(Icons.Default.MoreVert, contentDescription = "Меню")
+                                Icon(Icons.Default.MoreVert, contentDescription = localizedString("Меню"))
                             }
                             DropdownMenu(
                                 expanded = showMainMenu,
@@ -412,10 +411,10 @@ private fun ChatsWorkspaceScreen(
                                 DropdownMenuItem(
                                     text = {
                                         Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Text("Упоминания")
+                                            LocalizedText("Упоминания")
                                             if (state.mentionUnreadCount > 0) {
                                                 Spacer(Modifier.width(8.dp))
-                                                Badge { Text(compactCount(state.mentionUnreadCount)) }
+                                                Badge { VerbatimText(compactCount(state.mentionUnreadCount)) }
                                             }
                                         }
                                     },
@@ -425,14 +424,14 @@ private fun ChatsWorkspaceScreen(
                                     },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Поиск") },
+                                    text = { LocalizedText("Поиск") },
                                     onClick = {
                                         showMainMenu = false
                                         onOpenSearch()
                                     },
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Настройки") },
+                                    text = { LocalizedText("Настройки") },
                                     onClick = {
                                         showMainMenu = false
                                         onOpenSettings()
@@ -454,12 +453,12 @@ private fun ChatsWorkspaceScreen(
                 if (state.channels.isEmpty()) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text("Пока нет каналов", style = MaterialTheme.typography.headlineSmall)
+                            LocalizedText("Пока нет каналов", style = MaterialTheme.typography.headlineSmall)
                             Spacer(Modifier.height(12.dp))
                             OutlinedButton(onClick = { showAddChannel = true }) {
                                 Icon(Icons.Default.Add, contentDescription = null)
                                 Spacer(Modifier.width(8.dp))
-                                Text("Добавить канал")
+                                LocalizedText("Добавить канал")
                             }
                         }
                     }

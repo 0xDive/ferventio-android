@@ -4,6 +4,8 @@ import json
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
+from generate_ui_catalog import collect
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -397,11 +399,15 @@ EXTRA = {
 
 
 def main() -> None:
-    translations = resource_pairs()
-    translations.update(EXTRA)
     out = ROOT / 'config/localization/ui_strings_en.json'
+    existing = json.loads(out.read_text(encoding='utf-8')) if out.exists() else {}
+    translations = {str(key): str(value) for key, value in existing.items()}
+    translations.update(resource_pairs())
+    translations.update(EXTRA)
+    active = set(collect())
+    translations = {key: value for key, value in translations.items() if key in active}
     out.write_text(json.dumps(dict(sorted(translations.items())), ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
-    print(f'wrote {len(translations)} translations to {out}')
+    print(f'wrote {len(translations)} active translations to {out}')
 
 
 if __name__ == '__main__':

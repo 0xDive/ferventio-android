@@ -103,7 +103,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -135,6 +134,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -175,6 +178,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.ferventio.app.R
 import io.ferventio.app.BuildConfig
 import io.ferventio.app.domain.AutoModHeldMessage
 import io.ferventio.app.domain.AutoModMessageStatus
@@ -266,6 +270,7 @@ internal fun ChannelChatContent(
     onHorizontalGestureLockChanged: (Boolean) -> Unit = {},
     instanceKey: String = channelId,
 ) {
+    val resourceStrings = rememberAppResourceStrings(state.appLanguage)
     val input = state.draftsByChannel[channelId].orEmpty()
     val canWrite = state.isAuthenticated
     var replyTarget by remember(instanceKey) { mutableStateOf<ChatMessage?>(null) }
@@ -377,10 +382,12 @@ internal fun ChannelChatContent(
                 .toSet()
         }
     }
-    val isViewportAtBottom by remember(listState, lastContentIndex) {
+    val latestLastContentIndex = rememberUpdatedState(lastContentIndex)
+    val isViewportAtBottom by remember(listState) {
         derivedStateOf {
-            lastContentIndex < 0 ||
-                (listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1) >= lastContentIndex
+            val currentLastContentIndex = latestLastContentIndex.value
+            currentLastContentIndex < 0 ||
+                (listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1) >= currentLastContentIndex
         }
     }
     val latestMessageId = messages.lastOrNull()?.id
@@ -388,7 +395,7 @@ internal fun ChannelChatContent(
     val liveContentKey = "${latestMessageId.orEmpty()}|${latestAutoModMessageId.orEmpty()}"
     var lastObservedLiveContentKey by remember(instanceKey) { mutableStateOf(liveContentKey) }
     val latestMessages by rememberUpdatedState(messages)
-    val latestLastContentIndex by rememberUpdatedState(lastContentIndex)
+    val latestAutoScrollEnabled = rememberUpdatedState(state.autoScrollEnabled)
     var initialPositionApplied by remember(instanceKey) {
         // When messages are already in memory, rememberLazyListState has received the correct
         // initial anchor and the page can be shown immediately. Empty precomposed neighbours keep
@@ -396,8 +403,31 @@ internal fun ChannelChatContent(
         mutableStateOf(hasChatContent)
     }
     var followLiveChat by remember(instanceKey) { mutableStateOf(state.autoScrollEnabled && !restoreOldPosition) }
+    var liveFollowPausedByUser by remember(instanceKey) { mutableStateOf(restoreOldPosition) }
+    var resumeEligibleAfterUserScroll by remember(instanceKey) { mutableStateOf(false) }
     val latestFollowLiveChat by rememberUpdatedState(followLiveChat)
     val isDragged by listState.interactionSource.collectIsDraggedAsState()
+    val pauseLiveFollowingForUserScroll: () -> Unit = {
+        // Keep the pause sticky even when the latest row is still partly visible. Once the
+        // gesture has actually moved into older content, returning to the bottom may resume.
+        resumeEligibleAfterUserScroll = LiveChatFollowPolicy.updateResumeEligibility(
+            current = resumeEligibleAfterUserScroll,
+            viewportAtBottom = isViewportAtBottom,
+        )
+        liveFollowPausedByUser = true
+        followLiveChat = false
+    }
+    val latestPauseLiveFollowingForUserScroll = rememberUpdatedState(pauseLiveFollowingForUserScroll)
+    val userScrollConnection = remember(instanceKey) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (source == NestedScrollSource.UserInput && available.y != 0f) {
+                    latestPauseLiveFollowingForUserScroll.value()
+                }
+                return Offset.Zero
+            }
+        }
+    }
     val catalog = state.emoteCatalogByChannel[channelId].orEmpty()
     val emoteCatalogByProviderAndId = remember(catalog) {
         catalog.associateBy { asset -> asset.provider to asset.id }
@@ -504,6 +534,7 @@ internal fun ChannelChatContent(
                 it.id == targetId || it.serverMessageId == targetId
             }
             if (targetIndex >= 0) {
+                liveFollowPausedByUser = true
                 followLiveChat = false
                 highlightedMessageId = currentMessages[targetIndex].id
                 coroutineScope.launch { listState.scrollToItem(targetIndex) }
@@ -544,9 +575,7 @@ internal fun ChannelChatContent(
 
     LaunchedEffect(isDragged) {
         if (isDragged) {
-            // Pause before hiding IME. Otherwise the viewport expansion can race the drag and
-            // the live-follow observer would pull the user back to the newest message.
-            followLiveChat = false
+            pauseLiveFollowingForUserScroll()
             hideKeyboard()
         }
     }
@@ -589,6 +618,7 @@ internal fun ChannelChatContent(
         }
         val targetOffset = if (restore) savedPosition.firstVisibleItemScrollOffset.coerceAtLeast(0) else 0
         listState.scrollToItem(targetIndex, targetOffset)
+        liveFollowPausedByUser = restore
         followLiveChat = state.autoScrollEnabled && !restore
         // Wait until LazyColumn has measured the requested anchor before revealing it. This
         // removes the old-message flash when switching between active channels.
@@ -612,7 +642,18 @@ internal fun ChannelChatContent(
                 delay(SCROLL_POSITION_SAVE_DELAY_MILLIS)
                 val index = listState.firstVisibleItemIndex
                 val atBottom = isViewportAtBottom
-                followLiveChat = state.autoScrollEnabled && atBottom
+                if (
+                    liveFollowPausedByUser &&
+                    LiveChatFollowPolicy.shouldResumeAfterUserScroll(
+                        autoScrollEnabled = latestAutoScrollEnabled.value,
+                        resumeEligibleAfterUserScroll = resumeEligibleAfterUserScroll,
+                        viewportAtBottom = atBottom,
+                    )
+                ) {
+                    liveFollowPausedByUser = false
+                }
+                resumeEligibleAfterUserScroll = false
+                followLiveChat = latestAutoScrollEnabled.value && atBottom && !liveFollowPausedByUser
                 onScrollPositionChanged(
                     channelId,
                     latestMessages.getOrNull(index)?.id,
@@ -631,12 +672,12 @@ internal fun ChannelChatContent(
             .distinctUntilChanged()
             .collectLatest {
                 if (
-                    state.autoScrollEnabled &&
+                    latestAutoScrollEnabled.value &&
                     latestFollowLiveChat &&
                     !listState.isScrollInProgress &&
-                    latestLastContentIndex >= 0
+                    latestLastContentIndex.value >= 0
                 ) {
-                    listState.scrollToItem(latestLastContentIndex)
+                    listState.scrollToItem(latestLastContentIndex.value)
                 }
             }
     }
@@ -660,6 +701,7 @@ internal fun ChannelChatContent(
             if (!initialPositionApplied) return@LaunchedEffect
             val targetIndex = messages.indexOfFirst { it.id == targetId || it.serverMessageId == targetId }
             if (targetIndex >= 0) {
+                liveFollowPausedByUser = true
                 followLiveChat = false
                 highlightedMessageId = messages[targetIndex].id
                 listState.scrollToItem(targetIndex)
@@ -692,8 +734,8 @@ internal fun ChannelChatContent(
         if (!followLiveChat) return@LaunchedEffect
         // Coalesce bursts of incoming messages into one layout jump instead of one scroll job per event.
         delay(LIVE_FOLLOW_COALESCE_MILLIS)
-        if (latestFollowLiveChat && latestLastContentIndex >= 0) {
-            listState.scrollToItem(latestLastContentIndex)
+        if (latestFollowLiveChat && latestLastContentIndex.value >= 0) {
+            listState.scrollToItem(latestLastContentIndex.value)
         }
     }
 
@@ -763,6 +805,7 @@ internal fun ChannelChatContent(
                 state = listState,
                 modifier = Modifier
                     .fillMaxSize()
+                    .nestedScroll(userScrollConnection)
                     .testTag(CHAT_LIST_TEST_TAG)
                     .semantics {
                         if (BuildConfig.PERFORMANCE_TESTING) {
@@ -832,6 +875,8 @@ internal fun ChannelChatContent(
             if (initialPositionApplied && hasChatContent && !followLiveChat) {
                 FilledTonalButton(
                     onClick = {
+                        liveFollowPausedByUser = false
+                        resumeEligibleAfterUserScroll = false
                         followLiveChat = state.autoScrollEnabled
                         coroutineScope.launch {
                             listState.scrollToItem(lastContentIndex)
@@ -851,7 +896,7 @@ internal fun ChannelChatContent(
                 ) {
                     Icon(Icons.Default.KeyboardArrowDown, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
-                    Text("К актуальному чату")
+                    LocalizedText(resourceStrings.string(R.string.ferventio_jump_to_live_chat))
                 }
             }
         }
@@ -871,12 +916,12 @@ internal fun ChannelChatContent(
                     Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(
-                            "Ответ для ${target.userDisplayName}",
+                        LocalizedText(
+                            "Ответ для ${verbatimArgument(target.userDisplayName)}",
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSecondaryContainer,
                         )
-                        Text(
+                        VerbatimText(
                             target.text,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -885,7 +930,7 @@ internal fun ChannelChatContent(
                         )
                     }
                     IconButton(onClick = { replyTarget = null }) {
-                        Icon(Icons.Default.Close, contentDescription = "Отменить ответ")
+                        Icon(Icons.Default.Close, contentDescription = localizedString("Отменить ответ"))
                     }
                 }
             }
@@ -987,14 +1032,14 @@ internal fun ChannelChatContent(
                         decorationBox = { innerTextField ->
                             Box(contentAlignment = Alignment.CenterStart) {
                                 if (input.isEmpty()) {
-                                    Text(
+                                    LocalizedText(
                                         if (canWrite) "Сообщение" else "Войди через Twitch, чтобы писать",
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
                                     )
                                 } else {
                                     composerRichText?.let { richText ->
-                                        Text(
+                                        VerbatimText(
                                             text = richText.annotatedText,
                                             inlineContent = richText.inlineContent,
                                             style = MaterialTheme.typography.bodyMedium.copy(
@@ -1019,7 +1064,7 @@ internal fun ChannelChatContent(
                     ) {
                         Icon(
                             Icons.Default.InsertEmoticon,
-                            contentDescription = "Каталог эмоутов",
+                            contentDescription = localizedString("Каталог эмоутов"),
                             modifier = Modifier.size(20.dp),
                         )
                     }
@@ -1037,7 +1082,7 @@ internal fun ChannelChatContent(
                     disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.42f),
                 ),
             ) {
-                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Отправить", modifier = Modifier.size(20.dp))
+                Icon(Icons.AutoMirrored.Filled.Send, contentDescription = localizedString("Отправить"), modifier = Modifier.size(20.dp))
             }
         }
 

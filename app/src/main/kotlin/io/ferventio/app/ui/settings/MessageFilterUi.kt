@@ -34,7 +34,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -91,14 +90,13 @@ internal fun MessageFilterSettings(
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(
-            "Фильтры компилируются один раз и затем применяются к сообщениям. " +
-                "Строковые сравнения без regex не учитывают регистр.",
+        LocalizedText(
+            "Фильтры компилируются один раз и затем применяются к сообщениям. Строковые сравнения без regex не учитывают регистр.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (state.savedMessageFilters.isEmpty()) {
-            Text("Сохранённых фильтров пока нет", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            LocalizedText("Сохранённых фильтров пока нет", color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
             state.savedMessageFilters.forEachIndexed { index, filter ->
                 Row(
@@ -109,8 +107,8 @@ internal fun MessageFilterSettings(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(Modifier.weight(1f)) {
-                        Text(filter.name, fontWeight = FontWeight.SemiBold)
-                        Text(
+                        VerbatimText(filter.name, fontWeight = FontWeight.SemiBold)
+                        VerbatimText(
                             filter.expression,
                             style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -119,13 +117,13 @@ internal fun MessageFilterSettings(
                         )
                     }
                     IconButton(onClick = { controller.addSavedFilterSplit(filter.id) }) {
-                        Icon(Icons.Default.FilterAlt, contentDescription = "Добавить в split")
+                        Icon(Icons.Default.FilterAlt, contentDescription = localizedString("Добавить в split"))
                     }
                     IconButton(onClick = { editing = filter }) {
-                        Icon(Icons.Default.Edit, contentDescription = "Изменить")
+                        Icon(Icons.Default.Edit, contentDescription = localizedString("Изменить"))
                     }
                     IconButton(onClick = { controller.deleteSavedMessageFilter(filter.id) }) {
-                        Icon(Icons.Default.Delete, contentDescription = "Удалить")
+                        Icon(Icons.Default.Delete, contentDescription = localizedString("Удалить"))
                     }
                 }
                 if (index != state.savedMessageFilters.lastIndex) HorizontalDivider()
@@ -134,7 +132,7 @@ internal fun MessageFilterSettings(
         Button(onClick = { creating = true }, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.Default.Add, contentDescription = null)
             Spacer(Modifier.width(6.dp))
-            Text("Создать фильтр")
+            LocalizedText("Создать фильтр")
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(
@@ -146,7 +144,7 @@ internal fun MessageFilterSettings(
             ) {
                 Icon(Icons.Default.ContentCopy, contentDescription = null)
                 Spacer(Modifier.width(5.dp))
-                Text("Экспорт")
+                LocalizedText("Экспорт")
             }
             OutlinedButton(
                 onClick = { importing = true },
@@ -154,19 +152,18 @@ internal fun MessageFilterSettings(
             ) {
                 Icon(Icons.Default.FileDownload, contentDescription = null)
                 Spacer(Modifier.width(5.dp))
-                Text("Импорт")
+                LocalizedText("Импорт")
             }
         }
         status?.let {
-            Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+            LocalizedText(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
         }
-        Text("Примеры", fontWeight = FontWeight.SemiBold)
+        LocalizedText("Примеры", fontWeight = FontWeight.SemiBold)
         MessageFilterExamples(onSelect = { example ->
             editing = SavedMessageFilter(name = "Новый фильтр", expression = example)
         })
-        Text(
-            "Поля reward.title и reward.cost доступны только если Twitch передал metadata награды; " +
-                "иначе сравнение с ними не совпадает.",
+        LocalizedText(
+            "Поля reward.title и reward.cost доступны только если Twitch передал metadata награды; иначе сравнение с ними не совпадает.",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -220,7 +217,7 @@ private fun SavedFilterEditorDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (initial == null) "Новый фильтр" else "Редактирование фильтра") },
+        title = { LocalizedText(if (initial == null) "Новый фильтр" else "Редактирование фильтра") },
         text = {
             LazyColumn(
                 modifier = Modifier.heightIn(max = 560.dp),
@@ -231,7 +228,7 @@ private fun SavedFilterEditorDialog(
                         value = name,
                         onValueChange = { name = it.take(80) },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("Название") },
+                        label = { LocalizedText("Название") },
                         singleLine = true,
                     )
                 }
@@ -244,7 +241,7 @@ private fun SavedFilterEditorDialog(
                 }
                 item { FilterDiagnostics(compiled.diagnostics) }
                 item {
-                    Text(
+                    LocalizedText(
                         "Предпросмотр: ${preview.totalMatches} из ${preview.totalChecked}",
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -253,7 +250,7 @@ private fun SavedFilterEditorDialog(
                     PreviewMessageRow(preview.messages[index])
                 }
                 item {
-                    Text("Примеры", fontWeight = FontWeight.SemiBold)
+                    LocalizedText("Примеры", fontWeight = FontWeight.SemiBold)
                     MessageFilterExamples(onSelect = { expression = it })
                 }
             }
@@ -269,9 +266,9 @@ private fun SavedFilterEditorDialog(
                         ),
                     )
                 },
-            ) { Text("Сохранить") }
+            ) { LocalizedText("Сохранить") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        dismissButton = { TextButton(onClick = onDismiss) { LocalizedText("Отмена") } },
     )
 }
 
@@ -317,7 +314,7 @@ internal fun SplitFilterEditorDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Фильтр split") },
+        title = { LocalizedText("Фильтр split") },
         text = {
             LazyColumn(
                 modifier = Modifier.heightIn(max = 580.dp),
@@ -329,11 +326,11 @@ internal fun SplitFilterEditorDialog(
                             OutlinedButton(
                                 onClick = { savedMenu = true },
                                 modifier = Modifier.fillMaxWidth(),
-                            ) { Text("Выбрать сохранённый фильтр") }
+                            ) { LocalizedText("Выбрать сохранённый фильтр") }
                             DropdownMenu(expanded = savedMenu, onDismissRequest = { savedMenu = false }) {
                                 savedFilters.forEach { filter ->
                                     DropdownMenuItem(
-                                        text = { Text(filter.name) },
+                                        text = { VerbatimText(filter.name) },
                                         onClick = {
                                             linkedFilterId = filter.id
                                             expression = filter.expression
@@ -349,8 +346,8 @@ internal fun SplitFilterEditorDialog(
                     val linkedName = savedFilters.firstOrNull { it.id == filterId }?.name
                     if (linkedName != null) {
                         item {
-                            Text(
-                                "Связан с сохранённым фильтром: $linkedName",
+                            LocalizedText(
+                                "Связан с сохранённым фильтром: ${verbatimArgument(linkedName)}",
                                 color = MaterialTheme.colorScheme.primary,
                                 style = MaterialTheme.typography.labelMedium,
                             )
@@ -369,7 +366,7 @@ internal fun SplitFilterEditorDialog(
                 }
                 if (isHighlights) {
                     item {
-                        Text(
+                        LocalizedText(
                             "Специальный split Highlights",
                             color = MaterialTheme.colorScheme.primary,
                         )
@@ -378,7 +375,7 @@ internal fun SplitFilterEditorDialog(
                     item { FilterDiagnostics(compiled.diagnostics) }
                 }
                 item {
-                    Text(
+                    LocalizedText(
                         "Предпросмотр: ${preview.totalMatches} из ${preview.totalChecked}",
                         fontWeight = FontWeight.SemiBold,
                     )
@@ -387,7 +384,7 @@ internal fun SplitFilterEditorDialog(
                     PreviewMessageRow(preview.messages[index])
                 }
                 item {
-                    Text("Примеры", fontWeight = FontWeight.SemiBold)
+                    LocalizedText("Примеры", fontWeight = FontWeight.SemiBold)
                     MessageFilterExamples(onSelect = { value ->
                         linkedFilterId = null
                         expression = value
@@ -402,15 +399,15 @@ internal fun SplitFilterEditorDialog(
                     val value = linkedFilterId?.let(::savedFilterReference) ?: expression.trim()
                     onSave(value)
                 },
-            ) { Text("Применить") }
+            ) { LocalizedText("Применить") }
         },
         dismissButton = {
             Row {
                 TextButton(onClick = {
                     linkedFilterId = null
                     expression = ""
-                }) { Text("Сбросить") }
-                TextButton(onClick = onDismiss) { Text("Отмена") }
+                }) { LocalizedText("Сбросить") }
+                TextButton(onClick = onDismiss) { LocalizedText("Отмена") }
             }
         },
     )
@@ -440,7 +437,7 @@ private fun FilterExpressionField(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 120.dp),
-        label = { Text(label) },
+        label = { LocalizedText(label) },
         textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
         visualTransformation = transformation,
         minLines = 4,
@@ -451,7 +448,7 @@ private fun FilterExpressionField(
 @Composable
 private fun FilterDiagnostics(diagnostics: List<FilterDiagnostic>) {
     if (diagnostics.isEmpty()) {
-        Text("Выражение корректно", color = MaterialTheme.colorScheme.primary)
+        LocalizedText("Выражение корректно", color = MaterialTheme.colorScheme.primary)
         return
     }
     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -461,7 +458,7 @@ private fun FilterDiagnostics(diagnostics: List<FilterDiagnostic>) {
             } else {
                 MaterialTheme.colorScheme.tertiary
             }
-            Text(
+            LocalizedText(
                 "${diagnostic.span.start + 1}: ${diagnostic.message}",
                 style = MaterialTheme.typography.labelSmall,
                 color = color,
@@ -477,7 +474,7 @@ private fun MessageFilterExamples(onSelect: (String) -> Unit) {
             FilterChip(
                 selected = false,
                 onClick = { onSelect(expression) },
-                label = { Text(title) },
+                label = { LocalizedText(title) },
             )
         }
     }
@@ -486,12 +483,12 @@ private fun MessageFilterExamples(onSelect: (String) -> Unit) {
 @Composable
 private fun PreviewMessageRow(message: ChatMessage) {
     Column(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
-        Text(
+        VerbatimText(
             "#${message.channelLogin} · ${message.userDisplayName}",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary,
         )
-        Text(message.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        VerbatimText(message.text, maxLines = 2, overflow = TextOverflow.Ellipsis)
     }
 }
 
@@ -505,7 +502,7 @@ private fun ImportFiltersDialog(
     var raw by rememberSaveable { mutableStateOf(initial) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Импорт фильтров") },
+        title = { LocalizedText("Импорт фильтров") },
         text = {
             OutlinedTextField(
                 value = raw,
@@ -513,15 +510,15 @@ private fun ImportFiltersDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = 240.dp),
-                label = { Text("JSON") },
+                label = { LocalizedText("JSON") },
                 textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                 minLines = 10,
             )
         },
         confirmButton = {
-            TextButton(enabled = raw.isNotBlank(), onClick = { onImport(raw) }) { Text("Импортировать") }
+            TextButton(enabled = raw.isNotBlank(), onClick = { onImport(raw) }) { LocalizedText("Импортировать") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        dismissButton = { TextButton(onClick = onDismiss) { LocalizedText("Отмена") } },
     )
 }
 

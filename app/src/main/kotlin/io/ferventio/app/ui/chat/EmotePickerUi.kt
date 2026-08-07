@@ -38,7 +38,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -72,16 +71,16 @@ import kotlinx.coroutines.launch
 private enum class EmotePickerFilter(
     val providerId: String? = null,
     val shortLabel: String,
-    val contentDescription: String,
+    val contentDescriptionSource: String,
 ) {
-    ALL(shortLabel = "ALL", contentDescription = "Все эмоуты"),
-    FREQUENT(shortLabel = "TOP", contentDescription = "Часто используемые"),
-    RECENT(shortLabel = "", contentDescription = "Недавние эмоуты"),
-    FAVORITES(shortLabel = "", contentDescription = "Избранные эмоуты"),
-    TWITCH(providerId = "twitch", shortLabel = "T", contentDescription = "Twitch"),
-    BETTER_TTV(providerId = "betterttv", shortLabel = "B", contentDescription = "BetterTTV"),
-    FRANKER_FACE_Z(providerId = "frankerfacez", shortLabel = "F", contentDescription = "FrankerFaceZ"),
-    SEVEN_TV(providerId = "7tv", shortLabel = "7", contentDescription = "7TV"),
+    ALL(shortLabel = "ALL", contentDescriptionSource = "Все эмоуты"),
+    FREQUENT(shortLabel = "TOP", contentDescriptionSource = "Часто используемые"),
+    RECENT(shortLabel = "", contentDescriptionSource = "Недавние эмоуты"),
+    FAVORITES(shortLabel = "", contentDescriptionSource = "Избранные эмоуты"),
+    TWITCH(providerId = "twitch", shortLabel = "T", contentDescriptionSource = "Twitch"),
+    BETTER_TTV(providerId = "betterttv", shortLabel = "B", contentDescriptionSource = "BetterTTV"),
+    FRANKER_FACE_Z(providerId = "frankerfacez", shortLabel = "F", contentDescriptionSource = "FrankerFaceZ"),
+    SEVEN_TV(providerId = "7tv", shortLabel = "7", contentDescriptionSource = "7TV"),
 }
 
 private data class EmotePickerSection(
@@ -306,13 +305,13 @@ internal fun InlineEmoteAutocomplete(
                         )
                         Spacer(Modifier.width(9.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(
+                            VerbatimText(
                                 asset.code,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 fontWeight = FontWeight.Bold,
                             )
-                            Text(
+                            VerbatimText(
                                 asset.providerDisplayName(),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -388,7 +387,7 @@ internal fun TwitchStyleEmotePickerPanel(
             EmotePickerFilter.RECENT -> "Недавние" to "Последние использованные эмоуты"
             EmotePickerFilter.FAVORITES -> "Избранные" to "Сохранённые эмоуты"
             EmotePickerFilter.TWITCH -> "Twitch" to "Доступные твоему аккаунту эмоуты"
-            else -> selectedFilter.contentDescription to "Канал и глобальный каталог"
+            else -> selectedFilter.contentDescriptionSource to "Канал и глобальный каталог"
         }
     }
 
@@ -432,14 +431,18 @@ internal fun TwitchStyleEmotePickerPanel(
                 }
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {
-                    Text(
-                        header.first,
+                    VerbatimText(
+                        if (highlighted != null || selectedFilter == EmotePickerFilter.ALL) {
+                            header.first
+                        } else {
+                            localizedString(header.first)
+                        },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         fontWeight = FontWeight.Bold,
                     )
-                    Text(
-                        header.second,
+                    VerbatimText(
+                        localizedString(header.second),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.bodySmall,
@@ -450,15 +453,15 @@ internal fun TwitchStyleEmotePickerPanel(
                     IconButton(onClick = { onToggleFavorite(asset) }) {
                         Icon(
                             if (asset.usageKey in favoriteEmoteKeys) Icons.Default.Star else Icons.Default.StarBorder,
-                            contentDescription = "Избранное",
+                            contentDescription = localizedString("Избранное"),
                         )
                     }
                     IconButton(onClick = { onOpenInfo(asset) }) {
-                        Icon(Icons.Default.Info, contentDescription = "Информация об эмоуте")
+                        Icon(Icons.Default.Info, contentDescription = localizedString("Информация об эмоуте"))
                     }
                 }
                 IconButton(onClick = { showSearch = !showSearch }) {
-                    Icon(Icons.Default.Search, contentDescription = "Поиск эмоутов")
+                    Icon(Icons.Default.Search, contentDescription = localizedString("Поиск эмоутов"))
                 }
             }
 
@@ -469,12 +472,12 @@ internal fun TwitchStyleEmotePickerPanel(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 12.dp, vertical = 4.dp),
-                    placeholder = { Text("Поиск эмоутов") },
+                    placeholder = { LocalizedText("Поиск эмоутов") },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                     trailingIcon = {
                         if (query.isNotEmpty()) {
                             IconButton(onClick = { query = "" }) {
-                                Icon(Icons.Default.Close, contentDescription = "Очистить поиск")
+                                Icon(Icons.Default.Close, contentDescription = localizedString("Очистить поиск"))
                             }
                         }
                     },
@@ -549,7 +552,7 @@ internal fun TwitchStyleEmotePickerPanel(
                         ) {
                             Icon(
                                 Icons.Default.KeyboardArrowDown,
-                                contentDescription = "Закрыть каталог эмоутов",
+                                contentDescription = localizedString("Закрыть каталог эмоутов"),
                                 modifier = Modifier.size(24.dp),
                             )
                         }
@@ -589,7 +592,7 @@ private fun EmotePickerGridPage(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
+            LocalizedText(
                 if (query.isBlank()) "В этой категории пока нет эмоутов" else "Ничего не найдено",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -615,8 +618,8 @@ private fun EmotePickerGridPage(
                 contentType = "emote-header",
                 span = { GridItemSpan(maxLineSpan) },
             ) {
-                Text(
-                    section.title.uppercase(),
+                VerbatimText(
+                    localizedString(section.title).uppercase(),
                     modifier = Modifier.padding(start = 4.dp, top = 9.dp, bottom = 4.dp),
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.Bold,
@@ -658,20 +661,20 @@ private fun EmoteCategoryButton(
             when (filter) {
                 EmotePickerFilter.ALL -> Icon(
                     Icons.Default.InsertEmoticon,
-                    contentDescription = filter.contentDescription,
+                    contentDescription = localizedString(filter.contentDescriptionSource),
                     modifier = Modifier.size(21.dp),
                 )
                 EmotePickerFilter.RECENT -> Icon(
                     Icons.Default.History,
-                    contentDescription = filter.contentDescription,
+                    contentDescription = localizedString(filter.contentDescriptionSource),
                     modifier = Modifier.size(21.dp),
                 )
                 EmotePickerFilter.FAVORITES -> Icon(
                     Icons.Default.Star,
-                    contentDescription = filter.contentDescription,
+                    contentDescription = localizedString(filter.contentDescriptionSource),
                     modifier = Modifier.size(21.dp),
                 )
-                else -> Text(
+                else -> VerbatimText(
                     filter.shortLabel,
                     fontWeight = FontWeight.Black,
                     fontSize = 17.sp,
