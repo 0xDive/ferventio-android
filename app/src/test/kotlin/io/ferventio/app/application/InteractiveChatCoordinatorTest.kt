@@ -1,5 +1,6 @@
 package io.ferventio.app.application
 
+import io.ferventio.app.domain.InteractiveMutationKind
 import io.ferventio.app.domain.PollChoice
 import io.ferventio.app.domain.PollDraft
 import io.ferventio.app.domain.PollOverlay
@@ -91,6 +92,32 @@ class InteractiveChatCoordinatorTest {
     }
 
     @Test
+    fun `failed mutation stays visible until a later mutation succeeds`() {
+        runBlocking {
+            val gateway = FakeGateway(pollCreateFailure = IllegalStateException("boom"))
+            val coordinator = InteractiveChatCoordinator(gateway)
+            val draft = PollDraft(
+                title = "Question",
+                choices = listOf("A", "B"),
+                durationSeconds = 60,
+            )
+
+            val failedCall = runCatching { coordinator.createPoll(auth, draft) }
+
+            assertTrue(failedCall.isFailure)
+            val failure = coordinator.state.value.mutationsByChannel.getValue("channel")
+            assertEquals(InteractiveMutationKind.CREATE_POLL, failure.kind)
+            assertFalse(failure.inFlight)
+            assertTrue(failure.failed)
+
+            gateway.pollCreateFailure = null
+            coordinator.createPoll(auth, draft)
+
+            assertFalse("channel" in coordinator.state.value.mutationsByChannel)
+        }
+    }
+
+    @Test
     fun `close releases gateway`() {
         val gateway = FakeGateway()
         val coordinator = InteractiveChatCoordinator(gateway)
@@ -147,12 +174,16 @@ class InteractiveChatCoordinatorTest {
             status = PredictionStatus.LOCKED,
             updatedAtMillis = 2L,
         ),
+        var pollCreateFailure: Throwable? = null,
     ) : InteractiveChatGateway {
         var closed: Boolean = false
 
         override suspend fun getPolls(auth: InteractiveChatAuth): List<PollOverlay> = polls
 
-        override suspend fun createPoll(auth: InteractiveChatAuth, draft: PollDraft): PollOverlay = createdPoll
+        override suspend fun createPoll(auth: InteractiveChatAuth, draft: PollDraft): PollOverlay {
+            pollCreateFailure?.let { throw it }
+            return createdPoll
+        }
 
         override suspend fun endPoll(
             auth: InteractiveChatAuth,

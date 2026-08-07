@@ -983,6 +983,7 @@ internal fun ChannelChatContent(
         InteractiveChatOverlayStack(
             poll = interactiveChatState.pollsByChannel[channelId],
             prediction = interactiveChatState.predictionsByChannel[channelId],
+            mutation = interactiveChatState.mutationsByChannel[channelId],
             strings = InteractiveOverlayUiStrings(
                 pollLabel = resourceStrings.string(R.string.ferventio_interactive_poll_label),
                 predictionLabel = resourceStrings.string(R.string.ferventio_interactive_prediction_label),
@@ -994,6 +995,8 @@ internal fun ChannelChatContent(
                 lockPrediction = resourceStrings.string(R.string.ferventio_interactive_lock_prediction),
                 cancelPrediction = resourceStrings.string(R.string.ferventio_interactive_cancel_prediction),
                 resolvePrediction = resourceStrings.string(R.string.ferventio_interactive_resolve_prediction),
+                working = resourceStrings.string(R.string.ferventio_interactive_working),
+                actionFailed = resourceStrings.string(R.string.ferventio_interactive_action_failed),
             ),
             creationStrings = InteractiveCreationUiStrings(
                 createPoll = resourceStrings.string(R.string.ferventio_interactive_create_poll),

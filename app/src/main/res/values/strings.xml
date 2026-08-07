@@ -198,6 +198,8 @@
     <string name="ferventio_interactive_lock_prediction">Lock prediction</string>
     <string name="ferventio_interactive_cancel_prediction">Cancel prediction</string>
     <string name="ferventio_interactive_resolve_prediction">Resolve</string>
+    <string name="ferventio_interactive_working">Updating Twitch…</string>
+    <string name="ferventio_interactive_action_failed">The action failed. Try again.</string>
 
         <string name="ferventio_workspace_search_chat">Search chat</string>
     <string name="ferventio_workspace_actions">Actions</string>
