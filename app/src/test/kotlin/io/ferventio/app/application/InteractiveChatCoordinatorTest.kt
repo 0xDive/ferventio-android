@@ -1,6 +1,8 @@
 package io.ferventio.app.application
 
+import io.ferventio.app.domain.InteractiveMutationFailureKind
 import io.ferventio.app.domain.InteractiveMutationKind
+import io.ferventio.app.domain.InteractiveMutationRecovery
 import io.ferventio.app.domain.PollChoice
 import io.ferventio.app.domain.PollDraft
 import io.ferventio.app.domain.PollOverlay
@@ -11,7 +13,12 @@ import io.ferventio.app.domain.PredictionOverlay
 import io.ferventio.app.domain.PredictionStatus
 import io.ferventio.app.twitch.PollEndStatus
 import io.ferventio.app.twitch.PredictionEndStatus
+import io.ferventio.app.twitch.TwitchInteractiveApiException
+import java.io.IOException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.yield
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -92,9 +99,11 @@ class InteractiveChatCoordinatorTest {
     }
 
     @Test
-    fun `failed mutation stays visible until a later mutation succeeds`() {
+    fun `rate limited mutation can retry the same command with fresh auth`() {
         runBlocking {
-            val gateway = FakeGateway(pollCreateFailure = IllegalStateException("boom"))
+            val gateway = FakeGateway(
+                pollCreateFailure = TwitchInteractiveApiException(429, "rate limited"),
+            )
             val coordinator = InteractiveChatCoordinator(gateway)
             val draft = PollDraft(
                 title = "Question",
@@ -102,18 +111,115 @@ class InteractiveChatCoordinatorTest {
                 durationSeconds = 60,
             )
 
-            val failedCall = runCatching { coordinator.createPoll(auth, draft) }
-
-            assertTrue(failedCall.isFailure)
+            assertTrue(runCatching { coordinator.createPoll(auth, draft) }.isFailure)
             val failure = coordinator.state.value.mutationsByChannel.getValue("channel")
             assertEquals(InteractiveMutationKind.CREATE_POLL, failure.kind)
-            assertFalse(failure.inFlight)
-            assertTrue(failure.failed)
+            assertEquals(InteractiveMutationFailureKind.RATE_LIMITED, failure.failureKind)
+            assertEquals(InteractiveMutationRecovery.RETRY, failure.recovery)
 
             gateway.pollCreateFailure = null
-            coordinator.createPoll(auth, draft)
+            val recovered = coordinator.recover(auth.copy(accessToken = "fresh-token"))
 
+            assertTrue(recovered)
+            assertEquals("fresh-token", gateway.lastCreatePollToken)
             assertFalse("channel" in coordinator.state.value.mutationsByChannel)
+        }
+    }
+
+    @Test
+    fun `network failure refreshes state instead of replaying mutation`() {
+        runBlocking {
+            val gateway = FakeGateway(pollCreateFailure = IOException("offline"))
+            val coordinator = InteractiveChatCoordinator(gateway)
+            val draft = PollDraft(
+                title = "Question",
+                choices = listOf("A", "B"),
+                durationSeconds = 60,
+            )
+
+            assertTrue(runCatching { coordinator.createPoll(auth, draft) }.isFailure)
+            val failure = coordinator.state.value.mutationsByChannel.getValue("channel")
+            assertEquals(InteractiveMutationFailureKind.NETWORK, failure.failureKind)
+            assertEquals(InteractiveMutationRecovery.REFRESH, failure.recovery)
+
+            gateway.pollCreateFailure = null
+            assertTrue(coordinator.recover(auth))
+            assertEquals(1, gateway.createPollCalls)
+            assertFalse("channel" in coordinator.state.value.mutationsByChannel)
+        }
+    }
+
+    @Test
+    fun `refresh recovery restores failure if refresh also fails`() {
+        runBlocking {
+            val gateway = FakeGateway(pollCreateFailure = IOException("offline"))
+            val coordinator = InteractiveChatCoordinator(gateway)
+            val draft = PollDraft(
+                title = "Question",
+                choices = listOf("A", "B"),
+                durationSeconds = 60,
+            )
+
+            assertTrue(runCatching { coordinator.createPoll(auth, draft) }.isFailure)
+            gateway.pollCreateFailure = null
+            gateway.pollsFailure = IOException("still offline")
+
+            assertTrue(runCatching { coordinator.recover(auth) }.isFailure)
+            val failure = coordinator.state.value.mutationsByChannel.getValue("channel")
+            assertFalse(failure.inFlight)
+            assertEquals(InteractiveMutationFailureKind.NETWORK, failure.failureKind)
+            assertEquals(InteractiveMutationRecovery.REFRESH, failure.recovery)
+            assertEquals(1, gateway.createPollCalls)
+        }
+    }
+
+    @Test
+    fun `refresh recovery becomes in flight and rejects a second recovery tap`() {
+        runBlocking {
+            val gateway = FakeGateway(pollCreateFailure = IOException("offline"))
+            val coordinator = InteractiveChatCoordinator(gateway)
+            val draft = PollDraft(
+                title = "Question",
+                choices = listOf("A", "B"),
+                durationSeconds = 60,
+            )
+
+            assertTrue(runCatching { coordinator.createPoll(auth, draft) }.isFailure)
+            gateway.pollCreateFailure = null
+            gateway.pollsGate = CompletableDeferred()
+
+            val recovery = launch { coordinator.recover(auth) }
+            while (gateway.getPollsCalls == 0) yield()
+
+            assertTrue(coordinator.state.value.mutationsByChannel.getValue("channel").inFlight)
+            assertFalse(coordinator.recover(auth))
+
+            gateway.pollsGate?.complete(Unit)
+            recovery.join()
+            assertFalse("channel" in coordinator.state.value.mutationsByChannel)
+            assertEquals(1, gateway.getPollsCalls)
+        }
+    }
+
+    @Test
+    fun `permission failure cannot replay mutation`() {
+        runBlocking {
+            val gateway = FakeGateway(
+                pollCreateFailure = TwitchInteractiveApiException(403, "forbidden"),
+            )
+            val coordinator = InteractiveChatCoordinator(gateway)
+            val draft = PollDraft(
+                title = "Question",
+                choices = listOf("A", "B"),
+                durationSeconds = 60,
+            )
+
+            assertTrue(runCatching { coordinator.createPoll(auth, draft) }.isFailure)
+            val failure = coordinator.state.value.mutationsByChannel.getValue("channel")
+            assertEquals(InteractiveMutationFailureKind.PERMISSION, failure.failureKind)
+            assertEquals(InteractiveMutationRecovery.NONE, failure.recovery)
+            assertFalse(coordinator.recover(auth))
+            assertEquals(1, gateway.createPollCalls)
         }
     }
 
@@ -175,12 +281,24 @@ class InteractiveChatCoordinatorTest {
             updatedAtMillis = 2L,
         ),
         var pollCreateFailure: Throwable? = null,
+        var pollsFailure: Throwable? = null,
+        var pollsGate: CompletableDeferred<Unit>? = null,
     ) : InteractiveChatGateway {
         var closed: Boolean = false
+        var createPollCalls: Int = 0
+        var getPollsCalls: Int = 0
+        var lastCreatePollToken: String? = null
 
-        override suspend fun getPolls(auth: InteractiveChatAuth): List<PollOverlay> = polls
+        override suspend fun getPolls(auth: InteractiveChatAuth): List<PollOverlay> {
+            getPollsCalls += 1
+            pollsGate?.await()
+            pollsFailure?.let { throw it }
+            return polls
+        }
 
         override suspend fun createPoll(auth: InteractiveChatAuth, draft: PollDraft): PollOverlay {
+            createPollCalls += 1
+            lastCreatePollToken = auth.accessToken
             pollCreateFailure?.let { throw it }
             return createdPoll
         }

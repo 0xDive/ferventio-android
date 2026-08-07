@@ -40,6 +40,11 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 
+class TwitchInteractiveApiException(
+    val statusCode: Int,
+    message: String,
+) : RuntimeException(message)
+
 /** Twitch Helix adapter for Polls and Channel Points Predictions. */
 class TwitchInteractiveApiClient(
     private val clockMillis: () -> Long = System::currentTimeMillis,
@@ -238,7 +243,10 @@ class TwitchInteractiveApiClient(
         val twitchMessage = runCatching {
             json.parseToJsonElement(body).jsonObject["message"]?.jsonPrimitive?.contentOrNull
         }.getOrNull()
-        error(twitchMessage ?: "Twitch request failed with HTTP ${status.value}")
+        throw TwitchInteractiveApiException(
+            statusCode = status.value,
+            message = twitchMessage ?: "Twitch request failed with HTTP ${status.value}",
+        )
     }
 
     private fun String.requireId(label: String): String = trim().also {

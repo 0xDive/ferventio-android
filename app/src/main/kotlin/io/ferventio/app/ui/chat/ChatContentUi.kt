@@ -278,6 +278,7 @@ internal fun ChannelChatContent(
     onLockPrediction: (String) -> Unit = {},
     onCancelPrediction: (String) -> Unit = {},
     onResolvePrediction: (String, String) -> Unit = { _, _ -> },
+    onRecoverInteractiveMutation: () -> Unit = {},
     onDraftChange: (String) -> Unit = {},
     onRetryMessage: (ChatMessage) -> Unit = {},
     onDeleteMessage: (ChatMessage) -> Unit = {},
@@ -997,6 +998,14 @@ internal fun ChannelChatContent(
                 resolvePrediction = resourceStrings.string(R.string.ferventio_interactive_resolve_prediction),
                 working = resourceStrings.string(R.string.ferventio_interactive_working),
                 actionFailed = resourceStrings.string(R.string.ferventio_interactive_action_failed),
+                authenticationFailed = resourceStrings.string(R.string.ferventio_interactive_error_authentication),
+                permissionFailed = resourceStrings.string(R.string.ferventio_interactive_error_permission),
+                rateLimited = resourceStrings.string(R.string.ferventio_interactive_error_rate_limited),
+                networkFailed = resourceStrings.string(R.string.ferventio_interactive_error_network),
+                serverFailed = resourceStrings.string(R.string.ferventio_interactive_error_server),
+                conflictFailed = resourceStrings.string(R.string.ferventio_interactive_error_conflict),
+                retry = resourceStrings.string(R.string.ferventio_interactive_retry),
+                refresh = resourceStrings.string(R.string.ferventio_interactive_refresh),
             ),
             creationStrings = InteractiveCreationUiStrings(
                 createPoll = resourceStrings.string(R.string.ferventio_interactive_create_poll),
@@ -1036,6 +1045,7 @@ internal fun ChannelChatContent(
                     onResolvePrediction(predictionId, outcomeId)
                 }
             },
+            onRecoverMutation = onRecoverInteractiveMutation,
             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
         )
 

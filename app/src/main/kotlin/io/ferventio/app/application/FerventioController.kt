@@ -19,6 +19,7 @@ import io.ferventio.app.twitch.TwitchPinnedChatGqlException
 import io.ferventio.app.twitch.TwitchUnofficialChattersClient
 import io.ferventio.app.twitch.TwitchRecentMessagesClient
 import io.ferventio.app.twitch.TwitchApiException
+import io.ferventio.app.twitch.TwitchInteractiveApiException
 import io.ferventio.app.twitch.TwitchAnonymousChatClient
 import io.ferventio.app.twitch.EventSubActivity
 import io.ferventio.app.twitch.EventSubConnectionUpdate
@@ -89,6 +90,7 @@ class FerventioController(
     private val onHighlightAlert: (HighlightAlert) -> Unit = {},
     private val onInteractiveChatEvent: (InteractiveChatOverlayEvent) -> Unit = {},
     private val onInteractiveChatRefresh: suspend (InteractiveChatAuth) -> Unit = {},
+    private val onInteractiveMutationRecover: suspend (InteractiveChatAuth) -> Unit = {},
     private val onInteractivePollCreate: suspend (InteractiveChatAuth, PollDraft) -> Unit = { _, _ -> },
     private val onInteractivePredictionCreate: suspend (InteractiveChatAuth, PredictionDraft) -> Unit = { _, _ -> },
     private val onInteractivePollEnd: suspend (InteractiveChatAuth, String, PollEndStatus) -> Unit = { _, _, _ -> },
@@ -1999,6 +2001,25 @@ class FerventioController(
             durationSeconds = seconds,
         )
         showNotice("@$userLogin: timeout ${formatDuration(seconds)}")
+    }
+
+    fun recoverInteractiveMutation(channelId: String) {
+        val session = mutableState.value.session ?: return
+        if (session.userId != channelId) return
+        scope.launch {
+            runCatching {
+                withAuthenticationRetry { context ->
+                    if (context.session.userId != channelId) return@withAuthenticationRetry
+                    onInteractiveMutationRecover(
+                        InteractiveChatAuth(
+                            clientId = context.session.clientId,
+                            accessToken = context.accessToken,
+                            broadcasterId = channelId,
+                        ),
+                    )
+                }
+            }.onFailure { error -> showError(error.userMessage()) }
+        }
     }
 
     fun createInteractivePoll(channelId: String, draft: PollDraft) {
@@ -7027,6 +7048,7 @@ private fun Throwable.isTransientBackendFailure(): Boolean = when (this) {
 
 private fun Throwable.hasUnauthorizedApiCause(): Boolean = when (this) {
     is TwitchApiException -> statusCode == 401
+    is TwitchInteractiveApiException -> statusCode == 401
     is TwitchChatSendException -> statusCode == 401
     else -> cause?.hasUnauthorizedApiCause() == true
 }

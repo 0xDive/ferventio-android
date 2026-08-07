@@ -68,11 +68,15 @@ class InteractiveChatOverlayReducerTest {
             InteractiveChatOverlayEvent.MutationFailed(
                 channelId = "channel",
                 kind = InteractiveMutationKind.CANCEL_PREDICTION,
+                failureKind = InteractiveMutationFailureKind.NETWORK,
+                recovery = InteractiveMutationRecovery.REFRESH,
             ),
         )
         val failed = state.mutationsByChannel.getValue("channel")
         assertTrue(failed.failed)
         assertTrue(!failed.inFlight)
+        assertEquals(InteractiveMutationFailureKind.NETWORK, failed.failureKind)
+        assertEquals(InteractiveMutationRecovery.REFRESH, failed.recovery)
 
         state = InteractiveChatOverlayReducer.reduce(
             state,
