@@ -251,6 +251,7 @@ internal fun PhoneChannelPager(
                     onCancelPrediction = { predictionId -> controller.cancelInteractivePrediction(channel.id, predictionId) },
 
                     onResolvePrediction = { predictionId, outcomeId -> controller.resolveInteractivePrediction(channel.id, predictionId, outcomeId) },
+                    onRecoverInteractiveMutation = { controller.recoverInteractiveMutation(channel.id) },
                     onDraftChange = { controller.updateDraft(channel.id, it) },
                     onRetryMessage = controller::retryOutgoingMessage,
                     onDeleteMessage = controller::deleteMessage,
@@ -671,6 +672,7 @@ internal fun SplitPane(
                         onCancelPrediction = { predictionId -> controller.cancelInteractivePrediction(channel.id, predictionId) },
 
                         onResolvePrediction = { predictionId, outcomeId -> controller.resolveInteractivePrediction(channel.id, predictionId, outcomeId) },
+                        onRecoverInteractiveMutation = { controller.recoverInteractiveMutation(channel.id) },
                         onDraftChange = { controller.updateDraft(channel.id, it) },
                         onRetryMessage = controller::retryOutgoingMessage,
                         onDeleteMessage = controller::deleteMessage,

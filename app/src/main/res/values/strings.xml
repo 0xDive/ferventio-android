@@ -199,7 +199,15 @@
     <string name="ferventio_interactive_cancel_prediction">Cancel prediction</string>
     <string name="ferventio_interactive_resolve_prediction">Resolve</string>
     <string name="ferventio_interactive_working">Updating Twitch…</string>
-    <string name="ferventio_interactive_action_failed">The action failed. Try again.</string>
+    <string name="ferventio_interactive_action_failed">The action could not be completed.</string>
+    <string name="ferventio_interactive_error_authentication">Twitch authentication expired.</string>
+    <string name="ferventio_interactive_error_permission">You no longer have permission to manage this poll or prediction.</string>
+    <string name="ferventio_interactive_error_rate_limited">Twitch is rate limiting requests. Try again shortly.</string>
+    <string name="ferventio_interactive_error_network">The network request did not complete. Refresh the Twitch state before trying another action.</string>
+    <string name="ferventio_interactive_error_server">Twitch is temporarily unavailable. Refresh the Twitch state before trying another action.</string>
+    <string name="ferventio_interactive_error_conflict">This poll or prediction changed on Twitch. Refresh before making another change.</string>
+    <string name="ferventio_interactive_retry">Try again</string>
+    <string name="ferventio_interactive_refresh">Refresh state</string>
 
         <string name="ferventio_workspace_search_chat">Search chat</string>
     <string name="ferventio_workspace_actions">Actions</string>

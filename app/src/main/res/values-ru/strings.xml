@@ -201,7 +201,15 @@
     <string name="ferventio_interactive_cancel_prediction">Отменить прогноз</string>
     <string name="ferventio_interactive_resolve_prediction">Завершить</string>
     <string name="ferventio_interactive_working">Обновляем Twitch…</string>
-    <string name="ferventio_interactive_action_failed">Не удалось выполнить действие. Попробуй ещё раз.</string>
+    <string name="ferventio_interactive_action_failed">Не удалось выполнить действие.</string>
+    <string name="ferventio_interactive_error_authentication">Авторизация Twitch устарела.</string>
+    <string name="ferventio_interactive_error_permission">У вас больше нет прав на управление этим опросом или прогнозом.</string>
+    <string name="ferventio_interactive_error_rate_limited">Twitch временно ограничил частоту запросов. Попробуйте ещё раз чуть позже.</string>
+    <string name="ferventio_interactive_error_network">Сетевой запрос не завершился. Сначала обновите состояние Twitch, затем повторите действие.</string>
+    <string name="ferventio_interactive_error_server">Twitch временно недоступен. Сначала обновите состояние Twitch, затем повторите действие.</string>
+    <string name="ferventio_interactive_error_conflict">Опрос или прогноз уже изменился на Twitch. Обновите состояние перед следующим действием.</string>
+    <string name="ferventio_interactive_retry">Повторить</string>
+    <string name="ferventio_interactive_refresh">Обновить состояние</string>
 
         <string name="ferventio_workspace_search_chat">Поиск по чату</string>
     <string name="ferventio_workspace_actions">Действия</string>

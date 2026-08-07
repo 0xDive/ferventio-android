@@ -4,6 +4,7 @@ import io.ferventio.app.domain.InteractiveChatOverlayEvent
 import io.ferventio.app.domain.InteractiveChatOverlayReducer
 import io.ferventio.app.domain.InteractiveChatOverlayState
 import io.ferventio.app.domain.InteractiveMutationKind
+import io.ferventio.app.domain.InteractiveMutationRecovery
 import io.ferventio.app.domain.PollDraft
 import io.ferventio.app.domain.PollOverlay
 import io.ferventio.app.domain.PollStatus
@@ -13,6 +14,7 @@ import io.ferventio.app.domain.PredictionStatus
 import io.ferventio.app.twitch.PollEndStatus
 import io.ferventio.app.twitch.PredictionEndStatus
 import java.io.Closeable
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -29,17 +31,48 @@ data class InteractiveChatAuth(
     val broadcasterId: String,
 )
 
-/**
- * Granular state holder for Polls / Predictions. It intentionally lives next to
- * the main controller instead of inside it so interactive overlays have their
- * own lifecycle, tests and Twitch API boundary.
- */
+private sealed interface InteractiveRetryCommand {
+    val kind: InteractiveMutationKind
+
+    data class CreatePoll(val draft: PollDraft) : InteractiveRetryCommand {
+        override val kind = InteractiveMutationKind.CREATE_POLL
+    }
+
+    data class EndPoll(
+        val pollId: String,
+        val status: PollEndStatus,
+    ) : InteractiveRetryCommand {
+        override val kind = when (status) {
+            PollEndStatus.TERMINATED -> InteractiveMutationKind.END_POLL
+            PollEndStatus.ARCHIVED -> InteractiveMutationKind.ARCHIVE_POLL
+        }
+    }
+
+    data class CreatePrediction(val draft: PredictionDraft) : InteractiveRetryCommand {
+        override val kind = InteractiveMutationKind.CREATE_PREDICTION
+    }
+
+    data class EndPrediction(
+        val predictionId: String,
+        val status: PredictionEndStatus,
+        val winningOutcomeId: String?,
+    ) : InteractiveRetryCommand {
+        override val kind = when (status) {
+            PredictionEndStatus.LOCKED -> InteractiveMutationKind.LOCK_PREDICTION
+            PredictionEndStatus.CANCELED -> InteractiveMutationKind.CANCEL_PREDICTION
+            PredictionEndStatus.RESOLVED -> InteractiveMutationKind.RESOLVE_PREDICTION
+        }
+    }
+}
+
+/** Granular state holder and Twitch API boundary for Polls / Predictions. */
 class InteractiveChatCoordinator internal constructor(
     private val api: InteractiveChatGateway = TwitchInteractiveChatGateway(),
 ) : Closeable {
     private val mutableState = MutableStateFlow(InteractiveChatOverlayState())
     val state: StateFlow<InteractiveChatOverlayState> = mutableState.asStateFlow()
     private val mutationMutex = Mutex()
+    private val pendingRetries = ConcurrentHashMap<String, InteractiveRetryCommand>()
 
     suspend fun refresh(auth: InteractiveChatAuth) = mutationMutex.withLock {
         val (polls, predictions) = coroutineScope {
@@ -58,6 +91,7 @@ class InteractiveChatCoordinator internal constructor(
             it.status == PredictionStatus.ACTIVE || it.status == PredictionStatus.LOCKED
         } ?: predictions.firstOrNull { it.status == PredictionStatus.RESOLVED }
 
+        pendingRetries.remove(auth.broadcasterId)
         mutableState.update { current ->
             var next = InteractiveChatOverlayReducer.reduce(
                 current,
@@ -79,30 +113,26 @@ class InteractiveChatCoordinator internal constructor(
         }
     }
 
-    suspend fun createPoll(auth: InteractiveChatAuth, draft: PollDraft): PollOverlay =
-        runMutation(auth, InteractiveMutationKind.CREATE_POLL) {
-            api.createPoll(auth, draft).also(::ingestPoll)
-        }
+    suspend fun createPoll(auth: InteractiveChatAuth, draft: PollDraft): PollOverlay {
+        val command = InteractiveRetryCommand.CreatePoll(draft)
+        return runMutation(auth, command) { api.createPoll(auth, draft).also(::ingestPoll) }
+    }
 
     suspend fun endPoll(
         auth: InteractiveChatAuth,
         pollId: String,
         status: PollEndStatus,
-    ): PollOverlay = runMutation(
-        auth = auth,
-        kind = when (status) {
-            PollEndStatus.TERMINATED -> InteractiveMutationKind.END_POLL
-            PollEndStatus.ARCHIVED -> InteractiveMutationKind.ARCHIVE_POLL
-        },
-    ) {
-        api.endPoll(auth, pollId, status).also(::ingestPoll)
+    ): PollOverlay {
+        val command = InteractiveRetryCommand.EndPoll(pollId, status)
+        return runMutation(auth, command) { api.endPoll(auth, pollId, status).also(::ingestPoll) }
     }
 
     suspend fun createPrediction(
         auth: InteractiveChatAuth,
         draft: PredictionDraft,
-    ): PredictionOverlay = runMutation(auth, InteractiveMutationKind.CREATE_PREDICTION) {
-        api.createPrediction(auth, draft).also(::ingestPrediction)
+    ): PredictionOverlay {
+        val command = InteractiveRetryCommand.CreatePrediction(draft)
+        return runMutation(auth, command) { api.createPrediction(auth, draft).also(::ingestPrediction) }
     }
 
     suspend fun endPrediction(
@@ -110,37 +140,97 @@ class InteractiveChatCoordinator internal constructor(
         predictionId: String,
         status: PredictionEndStatus,
         winningOutcomeId: String? = null,
-    ): PredictionOverlay = runMutation(
-        auth = auth,
-        kind = when (status) {
-            PredictionEndStatus.LOCKED -> InteractiveMutationKind.LOCK_PREDICTION
-            PredictionEndStatus.CANCELED -> InteractiveMutationKind.CANCEL_PREDICTION
-            PredictionEndStatus.RESOLVED -> InteractiveMutationKind.RESOLVE_PREDICTION
-        },
+    ): PredictionOverlay {
+        val command = InteractiveRetryCommand.EndPrediction(predictionId, status, winningOutcomeId)
+        return runMutation(auth, command) {
+            api.endPrediction(auth, predictionId, status, winningOutcomeId).also(::ingestPrediction)
+        }
+    }
+
+    suspend fun recover(auth: InteractiveChatAuth): Boolean {
+        val mutation = state.value.mutationsByChannel[auth.broadcasterId] ?: return false
+        return when (mutation.recovery) {
+            InteractiveMutationRecovery.NONE -> false
+            InteractiveMutationRecovery.REFRESH -> recoverByRefresh(auth, mutation)
+            InteractiveMutationRecovery.RETRY -> {
+                val command = pendingRetries[auth.broadcasterId] ?: return false
+                runMutation(auth, command) { executeRetryCommand(auth, command) }
+                true
+            }
+        }
+    }
+
+    private suspend fun recoverByRefresh(
+        auth: InteractiveChatAuth,
+        mutation: io.ferventio.app.domain.InteractiveMutationStatus,
+    ): Boolean {
+        val channelId = auth.broadcasterId
+        val failureKind = mutation.failureKind ?: io.ferventio.app.domain.InteractiveMutationFailureKind.UNKNOWN
+        ingest(InteractiveChatOverlayEvent.MutationStarted(channelId, mutation.kind))
+        return try {
+            refresh(auth)
+            true
+        } catch (error: Throwable) {
+            ingest(
+                InteractiveChatOverlayEvent.MutationFailed(
+                    channelId = channelId,
+                    kind = mutation.kind,
+                    failureKind = failureKind,
+                    recovery = InteractiveMutationRecovery.REFRESH,
+                ),
+            )
+            throw error
+        }
+    }
+
+    private suspend fun executeRetryCommand(
+        auth: InteractiveChatAuth,
+        command: InteractiveRetryCommand,
     ) {
-        api.endPrediction(
-            auth = auth,
-            predictionId = predictionId,
-            status = status,
-            winningOutcomeId = winningOutcomeId,
-        ).also(::ingestPrediction)
+        when (command) {
+            is InteractiveRetryCommand.CreatePoll -> api.createPoll(auth, command.draft).also(::ingestPoll)
+            is InteractiveRetryCommand.EndPoll -> api.endPoll(auth, command.pollId, command.status).also(::ingestPoll)
+            is InteractiveRetryCommand.CreatePrediction -> api.createPrediction(auth, command.draft).also(::ingestPrediction)
+            is InteractiveRetryCommand.EndPrediction -> api.endPrediction(
+                auth = auth,
+                predictionId = command.predictionId,
+                status = command.status,
+                winningOutcomeId = command.winningOutcomeId,
+            ).also(::ingestPrediction)
+        }
     }
 
     private suspend fun <T> runMutation(
         auth: InteractiveChatAuth,
-        kind: InteractiveMutationKind,
+        command: InteractiveRetryCommand,
         block: suspend () -> T,
     ): T = mutationMutex.withLock {
-        ingest(InteractiveChatOverlayEvent.MutationStarted(auth.broadcasterId, kind))
+        val channelId = auth.broadcasterId
+        ingest(InteractiveChatOverlayEvent.MutationStarted(channelId, command.kind))
         try {
             block().also {
-                ingest(InteractiveChatOverlayEvent.MutationSucceeded(auth.broadcasterId, kind))
+                pendingRetries.remove(channelId)
+                ingest(InteractiveChatOverlayEvent.MutationSucceeded(channelId, command.kind))
             }
         } catch (cancelled: CancellationException) {
-            ingest(InteractiveChatOverlayEvent.MutationSucceeded(auth.broadcasterId, kind))
+            pendingRetries.remove(channelId)
+            ingest(InteractiveChatOverlayEvent.MutationSucceeded(channelId, command.kind))
             throw cancelled
         } catch (error: Throwable) {
-            ingest(InteractiveChatOverlayEvent.MutationFailed(auth.broadcasterId, kind))
+            val failure = InteractiveMutationFailureClassifier.classify(error)
+            if (failure.recovery == InteractiveMutationRecovery.RETRY) {
+                pendingRetries[channelId] = command
+            } else {
+                pendingRetries.remove(channelId)
+            }
+            ingest(
+                InteractiveChatOverlayEvent.MutationFailed(
+                    channelId = channelId,
+                    kind = command.kind,
+                    failureKind = failure.kind,
+                    recovery = failure.recovery,
+                ),
+            )
             throw error
         }
     }
@@ -149,17 +239,18 @@ class InteractiveChatCoordinator internal constructor(
         mutableState.update { current -> InteractiveChatOverlayReducer.reduce(current, event) }
     }
 
-    fun ingestPoll(poll: PollOverlay) {
-        ingest(InteractiveChatOverlayEvent.PollSnapshot(poll))
-    }
+    fun ingestPoll(poll: PollOverlay) = ingest(InteractiveChatOverlayEvent.PollSnapshot(poll))
 
-    fun ingestPrediction(prediction: PredictionOverlay) {
+    fun ingestPrediction(prediction: PredictionOverlay) =
         ingest(InteractiveChatOverlayEvent.PredictionSnapshot(prediction))
-    }
 
     fun clearChannel(channelId: String) {
+        pendingRetries.remove(channelId)
         ingest(InteractiveChatOverlayEvent.ClearChannel(channelId))
     }
 
-    override fun close() = api.close()
+    override fun close() {
+        pendingRetries.clear()
+        api.close()
+    }
 }

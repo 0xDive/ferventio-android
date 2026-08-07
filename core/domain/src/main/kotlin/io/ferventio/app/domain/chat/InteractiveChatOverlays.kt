@@ -102,10 +102,28 @@ enum class InteractiveMutationKind {
     RESOLVE_PREDICTION,
 }
 
+enum class InteractiveMutationFailureKind {
+    AUTHENTICATION,
+    PERMISSION,
+    RATE_LIMITED,
+    NETWORK,
+    SERVER,
+    CONFLICT,
+    UNKNOWN,
+}
+
+enum class InteractiveMutationRecovery {
+    NONE,
+    RETRY,
+    REFRESH,
+}
+
 data class InteractiveMutationStatus(
     val kind: InteractiveMutationKind,
     val inFlight: Boolean = true,
     val failed: Boolean = false,
+    val failureKind: InteractiveMutationFailureKind? = null,
+    val recovery: InteractiveMutationRecovery = InteractiveMutationRecovery.NONE,
 )
 
 data class InteractiveChatOverlayState(
@@ -128,6 +146,8 @@ sealed interface InteractiveChatOverlayEvent {
     data class MutationFailed(
         val channelId: String,
         val kind: InteractiveMutationKind,
+        val failureKind: InteractiveMutationFailureKind,
+        val recovery: InteractiveMutationRecovery,
     ) : InteractiveChatOverlayEvent
     data class ClearChannel(val channelId: String) : InteractiveChatOverlayEvent
 }
@@ -175,7 +195,12 @@ object InteractiveChatOverlayReducer {
             if (current?.kind != event.kind) state
             else state.copy(
                 mutationsByChannel = state.mutationsByChannel + (
-                    event.channelId to current.copy(inFlight = false, failed = true)
+                    event.channelId to current.copy(
+                        inFlight = false,
+                        failed = true,
+                        failureKind = event.failureKind,
+                        recovery = event.recovery,
+                    )
                 ),
             )
         }

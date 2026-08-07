@@ -62,6 +62,7 @@ class AppContainer(context: Context) {
         onHighlightAlert = pushCoordinator::showHighlightAlert,
         onInteractiveChatEvent = interactiveChatCoordinator::ingest,
         onInteractiveChatRefresh = interactiveChatCoordinator::refresh,
+        onInteractiveMutationRecover = { auth -> interactiveChatCoordinator.recover(auth) },
         onInteractivePollCreate = { auth, draft ->
             interactiveChatCoordinator.createPoll(auth, draft)
         },

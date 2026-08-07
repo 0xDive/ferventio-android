@@ -21,6 +21,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import io.ferventio.app.domain.InteractiveMutationFailureKind
+import io.ferventio.app.domain.InteractiveMutationRecovery
 import io.ferventio.app.domain.InteractiveMutationStatus
 import io.ferventio.app.domain.PollDraft
 import io.ferventio.app.domain.PollOverlay
@@ -41,6 +43,14 @@ internal data class InteractiveOverlayUiStrings(
     val resolvePrediction: String,
     val working: String,
     val actionFailed: String,
+    val authenticationFailed: String,
+    val permissionFailed: String,
+    val rateLimited: String,
+    val networkFailed: String,
+    val serverFailed: String,
+    val conflictFailed: String,
+    val retry: String,
+    val refresh: String,
 )
 
 private enum class InteractiveManagementAction {
@@ -72,6 +82,7 @@ internal fun InteractiveChatOverlayStack(
     onLockPrediction: () -> Unit = {},
     onCancelPrediction: () -> Unit = {},
     onResolvePrediction: (String) -> Unit = {},
+    onRecoverMutation: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val mutationInFlight = mutation?.inFlight == true
@@ -110,11 +121,35 @@ internal fun InteractiveChatOverlayStack(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         } else if (mutation?.failed == true) {
-            LocalizedText(
-                strings.actionFailed,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-            )
+            val failureText = when (mutation.failureKind) {
+                InteractiveMutationFailureKind.AUTHENTICATION -> strings.authenticationFailed
+                InteractiveMutationFailureKind.PERMISSION -> strings.permissionFailed
+                InteractiveMutationFailureKind.RATE_LIMITED -> strings.rateLimited
+                InteractiveMutationFailureKind.NETWORK -> strings.networkFailed
+                InteractiveMutationFailureKind.SERVER -> strings.serverFailed
+                InteractiveMutationFailureKind.CONFLICT -> strings.conflictFailed
+                InteractiveMutationFailureKind.UNKNOWN, null -> strings.actionFailed
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+            ) {
+                LocalizedText(
+                    failureText,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                when (mutation.recovery) {
+                    InteractiveMutationRecovery.RETRY -> TextButton(onClick = onRecoverMutation) {
+                        LocalizedText(strings.retry)
+                    }
+                    InteractiveMutationRecovery.REFRESH -> TextButton(onClick = onRecoverMutation) {
+                        LocalizedText(strings.refresh)
+                    }
+                    InteractiveMutationRecovery.NONE -> Unit
+                }
+            }
         }
         if (canCreatePoll || canCreatePrediction) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
