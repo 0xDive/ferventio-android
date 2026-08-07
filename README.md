@@ -105,7 +105,6 @@ Security reports must be submitted privately as described in [`SECURITY.md`](SEC
 
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — development workflow
 - [`docs/releasing.md`](docs/releasing.md) — signing, versioning and release checks
-- [`CHANGELOG.md`](CHANGELOG.md) — public changes
 
 ## License
 

@@ -145,24 +145,6 @@ jobs:
 
           TAG="android-v${VERSION}"
 
-          python3 - "$VERSION" <<'PY'
-          from pathlib import Path
-          import re
-          import sys
-
-          version = sys.argv[1]
-          changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
-
-          if not re.search(
-              rf"^## \[{re.escape(version)}\](?:\s|$)",
-              changelog,
-              re.MULTILINE,
-          ):
-              raise SystemExit(
-                  f"CHANGELOG.md does not contain a section for {version}"
-              )
-          PY
-
           if gh release view "$TAG" \
             --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1
           then
@@ -394,48 +376,55 @@ jobs:
 
       - name: Generate release notes
         env:
+          GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.metadata.outputs.version }}
+          TAG: ${{ steps.metadata.outputs.tag }}
         run: |
           set -euo pipefail
 
-          python3 - "$VERSION" dist/RELEASE_NOTES.md <<'PY'
-          from pathlib import Path
-          import re
-          import sys
+          PREVIOUS_TAG="$(
+            git tag \
+              --list 'android-v*' \
+              --sort=-version:refname \
+              | grep -Fxv "$TAG" \
+              | head -n 1 \
+              || true
+          )"
 
-          version = sys.argv[1]
-          output = Path(sys.argv[2])
-          changelog = Path("CHANGELOG.md").read_text(encoding="utf-8")
-
-          match = re.search(
-              rf"^## \[{re.escape(version)}\][^\n]*\n"
-              rf"(.*?)(?=^## |\Z)",
-              changelog,
-              re.MULTILINE | re.DOTALL,
+          API_ARGS=(
+            --method POST
+            -H "Accept: application/vnd.github+json"
+            -H "X-GitHub-Api-Version: 2022-11-28"
+            "/repos/${GITHUB_REPOSITORY}/releases/generate-notes"
+            -f "tag_name=$TAG"
+            -f "target_commitish=$GITHUB_SHA"
           )
 
-          if not match:
-              raise SystemExit(
-                  f"CHANGELOG section {version} was not found"
-              )
+          if [[ -n "$PREVIOUS_TAG" ]]; then
+            API_ARGS+=(
+              -f "previous_tag_name=$PREVIOUS_TAG"
+            )
+          fi
 
-          changes = match.group(1).strip()
+          GENERATED_NOTES="$(
+            gh api \
+              "${API_ARGS[@]}" \
+              --jq '.body'
+          )"
 
-          notes = f"""## Downloads
+          cat > dist/RELEASE_NOTES.md <<EOF
+          ## Downloads
 
-          - `ferventio-{version}-foss.apk` — FOSS distribution without Google runtime dependencies
-          - `ferventio-{version}-play.apk` — Play distribution with Firebase Cloud Messaging and Crashlytics
-          - `SHA256SUMS` — SHA-256 checksums
+          - \`ferventio-${VERSION}-foss.apk\` — FOSS distribution without Google runtime dependencies
+          - \`ferventio-${VERSION}-play.apk\` — Play distribution with Firebase Cloud Messaging and Crashlytics
+          - \`SHA256SUMS\` — SHA-256 checksums
 
           Both APKs use the same application ID and signing certificate.
 
           ## Changes
 
-          {changes}
-          """
-
-          output.write_text(notes, encoding="utf-8")
-          PY
+          ${GENERATED_NOTES}
+          EOF
 
       - name: Store private R8 mapping files
         uses: actions/upload-artifact@v4
