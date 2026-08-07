@@ -111,6 +111,7 @@ import io.ferventio.app.domain.ChatSplit
 import io.ferventio.app.domain.FilteredSplit
 import io.ferventio.app.application.FerventioController
 import io.ferventio.app.domain.FerventioUiState
+import io.ferventio.app.domain.InteractiveChatOverlayState
 import io.ferventio.app.domain.MainSection
 import io.ferventio.app.domain.MAX_SPLITS_PER_TAB
 import io.ferventio.app.domain.SplitLayout
@@ -124,6 +125,7 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun AuthenticatedShell(
     state: FerventioUiState,
+    interactiveChatState: InteractiveChatOverlayState,
     controller: FerventioController,
     snackbarHostState: SnackbarHostState,
     pushState: PushUiState,
@@ -171,6 +173,7 @@ internal fun AuthenticatedShell(
             MainSection.CHATS,
             MainSection.MODERATION -> ChatsWorkspaceScreen(
                 state = state,
+                interactiveChatState = interactiveChatState,
                 controller = controller,
                 snackbarHostState = snackbarHostState,
                 onOpenMentions = { navigate(MainSection.MENTIONS) },
@@ -218,6 +221,7 @@ internal fun AuthenticatedShell(
 @Composable
 private fun ChatsWorkspaceScreen(
     state: FerventioUiState,
+    interactiveChatState: InteractiveChatOverlayState,
     controller: FerventioController,
     snackbarHostState: SnackbarHostState,
     onOpenMentions: () -> Unit,
@@ -230,6 +234,7 @@ private fun ChatsWorkspaceScreen(
     var deleteChannelId by rememberSaveable { mutableStateOf<String?>(null) }
     var showChatModes by rememberSaveable { mutableStateOf(false) }
     var showChatUsers by rememberSaveable { mutableStateOf(false) }
+    var showActionSearch by rememberSaveable { mutableStateOf(false) }
     var showMainMenu by rememberSaveable { mutableStateOf(false) }
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val drawerScope = rememberCoroutineScope()
@@ -372,6 +377,15 @@ private fun ChatsWorkspaceScreen(
                             ?.let(state.moderatedChannelIds::contains) == true
                         IconButton(
                             onClick = {
+                                hideKeyboard()
+                                showActionSearch = true
+                            },
+                            modifier = Modifier.size(38.dp),
+                        ) {
+                            Icon(Icons.Default.Search, contentDescription = localizedString("Действия и поиск"))
+                        }
+                        IconButton(
+                            onClick = {
                                 if (selectedChannel != null) {
                                     hideKeyboard()
                                     showChatUsers = true
@@ -469,6 +483,7 @@ private fun ChatsWorkspaceScreen(
                         if (useWideLayout) {
                             WideSplitLayout(
                                 state = state,
+                                interactiveChatState = interactiveChatState,
                                 controller = controller,
                                 tab = activeTab ?: WorkspaceTab.default(state.selectedChannelId),
                                 hideKeyboard = hideKeyboard,
@@ -476,6 +491,7 @@ private fun ChatsWorkspaceScreen(
                         } else {
                             PhoneChannelPager(
                                 state = state,
+                                interactiveChatState = interactiveChatState,
                                 controller = controller,
                                 hideKeyboard = hideKeyboard,
                             )
@@ -492,6 +508,43 @@ private fun ChatsWorkspaceScreen(
             onAdd = { login ->
                 controller.addChannel(login)
                 showAddChannel = false
+            },
+        )
+    }
+
+    if (showActionSearch) {
+        val currentTab = state.workspaceLayout.activeTab
+        val activeSplitId = currentTab?.activeSplitId
+        val activeSplitChannelId = currentTab
+            ?.splits
+            ?.firstOrNull { split -> split.id == activeSplitId }
+            ?.channelId
+            ?: state.selectedChannelId
+        GlobalActionSearchSheet(
+            state = state,
+            onDismiss = { showActionSearch = false },
+            onAction = { action ->
+                when {
+                    action.id == "navigation:settings" -> onOpenSettings()
+                    action.id == "navigation:add-channel" -> showAddChannel = true
+                    action.id == "navigation:reconnect" -> controller.reconnectEventSub()
+                    action.id.startsWith("channel:") -> {
+                        val channelId = action.id.substringAfter("channel:")
+                        if (activeSplitId != null && currentTab.splits.size > 1) {
+                            controller.setChatSplitChannel(activeSplitId, channelId)
+                        } else {
+                            controller.selectChannel(channelId)
+                        }
+                    }
+                    action.id.startsWith("command:") -> {
+                        activeSplitChannelId?.let { channelId ->
+                            controller.updateDraft(
+                                channelId,
+                                "/${action.id.substringAfter("command:")} ",
+                            )
+                        }
+                    }
+                }
             },
         )
     }

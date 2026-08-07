@@ -1,0 +1,251 @@
+package io.ferventio.app.ui
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import io.ferventio.app.domain.PollDraft
+import io.ferventio.app.domain.PollOverlay
+import io.ferventio.app.domain.PredictionDraft
+import io.ferventio.app.domain.PredictionOverlay
+import io.ferventio.app.domain.PredictionStatus
+
+internal data class InteractiveOverlayUiStrings(
+    val pollLabel: String,
+    val predictionLabel: String,
+    val votesLabel: String,
+    val usersLabel: String,
+    val pointsLabel: String,
+    val endPoll: String,
+    val archivePoll: String,
+    val lockPrediction: String,
+    val cancelPrediction: String,
+    val resolvePrediction: String,
+)
+
+@Composable
+internal fun InteractiveChatOverlayStack(
+    poll: PollOverlay?,
+    prediction: PredictionOverlay?,
+    strings: InteractiveOverlayUiStrings,
+    creationStrings: InteractiveCreationUiStrings,
+    canManagePoll: Boolean,
+    canManagePrediction: Boolean,
+    onCreatePoll: (PollDraft) -> Unit = {},
+    onCreatePrediction: (PredictionDraft) -> Unit = {},
+    onEndPoll: () -> Unit = {},
+    onArchivePoll: () -> Unit = {},
+    onLockPrediction: () -> Unit = {},
+    onCancelPrediction: () -> Unit = {},
+    onResolvePrediction: (String) -> Unit = {},
+    modifier: Modifier = Modifier,
+) {
+    val canCreatePoll = canManagePoll && poll?.isActive != true
+    val canCreatePrediction = canManagePrediction &&
+        prediction?.status !in setOf(PredictionStatus.ACTIVE, PredictionStatus.LOCKED)
+    if (poll == null && prediction == null && !canCreatePoll && !canCreatePrediction) return
+
+    var creationKind by remember { mutableStateOf<InteractiveCreationKind?>(null) }
+
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (canCreatePoll || canCreatePrediction) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (canCreatePoll) {
+                    OutlinedButton(onClick = { creationKind = InteractiveCreationKind.POLL }) {
+                        LocalizedText(creationStrings.createPoll)
+                    }
+                }
+                if (canCreatePrediction) {
+                    OutlinedButton(onClick = { creationKind = InteractiveCreationKind.PREDICTION }) {
+                        LocalizedText(creationStrings.createPrediction)
+                    }
+                }
+            }
+        }
+        poll?.let {
+            PollOverlayCard(
+                poll = it,
+                strings = strings,
+                canManage = canManagePoll,
+                onEnd = onEndPoll,
+                onArchive = onArchivePoll,
+            )
+        }
+        prediction?.let {
+            PredictionOverlayCard(
+                prediction = it,
+                strings = strings,
+                canManage = canManagePrediction,
+                onLock = onLockPrediction,
+                onCancel = onCancelPrediction,
+                onResolve = onResolvePrediction,
+            )
+        }
+    }
+
+    creationKind?.let { kind ->
+        InteractiveChatCreationDialog(
+            kind = kind,
+            strings = creationStrings,
+            onDismiss = { creationKind = null },
+            onCreatePoll = onCreatePoll,
+            onCreatePrediction = onCreatePrediction,
+        )
+    }
+}
+
+@Composable
+private fun PollOverlayCard(
+    poll: PollOverlay,
+    strings: InteractiveOverlayUiStrings,
+    canManage: Boolean,
+    onEnd: () -> Unit,
+    onArchive: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            LocalizedText(
+                strings.pollLabel,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+            )
+            VerbatimText(
+                poll.title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            poll.choices.forEach { choice ->
+                val share = poll.voteShare(choice.id).toFloat().coerceIn(0f, 1f)
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        VerbatimText(
+                            choice.title,
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        VerbatimText(
+                            "${choice.votes} ${strings.votesLabel}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    LinearProgressIndicator(
+                        progress = { share },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+            if (canManage && poll.isActive) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = onEnd) {
+                        LocalizedText(strings.endPoll)
+                    }
+                    TextButton(onClick = onArchive) {
+                        LocalizedText(strings.archivePoll)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PredictionOverlayCard(
+    prediction: PredictionOverlay,
+    strings: InteractiveOverlayUiStrings,
+    canManage: Boolean,
+    onLock: () -> Unit,
+    onCancel: () -> Unit,
+    onResolve: (String) -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            LocalizedText(
+                strings.predictionLabel,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.tertiary,
+                fontWeight = FontWeight.Bold,
+            )
+            VerbatimText(
+                prediction.title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            prediction.outcomes.forEach { outcome ->
+                val share = prediction.pointsShare(outcome.id).toFloat().coerceIn(0f, 1f)
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        VerbatimText(
+                            outcome.title,
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                        VerbatimText(
+                            "${outcome.users} ${strings.usersLabel} · ${outcome.channelPoints} ${strings.pointsLabel}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    LinearProgressIndicator(
+                        progress = { share },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    if (canManage && prediction.status == PredictionStatus.LOCKED) {
+                        TextButton(onClick = { onResolve(outcome.id) }) {
+                            LocalizedText("${strings.resolvePrediction}: ${outcome.title}")
+                        }
+                    }
+                }
+            }
+            if (canManage) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (prediction.status == PredictionStatus.ACTIVE) {
+                        OutlinedButton(onClick = onLock) {
+                            LocalizedText(strings.lockPrediction)
+                        }
+                    }
+                    if (prediction.status == PredictionStatus.ACTIVE || prediction.status == PredictionStatus.LOCKED) {
+                        Spacer(Modifier.width(1.dp))
+                        TextButton(onClick = onCancel) {
+                            LocalizedText(strings.cancelPrediction)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

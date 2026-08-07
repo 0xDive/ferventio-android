@@ -25,6 +25,7 @@ class SettingsBackupCodecTest {
         assertEquals(listOf("channel_a", "channel_b"), decoded.content.channels.logins)
         assertTrue("provider:emote" in decoded.content.favouriteEmotes)
         assertEquals(false, decoded.content.settings.showSystemMessages)
+        assertEquals(false, decoded.content.settings.repeatCollapseEnabled)
         assertTrue(decoded.content.settings.recentMessagesEnabled)
     }
 
@@ -66,6 +67,49 @@ class SettingsBackupCodecTest {
     }
 
     @Test
+    fun legacyBackupWithoutRepeatCollapseFieldUsesEnabledDefault() {
+        val baseContent = sampleContent()
+        val content = baseContent.copy(
+            settings = baseContent.settings.copy(repeatCollapseEnabled = true),
+        )
+        val document = SettingsBackupDocument(
+            formatVersion = 1,
+            createdAt = "2026-07-25T12:00:00Z",
+            appVersion = "0.0.1-test",
+            contentHash = SettingsBackupCodec.contentHashForVersion(content, 1),
+            content = content,
+        )
+        val legacyJson = SettingsBackupCodec.encode(document)
+            .replace(Regex("""\s*"repeatCollapseEnabled"\s*:\s*true\s*,?"""), "")
+
+        val decoded = SettingsBackupCodec.decode(legacyJson)
+
+        assertEquals(1, decoded.formatVersion)
+        assertTrue(decoded.content.settings.repeatCollapseEnabled)
+    }
+
+    @Test
+    fun versionOneBackupCannotOverrideRepeatCollapseOutsideLegacyChecksum() {
+        val baseContent = sampleContent()
+        val content = baseContent.copy(
+            settings = baseContent.settings.copy(repeatCollapseEnabled = true),
+        )
+        val document = SettingsBackupDocument(
+            formatVersion = 1,
+            createdAt = "2026-07-25T12:00:00Z",
+            appVersion = "0.0.1-test",
+            contentHash = SettingsBackupCodec.contentHashForVersion(content, 1),
+            content = content,
+        )
+        val injected = SettingsBackupCodec.encode(document)
+            .replace("\"repeatCollapseEnabled\": true", "\"repeatCollapseEnabled\": false")
+
+        val decoded = SettingsBackupCodec.decode(injected)
+
+        assertTrue(decoded.content.settings.repeatCollapseEnabled)
+    }
+
+    @Test
     fun legacyBackupWithoutRecentMessagesFieldUsesDisabledDefault() {
         val content = sampleContent()
         val document = SettingsBackupDocument(
@@ -103,6 +147,7 @@ class SettingsBackupCodecTest {
             showSystemMessages = false,
             mentionColorArgb = 0xFFFFC857,
             autoScrollEnabled = true,
+            repeatCollapseEnabled = false,
             animateEmotes = true,
             emoteScalePercent = 125,
             betterTtvEnabled = true,

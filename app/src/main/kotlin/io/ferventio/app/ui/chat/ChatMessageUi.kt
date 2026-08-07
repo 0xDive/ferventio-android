@@ -177,6 +177,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.ferventio.app.BuildConfig
 import io.ferventio.app.domain.AutoModHeldMessage
 import io.ferventio.app.domain.AutoModMessageStatus
+import io.ferventio.app.domain.BttvEmoteCompositionPlan
+import io.ferventio.app.domain.BttvEmoteCompositionPlanner
+import io.ferventio.app.domain.BttvModifierEffect
 import io.ferventio.app.domain.ChatAssetResolver
 import io.ferventio.app.domain.ChatBadge
 import io.ferventio.app.domain.ChatBadgeAsset
@@ -396,12 +399,17 @@ internal fun MessageRow(
     val preparedText = remember(message) { ChatMessageTextPreparation.get(message) }
     val fragmentText = preparedText.fragmentText
     val useFragments = shownText == fragmentText && (!deleted || showDeletedMessageContent)
+    val bttvComposition = remember(message.fragments, useFragments) {
+        if (useFragments) BttvEmoteCompositionPlanner.build(message.fragments)
+        else BttvEmoteCompositionPlan.Empty
+    }
     val renderedGroups = remember(
         message.fragments,
         animateEmotes,
         useFragments,
         cheermoteAssets,
         emoteCatalogByProviderAndId,
+        bttvComposition,
     ) {
         if (!useFragments) emptyList()
         else buildRenderedEmoteGroups(
@@ -409,12 +417,29 @@ internal fun MessageRow(
             animateEmotes = animateEmotes,
             cheermoteAssets = cheermoteAssets,
             emoteCatalogByProviderAndId = emoteCatalogByProviderAndId,
+            compositionPlan = bttvComposition,
         )
     }
     val renderedGroupsByBaseIndex = remember(renderedGroups) { renderedGroups.associateBy(RenderedEmoteGroup::baseIndex) }
     val highlightColorArgb = decoration.highlightColorArgb
-    val skippedFragmentIndices = remember(renderedGroups) {
-        renderedGroups.flatMap { it.fragmentIndices.drop(1) }.toSet()
+    val skippedFragmentIndices = remember(renderedGroups, bttvComposition, message.fragments) {
+        val allOverlayIndices = bttvComposition.groups
+            .flatMap { group -> group.overlayFragmentIndices }
+            .toSet()
+        buildSet {
+            // Modifier tokens and whitespace consumed by a valid prefix chain are
+            // always hidden. Overlay tokens are hidden only after their image URL
+            // resolved and they were actually merged into a rendered group.
+            addAll(bttvComposition.hiddenFragmentIndices - allOverlayIndices)
+            renderedGroups.forEach { group ->
+                addAll(group.fragmentIndices.drop(1))
+                if (BttvModifierEffect.NO_SPACE in group.effects) {
+                    val trailingIndex = group.baseIndex + 1
+                    val trailingText = message.fragments.getOrNull(trailingIndex) as? ChatFragment.Text
+                    if (trailingText?.text?.isBlank() == true) add(trailingIndex)
+                }
+            }
+        }
     }
 
     Column(
@@ -610,11 +635,12 @@ internal fun MessageRow(
                 }
             }
             renderedGroups.forEach { group ->
+                val transform = BttvEmoteRenderTransformResolver.resolve(group.effects)
                 put(
                     inlineFragmentId(group.baseIndex),
                     InlineTextContent(
                         placeholder = Placeholder(
-                            width = (1.32f * emoteScale).em,
+                            width = (1.32f * emoteScale * transform.widthMultiplier).em,
                             height = (1.32f * emoteScale).em,
                             placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
                         ),
@@ -622,7 +648,9 @@ internal fun MessageRow(
                         LayeredEmoteImage(
                             urls = group.urls,
                             contentDescription = group.info.code,
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .bttvEmoteTransform(transform, animateDynamicEffects = animateEmotes),
                         )
                     },
                 )
@@ -694,6 +722,7 @@ internal data class RenderedEmoteGroup(
     val fragmentIndices: List<Int>,
     val urls: List<String>,
     val info: EmoteDisplayInfo,
+    val effects: Set<BttvModifierEffect> = emptySet(),
 )
 
 internal data class EmoteTextRange(
@@ -722,45 +751,46 @@ internal fun buildRenderedEmoteGroups(
     animateEmotes: Boolean,
     cheermoteAssets: Map<String, List<CheermoteAsset>>,
     emoteCatalogByProviderAndId: Map<Pair<String, String>, ThirdPartyEmoteAsset>,
-): List<RenderedEmoteGroup> {
-    val result = mutableListOf<RenderedEmoteGroup>()
-    fragments.forEachIndexed { index, fragment ->
-        val resolved = resolveFragmentEmote(
-            fragment = fragment,
+    compositionPlan: BttvEmoteCompositionPlan = BttvEmoteCompositionPlanner.build(fragments),
+): List<RenderedEmoteGroup> = compositionPlan.groups.mapNotNull { group ->
+    val baseFragment = fragments.getOrNull(group.baseFragmentIndex) ?: return@mapNotNull null
+    val base = resolveFragmentEmote(
+        fragment = baseFragment,
+        animateEmotes = animateEmotes,
+        cheermoteAssets = cheermoteAssets,
+        catalogByProviderAndId = emoteCatalogByProviderAndId,
+    ) ?: return@mapNotNull null
+
+    val resolvedOverlays = group.overlayFragmentIndices.mapNotNull { overlayIndex ->
+        val overlayFragment = fragments.getOrNull(overlayIndex) ?: return@mapNotNull null
+        resolveFragmentEmote(
+            fragment = overlayFragment,
             animateEmotes = animateEmotes,
             cheermoteAssets = cheermoteAssets,
             catalogByProviderAndId = emoteCatalogByProviderAndId,
-        ) ?: return@forEachIndexed
-        val previousGroup = result.lastOrNull()
-        if (
-            fragment is ChatFragment.ThirdPartyEmote &&
-            fragment.zeroWidth &&
-            previousGroup?.fragmentIndices?.lastOrNull() == index - 1
-        ) {
-            val previous = result.removeAt(result.lastIndex)
-            val combinedUrls = previous.urls + resolved.urls
-            result += previous.copy(
-                fragmentIndices = previous.fragmentIndices + index,
-                urls = combinedUrls,
-                info = previous.info.copy(
-                    code = previous.info.code + " + " + resolved.code,
-                    provider = if (previous.info.provider == resolved.provider) resolved.provider else "composite",
-                    id = previous.info.id + "+" + resolved.id,
-                    urls = combinedUrls,
-                    zeroWidth = true,
-                    layerCount = combinedUrls.size,
-                ),
-            )
-        } else {
-            result += RenderedEmoteGroup(
-                baseIndex = index,
-                fragmentIndices = listOf(index),
-                urls = resolved.urls,
-                info = resolved,
-            )
-        }
+        )?.let { overlayIndex to it }
     }
-    return result
+    val combinedUrls = base.urls + resolvedOverlays.flatMap { (_, overlay) -> overlay.urls }
+    val layerInfos = listOf(base) + resolvedOverlays.map { it.second }
+
+    RenderedEmoteGroup(
+        baseIndex = group.baseFragmentIndex,
+        fragmentIndices = listOf(group.baseFragmentIndex) + resolvedOverlays.map { it.first },
+        urls = combinedUrls,
+        info = base.copy(
+            code = layerInfos.joinToString(" + ") { it.code },
+            provider = layerInfos
+                .map(EmoteDisplayInfo::provider)
+                .distinct()
+                .singleOrNull()
+                ?: "composite",
+            id = layerInfos.joinToString("+") { it.id },
+            urls = combinedUrls,
+            zeroWidth = resolvedOverlays.isNotEmpty(),
+            layerCount = combinedUrls.size,
+        ),
+        effects = group.effects,
+    )
 }
 
 internal fun resolveFragmentEmote(

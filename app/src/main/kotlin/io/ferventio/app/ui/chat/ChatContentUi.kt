@@ -186,6 +186,27 @@ import io.ferventio.app.domain.ChatAssetResolver
 import io.ferventio.app.domain.ChatBadge
 import io.ferventio.app.domain.ChatBadgeAsset
 import io.ferventio.app.domain.ChatChannel
+import io.ferventio.app.domain.ChatRepeatCollapseConfig
+import io.ferventio.app.domain.ChatRepeatPresentationProjector
+import io.ferventio.app.domain.ConfirmedModerationCommand
+import io.ferventio.app.domain.ConfirmedModerationCommandParseResult
+import io.ferventio.app.domain.ConfirmedModerationCommandParser
+import io.ferventio.app.domain.CustomCommandComposerResolution
+import io.ferventio.app.domain.CustomCommandComposerResolver
+import io.ferventio.app.domain.CustomCommandContext
+import io.ferventio.app.domain.CustomCommandReply
+import io.ferventio.app.domain.CustomCommandRisk
+import io.ferventio.app.domain.CustomCommandRuntimeContext
+import io.ferventio.app.domain.CustomCommandUser
+import io.ferventio.app.domain.InteractiveChatCapabilities
+import io.ferventio.app.domain.InteractiveChatOverlayState
+import io.ferventio.app.domain.PollDraft
+import io.ferventio.app.domain.PredictionDraft
+import io.ferventio.app.domain.interactiveChatCapabilities
+import io.ferventio.app.domain.NukeComposerCommandParseResult
+import io.ferventio.app.domain.NukeComposerCommandParser
+import io.ferventio.app.domain.NukeExecutionPlan
+import io.ferventio.app.domain.NukePreviewConfig
 import io.ferventio.app.domain.ComposerAutocomplete
 import io.ferventio.app.domain.ComposerEmoteVisuals
 import io.ferventio.app.domain.ComposerSuggestion
@@ -239,13 +260,23 @@ import coil3.compose.AsyncImage
 import coil3.compose.AsyncImagePainter
 import coil3.compose.rememberAsyncImagePainter
 import androidx.core.graphics.toColorInt
+import android.widget.Toast
 
 
 @Composable
 internal fun ChannelChatContent(
     state: FerventioUiState,
     channelId: String,
+    interactiveChatState: InteractiveChatOverlayState = InteractiveChatOverlayState(),
     onSend: (String, String?) -> Boolean,
+    onExecuteNuke: (NukeExecutionPlan) -> Unit = {},
+    onExecuteModerationCommand: (ConfirmedModerationCommand) -> Unit = {},
+    onCreatePoll: (PollDraft) -> Unit = {},
+    onCreatePrediction: (PredictionDraft) -> Unit = {},
+    onEndPoll: (String, Boolean) -> Unit = { _, _ -> },
+    onLockPrediction: (String) -> Unit = {},
+    onCancelPrediction: (String) -> Unit = {},
+    onResolvePrediction: (String, String) -> Unit = { _, _ -> },
     onDraftChange: (String) -> Unit = {},
     onRetryMessage: (ChatMessage) -> Unit = {},
     onDeleteMessage: (ChatMessage) -> Unit = {},
@@ -268,11 +299,15 @@ internal fun ChannelChatContent(
     onMarkRead: () -> Unit = {},
     isReadActive: Boolean = true,
     onHorizontalGestureLockChanged: (Boolean) -> Unit = {},
+    repeatCollapseEnabled: Boolean? = null,
     instanceKey: String = channelId,
 ) {
     val resourceStrings = rememberAppResourceStrings(state.appLanguage)
+    val repeatCollapsePreference = rememberRepeatCollapsePreferenceState()
+    val effectiveRepeatCollapseEnabled = repeatCollapseEnabled ?: repeatCollapsePreference.enabled
     val input = state.draftsByChannel[channelId].orEmpty()
     val canWrite = state.isAuthenticated
+    val interactiveCapabilities = state.session?.interactiveChatCapabilities(channelId) ?: InteractiveChatCapabilities()
     var replyTarget by remember(instanceKey) { mutableStateOf<ChatMessage?>(null) }
     var replyThreadTarget by remember(instanceKey) { mutableStateOf<ChatMessage?>(null) }
     var messageActionsTarget by remember(instanceKey) { mutableStateOf<ChatMessage?>(null) }
@@ -282,9 +317,12 @@ internal fun ChannelChatContent(
     var historyScratch by remember(instanceKey) { mutableStateOf("") }
     var showEmotePicker by rememberSaveable(instanceKey) { mutableStateOf(false) }
     var emoteDetails by remember(instanceKey) { mutableStateOf<EmoteDisplayInfo?>(null) }
+    var pendingNukeConfig by remember(instanceKey) { mutableStateOf<NukePreviewConfig?>(null) }
+    var pendingModerationMacro by remember(instanceKey) { mutableStateOf<PendingModerationMacro?>(null) }
     BackHandler(enabled = showEmotePicker) { showEmotePicker = false }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
+    val localContext = LocalContext.current
     @Suppress("DEPRECATION") // LocalClipboard migration requires suspend clipboard writes.
     val clipboardManager = LocalClipboardManager.current
     val latestOnUserInteraction by rememberUpdatedState(onUserInteraction)
@@ -334,6 +372,13 @@ internal fun ChannelChatContent(
             }
         }
     }
+    val repeatPresentation = remember(messages, effectiveRepeatCollapseEnabled) {
+        ChatRepeatPresentationProjector.build(
+            canonicalMessages = messages,
+            config = ChatRepeatCollapseConfig(enabled = effectiveRepeatCollapseEnabled),
+        )
+    }
+    val visibleMessages = repeatPresentation.messages
     val heldAutoModMessages = remember(state.moderation.autoModQueue, channelId) {
         state.moderation.autoModQueue
             .asSequence()
@@ -341,32 +386,38 @@ internal fun ChannelChatContent(
             .sortedBy(AutoModHeldMessage::heldAtMillis)
             .toList()
     }
-    val totalContentCount = messages.size + heldAutoModMessages.size
+    val totalContentCount = visibleMessages.size + heldAutoModMessages.size
     val hasChatContent = totalContentCount > 0
     val lastContentIndex = totalContentCount - 1
     val savedPosition = state.scrollPositionsByChannel[channelId]
+    val repeatSavedPosition = remember(savedPosition, repeatPresentation) {
+        savedPosition?.copy(
+            anchorMessageId = savedPosition.anchorMessageId?.let(repeatPresentation::anchorFor),
+        )
+    }
     val restoreOldPosition = savedPosition?.isAtBottom == false
     val initialIndex = remember(
         instanceKey,
         hasChatContent,
-        savedPosition?.anchorMessageId,
-        savedPosition?.firstVisibleItemIndex,
-        savedPosition?.firstVisibleItemScrollOffset,
-        savedPosition?.isAtBottom,
+        repeatSavedPosition?.anchorMessageId,
+        repeatSavedPosition?.firstVisibleItemIndex,
+        repeatSavedPosition?.firstVisibleItemScrollOffset,
+        repeatSavedPosition?.isAtBottom,
     ) {
         when {
             !hasChatContent -> 0
-            restoreOldPosition && messages.isNotEmpty() -> ScrollRestorationPolicy.targetIndex(messages, savedPosition)
-                ?: savedPosition.firstVisibleItemIndex.coerceIn(0, messages.lastIndex)
+            restoreOldPosition && visibleMessages.isNotEmpty() ->
+                ScrollRestorationPolicy.targetIndex(visibleMessages, repeatSavedPosition)
+                    ?: repeatSavedPosition!!.firstVisibleItemIndex.coerceIn(0, visibleMessages.lastIndex)
             else -> lastContentIndex
         }
     }
     val initialOffset = remember(
         instanceKey,
-        savedPosition?.firstVisibleItemScrollOffset,
+        repeatSavedPosition?.firstVisibleItemScrollOffset,
         restoreOldPosition,
     ) {
-        if (restoreOldPosition) savedPosition.firstVisibleItemScrollOffset.coerceAtLeast(0) else 0
+        if (restoreOldPosition) repeatSavedPosition?.firstVisibleItemScrollOffset?.coerceAtLeast(0) ?: 0 else 0
     }
     val listState = rememberLazyListState(
         initialFirstVisibleItemIndex = initialIndex,
@@ -390,11 +441,13 @@ internal fun ChannelChatContent(
                 (listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1) >= currentLastContentIndex
         }
     }
+    // Keep the canonical newest id in the live key so every repeated incoming
+    // message updates the repeat count even while the visible anchor is stable.
     val latestMessageId = messages.lastOrNull()?.id
     val latestAutoModMessageId = heldAutoModMessages.lastOrNull()?.messageId
     val liveContentKey = "${latestMessageId.orEmpty()}|${latestAutoModMessageId.orEmpty()}"
     var lastObservedLiveContentKey by remember(instanceKey) { mutableStateOf(liveContentKey) }
-    val latestMessages by rememberUpdatedState(messages)
+    val latestVisibleMessages by rememberUpdatedState(visibleMessages)
     val latestAutoScrollEnabled = rememberUpdatedState(state.autoScrollEnabled)
     var initialPositionApplied by remember(instanceKey) {
         // When messages are already in memory, rememberLazyListState has received the correct
@@ -527,16 +580,21 @@ internal fun ChannelChatContent(
     }
 
     val latestMessagesForNavigation = rememberUpdatedState(messages)
+    val latestRepeatPresentation = rememberUpdatedState(repeatPresentation)
     val navigateToMessage: (String) -> Unit = remember(instanceKey, listState, coroutineScope) {
         { targetId ->
-            val currentMessages = latestMessagesForNavigation.value
-            val targetIndex = currentMessages.indexOfFirst {
+            val canonicalMessages = latestMessagesForNavigation.value
+            val presentation = latestRepeatPresentation.value
+            val canonicalTarget = canonicalMessages.firstOrNull {
                 it.id == targetId || it.serverMessageId == targetId
             }
-            if (targetIndex >= 0) {
+            val canonicalId = canonicalTarget?.id ?: targetId
+            val targetIndex = presentation.visibleIndexFor(canonicalId)
+            if (targetIndex != null) {
+                val anchorId = presentation.anchorFor(canonicalId)
                 liveFollowPausedByUser = true
                 followLiveChat = false
-                highlightedMessageId = currentMessages[targetIndex].id
+                highlightedMessageId = anchorId
                 coroutineScope.launch { listState.scrollToItem(targetIndex) }
             }
         }
@@ -548,11 +606,113 @@ internal fun ChannelChatContent(
         historyIndex = -1
     }
 
+    val openNukePreview: (String) -> Boolean = { commandText ->
+        when (val parsed = NukeComposerCommandParser.parse(commandText)) {
+            NukeComposerCommandParseResult.NotNuke -> false
+            is NukeComposerCommandParseResult.Error -> {
+                Toast.makeText(localContext, parsed.message, Toast.LENGTH_SHORT).show()
+                true
+            }
+            is NukeComposerCommandParseResult.Success -> {
+                if (channelId !in state.moderatedChannelIds) {
+                    Toast.makeText(
+                        localContext,
+                        resourceStrings.string(R.string.ferventio_nuke_requires_moderator),
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                } else {
+                    pendingNukeConfig = parsed.config
+                    hideKeyboard()
+                }
+                true
+            }
+        }
+    }
+
     val submitMessage: () -> Unit = submit@{
         val message = input
         if (message.isBlank()) return@submit
-        if (onSend(message, replyTarget?.id)) {
-            EmoteCatalogRanking.usedInText(message, catalog).forEach(onEmoteUsed)
+        // /nuke is a reserved local moderation command. Intercept it before custom
+        // command resolution; every other Twitch/bot slash command keeps pass-through.
+        if (openNukePreview(message)) return@submit
+        val channel = state.channels.firstOrNull { it.id == channelId }
+        val session = state.session
+        val replyUser = replyTarget?.let { target ->
+            CustomCommandUser(
+                id = target.userId,
+                login = target.userLogin,
+                displayName = target.userDisplayName,
+            )
+        }
+        @Suppress("DEPRECATION")
+        val clipboardText = clipboardManager.getText()?.text
+        val resolution = CustomCommandComposerResolver.resolve(
+            input = message,
+            commands = state.customCommands,
+            context = CustomCommandRuntimeContext(
+                base = CustomCommandContext(
+                    channelName = channel?.displayName ?: channel?.login.orEmpty(),
+                    channelId = channelId,
+                    myName = session?.login.orEmpty(),
+                    myId = session?.userId.orEmpty(),
+                ),
+                selectedUser = replyUser,
+                reply = replyTarget?.let { target ->
+                    replyUser?.let { user ->
+                        CustomCommandReply(
+                            messageId = target.id,
+                            user = user,
+                            text = target.text,
+                        )
+                    }
+                },
+                clipboardText = clipboardText,
+            ),
+        )
+        val outgoingText = when (resolution) {
+            is CustomCommandComposerResolution.PassThrough -> resolution.text
+            is CustomCommandComposerResolution.Error -> {
+                Toast.makeText(localContext, resolution.message, Toast.LENGTH_SHORT).show()
+                return@submit
+            }
+            is CustomCommandComposerResolution.Planned -> when (resolution.plan.risk) {
+                CustomCommandRisk.SAFE_TEXT,
+                CustomCommandRisk.CHAT_COMMAND -> resolution.plan.expandedText
+                CustomCommandRisk.MODERATION -> {
+                    when (
+                        val parsed = ConfirmedModerationCommandParser.parse(resolution.plan.expandedText)
+                    ) {
+                        is ConfirmedModerationCommandParseResult.Success -> {
+                            pendingModerationMacro = PendingModerationMacro(
+                                command = parsed.command,
+                                expandedCommand = resolution.plan.expandedText,
+                            )
+                        }
+                        is ConfirmedModerationCommandParseResult.Error,
+                        ConfirmedModerationCommandParseResult.Unsupported -> {
+                            Toast.makeText(
+                                localContext,
+                                resourceStrings.string(R.string.ferventio_moderation_macro_unsupported),
+                                Toast.LENGTH_SHORT,
+                            ).show()
+                        }
+                    }
+                    return@submit
+                }
+                CustomCommandRisk.MASS_MODERATION -> {
+                    if (!openNukePreview(resolution.plan.expandedText)) {
+                        Toast.makeText(
+                            localContext,
+                            resourceStrings.string(R.string.ferventio_mass_moderation_macro_unsupported),
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                    return@submit
+                }
+            }
+        }
+        if (onSend(outgoingText, replyTarget?.id)) {
+            EmoteCatalogRanking.usedInText(outgoingText, catalog).forEach(onEmoteUsed)
             onDraftChange("")
             replyTarget = null
             historyIndex = -1
@@ -606,17 +766,18 @@ internal fun ChannelChatContent(
         initialPositionApplied,
         hasChatContent,
         state.isHistoryLoading,
-        savedPosition,
+        repeatSavedPosition,
+        visibleMessages,
     ) {
         if (state.isHistoryLoading || initialPositionApplied || !hasChatContent) return@LaunchedEffect
-        val restore = savedPosition?.isAtBottom == false && messages.isNotEmpty()
+        val restore = repeatSavedPosition?.isAtBottom == false && visibleMessages.isNotEmpty()
         val targetIndex = if (restore) {
-            ScrollRestorationPolicy.targetIndex(messages, savedPosition)
-                ?: savedPosition.firstVisibleItemIndex.coerceIn(0, messages.lastIndex)
+            ScrollRestorationPolicy.targetIndex(visibleMessages, repeatSavedPosition)
+                ?: repeatSavedPosition.firstVisibleItemIndex.coerceIn(0, visibleMessages.lastIndex)
         } else {
             lastContentIndex
         }
-        val targetOffset = if (restore) savedPosition.firstVisibleItemScrollOffset.coerceAtLeast(0) else 0
+        val targetOffset = if (restore) repeatSavedPosition.firstVisibleItemScrollOffset.coerceAtLeast(0) else 0
         listState.scrollToItem(targetIndex, targetOffset)
         liveFollowPausedByUser = restore
         followLiveChat = state.autoScrollEnabled && !restore
@@ -656,7 +817,7 @@ internal fun ChannelChatContent(
                 followLiveChat = latestAutoScrollEnabled.value && atBottom && !liveFollowPausedByUser
                 onScrollPositionChanged(
                     channelId,
-                    latestMessages.getOrNull(index)?.id,
+                    latestVisibleMessages.getOrNull(index)?.id,
                     index,
                     listState.firstVisibleItemScrollOffset,
                     atBottom,
@@ -688,7 +849,7 @@ internal fun ChannelChatContent(
             val atBottom = latestFollowLiveChat || isViewportAtBottom
             onScrollPositionChanged(
                 channelId,
-                latestMessages.getOrNull(index)?.id,
+                latestVisibleMessages.getOrNull(index)?.id,
                 index,
                 listState.firstVisibleItemScrollOffset,
                 atBottom,
@@ -697,13 +858,15 @@ internal fun ChannelChatContent(
     }
 
     navigationTargetMessageId?.takeIf(String::isNotBlank)?.let { targetId ->
-        LaunchedEffect(targetId, initialPositionApplied, messages) {
+        LaunchedEffect(targetId, initialPositionApplied, messages, repeatPresentation) {
             if (!initialPositionApplied) return@LaunchedEffect
-            val targetIndex = messages.indexOfFirst { it.id == targetId || it.serverMessageId == targetId }
-            if (targetIndex >= 0) {
+            val canonicalTarget = messages.firstOrNull { it.id == targetId || it.serverMessageId == targetId }
+            val canonicalId = canonicalTarget?.id ?: targetId
+            val targetIndex = repeatPresentation.visibleIndexFor(canonicalId)
+            if (targetIndex != null) {
                 liveFollowPausedByUser = true
                 followLiveChat = false
-                highlightedMessageId = messages[targetIndex].id
+                highlightedMessageId = repeatPresentation.anchorFor(canonicalId)
                 listState.scrollToItem(targetIndex)
             }
             onNavigationConsumed(targetId)
@@ -712,6 +875,7 @@ internal fun ChannelChatContent(
 
     replyTargetMessageId?.takeIf(String::isNotBlank)?.let { targetId ->
         LaunchedEffect(targetId, messages) {
+            // Replies keep using canonical messages even when their row is folded into an anchor.
             val target = messages.firstOrNull { it.id == targetId || it.serverMessageId == targetId }
             if (target != null) replyTarget = target
             onReplyTargetConsumed(targetId)
@@ -787,6 +951,62 @@ internal fun ChannelChatContent(
             LinearProgressIndicator(Modifier.fillMaxWidth())
         }
 
+        InteractiveChatOverlayStack(
+            poll = interactiveChatState.pollsByChannel[channelId],
+            prediction = interactiveChatState.predictionsByChannel[channelId],
+            strings = InteractiveOverlayUiStrings(
+                pollLabel = resourceStrings.string(R.string.ferventio_interactive_poll_label),
+                predictionLabel = resourceStrings.string(R.string.ferventio_interactive_prediction_label),
+                votesLabel = resourceStrings.string(R.string.ferventio_interactive_votes_label),
+                usersLabel = resourceStrings.string(R.string.ferventio_interactive_users_label),
+                pointsLabel = resourceStrings.string(R.string.ferventio_interactive_points_label),
+                endPoll = resourceStrings.string(R.string.ferventio_interactive_end_poll),
+                archivePoll = resourceStrings.string(R.string.ferventio_interactive_archive_poll),
+                lockPrediction = resourceStrings.string(R.string.ferventio_interactive_lock_prediction),
+                cancelPrediction = resourceStrings.string(R.string.ferventio_interactive_cancel_prediction),
+                resolvePrediction = resourceStrings.string(R.string.ferventio_interactive_resolve_prediction),
+            ),
+            creationStrings = InteractiveCreationUiStrings(
+                createPoll = resourceStrings.string(R.string.ferventio_interactive_create_poll),
+                createPrediction = resourceStrings.string(R.string.ferventio_interactive_create_prediction),
+                title = resourceStrings.string(R.string.ferventio_interactive_title),
+                option = resourceStrings.string(R.string.ferventio_interactive_option),
+                addOption = resourceStrings.string(R.string.ferventio_interactive_add_option),
+                removeOption = resourceStrings.string(R.string.ferventio_interactive_remove_option),
+                durationSeconds = resourceStrings.string(R.string.ferventio_interactive_duration_seconds),
+                channelPointsVoting = resourceStrings.string(R.string.ferventio_interactive_channel_points_voting),
+                pointsPerVote = resourceStrings.string(R.string.ferventio_interactive_points_per_vote),
+                create = resourceStrings.string(R.string.ferventio_interactive_create),
+                cancel = resourceStrings.string(R.string.ferventio_moderation_cancel),
+            ),
+            canManagePoll = interactiveCapabilities.canManagePolls,
+            canManagePrediction = interactiveCapabilities.canManagePredictions,
+            onCreatePoll = onCreatePoll,
+            onCreatePrediction = onCreatePrediction,
+            onEndPoll = {
+                interactiveChatState.pollsByChannel[channelId]?.id?.let { pollId ->
+                    onEndPoll(pollId, false)
+                }
+            },
+            onArchivePoll = {
+                interactiveChatState.pollsByChannel[channelId]?.id?.let { pollId ->
+                    onEndPoll(pollId, true)
+                }
+            },
+            onLockPrediction = {
+                interactiveChatState.predictionsByChannel[channelId]?.id?.let(onLockPrediction)
+            },
+            onCancelPrediction = {
+                interactiveChatState.predictionsByChannel[channelId]?.id?.let(onCancelPrediction)
+            },
+            onResolvePrediction = { outcomeId ->
+                interactiveChatState.predictionsByChannel[channelId]?.id?.let { predictionId ->
+                    onResolvePrediction(predictionId, outcomeId)
+                }
+            },
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+        )
+
         pinnedMessage?.let { pinned ->
             PinnedMessageBanner(
                 pinned = pinned,
@@ -816,40 +1036,48 @@ internal fun ChannelChatContent(
                 contentPadding = androidx.compose.foundation.layout.PaddingValues(vertical = 4.dp),
             ) {
                 items(
-                    items = messages,
+                    items = visibleMessages,
                     key = { message -> message.id.ifBlank { message.hashCode().toString() } },
                     contentType = { message -> message.type.name },
                 ) { message ->
-                    MessageRow(
-                        message = message,
-                        profile = profilesById[message.userId],
-                        hydratedUserColor = state.userColorsById[message.userId],
-                        showAvatar = state.showAvatars,
-                        showBadges = state.showBadges,
-                        showTimestamp = state.showTimestamps,
-                        showDeletedMessageContent = state.showDeletedMessageContent,
-                        animateEmotes = state.animateEmotes &&
-                            !listState.isScrollInProgress &&
-                            message.id in visibleMessageIds,
-                        emoteScalePercent = state.emoteScalePercent,
-                        messageDensity = state.messageDensity,
-                        chatNameStyle = state.chatNameStyle,
-                        wrapMessageLines = state.wrapMessageLines,
-                        mentionColorArgb = state.mentionColorArgb,
-                        renderAssets = messageRenderAssets,
-                        frankerFaceZBadges = ffzBadgeListsByUser[message.userId]
-                            ?: ImmutableBadgeAssetList.Empty,
-                        onOpenUser = openUserFromRow,
-                        onOpenEmote = openEmoteFromRow,
-                        ownUserId = state.session?.userId,
-                        highlighted = highlightedMessageId == message.id,
-                        decoration = messageDecorations[message.id] ?: MessageDecoration(),
-                        onNavigateToMessage = navigateToMessage,
-                        onOpenReplyThread = openReplyThreadFromRow,
-                        onRetry = retryMessageFromRow,
-                        onOpenActions = openActionsFromRow,
-                        onReply = replyFromRow,
-                    )
+                    Column {
+                        MessageRow(
+                            message = message,
+                            profile = profilesById[message.userId],
+                            hydratedUserColor = state.userColorsById[message.userId],
+                            showAvatar = state.showAvatars,
+                            showBadges = state.showBadges,
+                            showTimestamp = state.showTimestamps,
+                            showDeletedMessageContent = state.showDeletedMessageContent,
+                            animateEmotes = state.animateEmotes &&
+                                !listState.isScrollInProgress &&
+                                message.id in visibleMessageIds,
+                            emoteScalePercent = state.emoteScalePercent,
+                            messageDensity = state.messageDensity,
+                            chatNameStyle = state.chatNameStyle,
+                            wrapMessageLines = state.wrapMessageLines,
+                            mentionColorArgb = state.mentionColorArgb,
+                            renderAssets = messageRenderAssets,
+                            frankerFaceZBadges = ffzBadgeListsByUser[message.userId]
+                                ?: ImmutableBadgeAssetList.Empty,
+                            onOpenUser = openUserFromRow,
+                            onOpenEmote = openEmoteFromRow,
+                            ownUserId = state.session?.userId,
+                            highlighted = highlightedMessageId == message.id,
+                            decoration = messageDecorations[message.id] ?: MessageDecoration(),
+                            onNavigateToMessage = navigateToMessage,
+                            onOpenReplyThread = openReplyThreadFromRow,
+                            onRetry = retryMessageFromRow,
+                            onOpenActions = openActionsFromRow,
+                            onReply = replyFromRow,
+                        )
+                        repeatPresentation.summariesByAnchorId[message.id]?.let { summary ->
+                            ChatRepeatCountBadge(
+                                summary = summary,
+                                modifier = Modifier.padding(start = 8.dp, top = 1.dp, bottom = 2.dp),
+                            )
+                        }
+                    }
                 }
                 items(
                     items = heldAutoModMessages,
@@ -882,7 +1110,7 @@ internal fun ChannelChatContent(
                             listState.scrollToItem(lastContentIndex)
                             onScrollPositionChanged(
                                 channelId,
-                                messages.lastOrNull()?.id,
+                                visibleMessages.lastOrNull()?.id,
                                 lastContentIndex,
                                 0,
                                 true,
@@ -1158,6 +1386,61 @@ internal fun ChannelChatContent(
             onDelete = {
                 messageActionsTarget = null
                 onDeleteMessage(target)
+            },
+        )
+    }
+    pendingModerationMacro?.let { pending ->
+        ModerationMacroConfirmationDialog(
+            expandedCommand = pending.expandedCommand,
+            strings = ModerationMacroConfirmationStrings(
+                title = resourceStrings.string(R.string.ferventio_moderation_macro_confirmation_title),
+                description = resourceStrings.string(R.string.ferventio_moderation_macro_confirmation_description),
+                execute = resourceStrings.string(R.string.ferventio_moderation_macro_execute),
+                cancel = resourceStrings.string(R.string.ferventio_moderation_cancel),
+            ),
+            onDismiss = { pendingModerationMacro = null },
+            onConfirm = {
+                pendingModerationMacro = null
+                onExecuteModerationCommand(pending.command)
+                onDraftChange("")
+                replyTarget = null
+                historyIndex = -1
+                historyScratch = ""
+                autocompleteIndex = 0
+            },
+        )
+    }
+    pendingNukeConfig?.let { config ->
+        NukePreviewSheet(
+            messages = rawMessages,
+            initialConfig = config,
+            strings = NukePreviewUiStrings(
+                title = resourceStrings.string(R.string.ferventio_nuke_preview_title),
+                queryLabel = resourceStrings.string(R.string.ferventio_nuke_query_label),
+                plainText = resourceStrings.string(R.string.ferventio_nuke_plain_text),
+                regex = resourceStrings.string(R.string.ferventio_nuke_regex),
+                caseSensitive = resourceStrings.string(R.string.ferventio_nuke_case_sensitive),
+                timeWindow = resourceStrings.string(R.string.ferventio_nuke_time_window),
+                excludeBroadcaster = resourceStrings.string(R.string.ferventio_nuke_exclude_broadcaster),
+                excludeModerators = resourceStrings.string(R.string.ferventio_nuke_exclude_moderators),
+                excludeVips = resourceStrings.string(R.string.ferventio_nuke_exclude_vips),
+                matchedMessages = resourceStrings.string(R.string.ferventio_nuke_matched_messages),
+                matchedUsers = resourceStrings.string(R.string.ferventio_nuke_matched_users),
+                excludedMatches = resourceStrings.string(R.string.ferventio_nuke_excluded_matches),
+                samples = resourceStrings.string(R.string.ferventio_nuke_samples),
+                noMatches = resourceStrings.string(R.string.ferventio_nuke_no_matches),
+                confirm = resourceStrings.string(R.string.ferventio_nuke_confirm),
+                cancel = resourceStrings.string(R.string.ferventio_nuke_cancel),
+            ),
+            onDismiss = { pendingNukeConfig = null },
+            onConfirm = { plan ->
+                pendingNukeConfig = null
+                onExecuteNuke(plan)
+                onDraftChange("")
+                replyTarget = null
+                historyIndex = -1
+                historyScratch = ""
+                autocompleteIndex = 0
             },
         )
     }

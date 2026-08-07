@@ -104,6 +104,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             FerventioApp(
                 controller = container.controller,
+                interactiveChatCoordinator = container.interactiveChatCoordinator,
                 pushCoordinator = container.pushCoordinator,
                 onExportSettings = ::exportSettings,
                 onImportSettings = ::importSettings,

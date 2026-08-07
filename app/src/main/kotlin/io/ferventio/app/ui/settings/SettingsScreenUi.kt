@@ -295,6 +295,7 @@ internal fun SettingsScreen(
     @Suppress("DEPRECATION") // LocalClipboard migration requires suspend clipboard writes.
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
+    val repeatCollapsePreference = rememberRepeatCollapsePreferenceState()
     val uriHandler = LocalUriHandler.current
     val uiScope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
@@ -633,6 +634,12 @@ internal fun SettingsScreen(
                                     description = resourceStrings.string(R.string.ferventio_auto_scroll_new_messages_summary),
                                     checked = state.autoScrollEnabled,
                                     onCheckedChange = controller::setAutoScrollEnabled,
+                                )
+                                SettingsSwitchRow(
+                                    title = resourceStrings.string(R.string.ferventio_repeat_collapse),
+                                    description = resourceStrings.string(R.string.ferventio_repeat_collapse_summary),
+                                    checked = repeatCollapsePreference.enabled,
+                                    onCheckedChange = repeatCollapsePreference::setEnabled,
                                 )
                                 LocalizedText("Цвет упоминаний", fontWeight = FontWeight.SemiBold)
                                 MentionColorPicker(

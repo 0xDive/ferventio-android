@@ -26,6 +26,9 @@ import kotlinx.serialization.json.jsonPrimitive
 import java.security.SecureRandom
 import java.util.UUID
 
+internal const val FERVENTIO_SETTINGS_FILE_NAME = "ferventio_settings"
+internal const val FERVENTIO_REPEAT_COLLAPSE_KEY = "repeat_collapse_enabled"
+
 class SettingsStore(context: Context) {
     private val appContext = context.applicationContext
     private val preferences = appContext.getSharedPreferences(FILE_NAME, Context.MODE_PRIVATE)
@@ -419,6 +422,10 @@ class SettingsStore(context: Context) {
         get() = preferences.getBoolean(KEY_AUTO_SCROLL_ENABLED, true)
         set(value) = preferences.edit().putBoolean(KEY_AUTO_SCROLL_ENABLED, value).apply()
 
+    var repeatCollapseEnabled: Boolean
+        get() = preferences.getBoolean(FERVENTIO_REPEAT_COLLAPSE_KEY, true)
+        set(value) = preferences.edit().putBoolean(FERVENTIO_REPEAT_COLLAPSE_KEY, value).apply()
+
     var settingsSyncEnabled: Boolean
         get() = preferences.getBoolean(KEY_SETTINGS_SYNC_ENABLED, false)
         set(value) = preferences.edit().putBoolean(KEY_SETTINGS_SYNC_ENABLED, value).apply()
@@ -595,7 +602,7 @@ class SettingsStore(context: Context) {
     }
 
     private companion object {
-        const val FILE_NAME = "ferventio_settings"
+        const val FILE_NAME = FERVENTIO_SETTINGS_FILE_NAME
         const val KEY_CHANNELS = "channels"
         const val KEY_CHANNELS_EXPLICITLY_EMPTY = "channels_explicitly_empty"
         const val KEY_SELECTED_CHANNEL = "selected_channel"
@@ -712,6 +719,7 @@ class SettingsStore(context: Context) {
             KEY_WRAP_MESSAGE_LINES,
             KEY_MENTION_COLOR_ARGB,
             KEY_AUTO_SCROLL_ENABLED,
+            FERVENTIO_REPEAT_COLLAPSE_KEY,
         )
     }
 }
