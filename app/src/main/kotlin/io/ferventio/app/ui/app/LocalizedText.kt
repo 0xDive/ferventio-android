@@ -35,7 +35,7 @@ internal fun ProvideAppResourceStrings(
 @Composable
 internal fun localizedString(source: String): String {
     val configured = LocalAppResourceStrings.current
-    return configured?.legacy(source) ?: UiStringCatalog.resolve(LocalContext.current, source)
+    return configured?.legacy(source) ?: LegacyUiStringCatalog.resolve(LocalContext.current, source)
 }
 
 @Composable
@@ -48,12 +48,12 @@ internal fun localizedJoinToString(
     val resolver: (String) -> String = if (configured != null) {
         configured::legacy
     } else {
-        { source -> UiStringCatalog.resolve(context, source) }
+        { source -> LegacyUiStringCatalog.resolve(context, source) }
     }
     return values.joinToString(separator = separator, transform = resolver)
 }
 
-internal fun verbatimArgument(value: Any?): String = UiStringCatalog.verbatim(value?.toString().orEmpty())
+internal fun verbatimArgument(value: Any?): String = LegacyUiStringCatalog.verbatim(value?.toString().orEmpty())
 
 @Composable
 internal fun LocalizedText(

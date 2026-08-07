@@ -216,6 +216,7 @@ import io.ferventio.app.domain.FerventioUiState
 import io.ferventio.app.domain.ScrollRestorationPolicy
 import io.ferventio.app.domain.TwitchUser
 import io.ferventio.app.domain.ThirdPartyEmoteAsset
+import io.ferventio.app.domain.UserCardContextBuilder
 import io.ferventio.app.domain.resolve
 import io.ferventio.app.domain.usageKey
 import io.ferventio.app.domain.ThirdPartyEmoteCatalogResolver
@@ -372,6 +373,9 @@ internal fun UserCardSheet(
             return@ModalBottomSheet
         }
 
+        val contextSummary = remember(data) {
+            UserCardContextBuilder.build(data, System.currentTimeMillis())
+        }
         val userCardRenderAssets = remember(
             data.channelId,
             badgeAssetsByChannel,
@@ -526,6 +530,10 @@ internal fun UserCardSheet(
                         }
                     }
                 }
+            }
+
+            item(key = "profile-context") {
+                UserCardContextSection(contextSummary, appLanguage = appLanguage)
             }
 
             cardState.errorMessage?.let { error ->

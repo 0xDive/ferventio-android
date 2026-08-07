@@ -58,6 +58,7 @@ data class BackupSettings(
     val showSystemMessages: Boolean = true,
     val mentionColorArgb: Long,
     val autoScrollEnabled: Boolean,
+    val repeatCollapseEnabled: Boolean = true,
     val animateEmotes: Boolean,
     val emoteScalePercent: Int,
     val betterTtvEnabled: Boolean,
@@ -125,6 +126,7 @@ object SettingsBackupCodec {
                 showSystemMessages = store.showSystemMessages,
                 mentionColorArgb = store.mentionColorArgb,
                 autoScrollEnabled = store.autoScrollEnabled,
+                repeatCollapseEnabled = store.repeatCollapseEnabled,
                 animateEmotes = store.animateEmotes,
                 emoteScalePercent = store.emoteScalePercent,
                 betterTtvEnabled = store.betterTtvEnabled,
@@ -179,7 +181,16 @@ object SettingsBackupCodec {
             maxNestingDepth = MAX_BACKUP_JSON_DEPTH,
             inputName = "Файл настроек",
         )
-        val document = compactJson.decodeFromString<SettingsBackupDocument>(raw)
+        val decoded = compactJson.decodeFromString<SettingsBackupDocument>(raw)
+        val document = if (decoded.formatVersion == 1) {
+            decoded.copy(
+                content = decoded.content.copy(
+                    settings = decoded.content.settings.copy(repeatCollapseEnabled = true),
+                ),
+            )
+        } else {
+            decoded
+        }
         validateDocument(document)
         return document
     }
@@ -210,6 +221,7 @@ object SettingsBackupCodec {
             store.showSystemMessages = settings.showSystemMessages
             store.mentionColorArgb = settings.mentionColorArgb
             store.autoScrollEnabled = settings.autoScrollEnabled
+            store.repeatCollapseEnabled = settings.repeatCollapseEnabled
             store.animateEmotes = settings.animateEmotes
             store.emoteScalePercent = settings.emoteScalePercent
             store.betterTtvEnabled = settings.betterTtvEnabled
@@ -261,17 +273,27 @@ object SettingsBackupCodec {
             "Неподдерживаемая версия резервной копии: ${document.formatVersion}"
         }
         validate(document.content)
-        require(document.contentHash == contentHash(document.content)) {
+        require(document.contentHash == contentHashForVersion(document.content, document.formatVersion)) {
             "Контрольная сумма резервной копии не совпадает"
         }
         runCatching { Instant.parse(document.createdAt) }
             .getOrElse { throw IllegalArgumentException("Некорректная дата резервной копии") }
     }
 
-    fun contentHash(content: SettingsBackupContent): String {
-        val canonical = compactJson.encodeToString(content).toByteArray(Charsets.UTF_8)
+    fun contentHash(content: SettingsBackupContent): String =
+        contentHashForVersion(content, BACKUP_FORMAT_VERSION)
+
+    internal fun contentHashForVersion(content: SettingsBackupContent, formatVersion: Int): String {
+        require(formatVersion in 1..BACKUP_FORMAT_VERSION) { "Неподдерживаемая версия резервной копии: $formatVersion" }
+        val canonicalText = compactJson.encodeToString(content).let { encoded ->
+            if (formatVersion == 1) {
+                encoded.replace(Regex(",\"repeatCollapseEnabled\":(?:true|false)"), "")
+            } else {
+                encoded
+            }
+        }
         return MessageDigest.getInstance("SHA-256")
-            .digest(canonical)
+            .digest(canonicalText.toByteArray(Charsets.UTF_8))
             .joinToString("") { byte -> "%02x".format(byte.toInt() and 0xff) }
     }
 
@@ -339,4 +361,4 @@ object SettingsBackupCodec {
 }
 
 const val BACKUP_FORMAT = "ferventio-settings-backup"
-const val BACKUP_FORMAT_VERSION = 1
+const val BACKUP_FORMAT_VERSION = 2

@@ -111,6 +111,7 @@ import io.ferventio.app.domain.ChatSplit
 import io.ferventio.app.domain.FilteredSplit
 import io.ferventio.app.application.FerventioController
 import io.ferventio.app.domain.FerventioUiState
+import io.ferventio.app.domain.InteractiveChatOverlayState
 import io.ferventio.app.domain.MainSection
 import io.ferventio.app.domain.MAX_SPLITS_PER_TAB
 import io.ferventio.app.domain.SplitLayout
@@ -162,6 +163,7 @@ internal fun WorkspaceTabStrip(
 @Composable
 internal fun PhoneChannelPager(
     state: FerventioUiState,
+    interactiveChatState: InteractiveChatOverlayState,
     controller: FerventioController,
     hideKeyboard: () -> Unit,
 ) {
@@ -232,7 +234,23 @@ internal fun PhoneChannelPager(
                 ChannelChatContent(
                     state = state,
                     channelId = channel.id,
+                    interactiveChatState = interactiveChatState,
                     onSend = { text, reply -> controller.sendMessageToChannel(channel.id, text, reply) },
+                    onExecuteNuke = { plan -> controller.executeNuke(channel.id, plan) },
+
+                    onExecuteModerationCommand = { command -> controller.executeConfirmedModerationCommand(channel.id, command) },
+
+                    onCreatePoll = { draft -> controller.createInteractivePoll(channel.id, draft) },
+
+                    onCreatePrediction = { draft -> controller.createInteractivePrediction(channel.id, draft) },
+
+                    onEndPoll = { pollId, archive -> controller.endInteractivePoll(channel.id, pollId, archive) },
+
+                    onLockPrediction = { predictionId -> controller.lockInteractivePrediction(channel.id, predictionId) },
+
+                    onCancelPrediction = { predictionId -> controller.cancelInteractivePrediction(channel.id, predictionId) },
+
+                    onResolvePrediction = { predictionId, outcomeId -> controller.resolveInteractivePrediction(channel.id, predictionId, outcomeId) },
                     onDraftChange = { controller.updateDraft(channel.id, it) },
                     onRetryMessage = controller::retryOutgoingMessage,
                     onDeleteMessage = controller::deleteMessage,
@@ -354,6 +372,7 @@ internal fun PhoneChannelTabs(
 @Composable
 internal fun WideSplitLayout(
     state: FerventioUiState,
+    interactiveChatState: InteractiveChatOverlayState,
     controller: FerventioController,
     tab: WorkspaceTab,
     hideKeyboard: () -> Unit,
@@ -372,6 +391,7 @@ internal fun WideSplitLayout(
             splitCount = 1,
             activeSplitId = tab.activeSplitId,
             state = state,
+            interactiveChatState = interactiveChatState,
             controller = controller,
             hideKeyboard = hideKeyboard,
             modifier = Modifier.fillMaxSize(),
@@ -380,6 +400,7 @@ internal fun WideSplitLayout(
             splits = splits,
             fraction = tab.primaryFraction,
             state = state,
+            interactiveChatState = interactiveChatState,
             controller = controller,
             hideKeyboard = hideKeyboard,
         )
@@ -388,6 +409,7 @@ internal fun WideSplitLayout(
             fraction = tab.primaryFraction,
             activeSplitId = tab.activeSplitId,
             state = state,
+            interactiveChatState = interactiveChatState,
             controller = controller,
             hideKeyboard = hideKeyboard,
         )
@@ -399,6 +421,7 @@ internal fun ResizableTwoPane(
     splits: List<SplitLayout>,
     fraction: Float,
     state: FerventioUiState,
+    interactiveChatState: InteractiveChatOverlayState,
     controller: FerventioController,
     hideKeyboard: () -> Unit,
 ) {
@@ -415,6 +438,7 @@ internal fun ResizableTwoPane(
             splitCount = 2,
             activeSplitId = state.workspaceLayout.activeTab?.activeSplitId,
             state = state,
+            interactiveChatState = interactiveChatState,
             controller = controller,
             hideKeyboard = hideKeyboard,
             modifier = Modifier.weight(localFraction),
@@ -439,6 +463,7 @@ internal fun ResizableTwoPane(
             splitCount = 2,
             activeSplitId = state.workspaceLayout.activeTab?.activeSplitId,
             state = state,
+            interactiveChatState = interactiveChatState,
             controller = controller,
             hideKeyboard = hideKeyboard,
             modifier = Modifier.weight(1f - localFraction),
@@ -452,6 +477,7 @@ internal fun SplitGrid(
     fraction: Float,
     activeSplitId: String?,
     state: FerventioUiState,
+    interactiveChatState: InteractiveChatOverlayState,
     controller: FerventioController,
     hideKeyboard: () -> Unit,
 ) {
@@ -470,6 +496,7 @@ internal fun SplitGrid(
             splitCount = splits.size,
             activeSplitId = activeSplitId,
             state = state,
+            interactiveChatState = interactiveChatState,
             controller = controller,
             hideKeyboard = hideKeyboard,
             modifier = Modifier.weight(localFraction),
@@ -494,6 +521,7 @@ internal fun SplitGrid(
             splitCount = splits.size,
             activeSplitId = activeSplitId,
             state = state,
+            interactiveChatState = interactiveChatState,
             controller = controller,
             hideKeyboard = hideKeyboard,
             modifier = Modifier.weight(1f - localFraction),
@@ -507,6 +535,7 @@ internal fun SplitColumn(
     splitCount: Int,
     activeSplitId: String?,
     state: FerventioUiState,
+    interactiveChatState: InteractiveChatOverlayState,
     controller: FerventioController,
     hideKeyboard: () -> Unit,
     modifier: Modifier,
@@ -518,6 +547,7 @@ internal fun SplitColumn(
                 splitCount = splitCount,
                 activeSplitId = activeSplitId,
                 state = state,
+                interactiveChatState = interactiveChatState,
                 controller = controller,
                 hideKeyboard = hideKeyboard,
                 modifier = Modifier.weight(1f),
@@ -533,6 +563,7 @@ internal fun SplitPane(
     splitCount: Int,
     activeSplitId: String?,
     state: FerventioUiState,
+    interactiveChatState: InteractiveChatOverlayState,
     controller: FerventioController,
     hideKeyboard: () -> Unit,
     modifier: Modifier,
@@ -622,7 +653,23 @@ internal fun SplitPane(
                     ChannelChatContent(
                         state = state,
                         channelId = channel.id,
+                        interactiveChatState = interactiveChatState,
                         onSend = { text, reply -> controller.sendMessageToChannel(channel.id, text, reply) },
+                        onExecuteNuke = { plan -> controller.executeNuke(channel.id, plan) },
+
+                        onExecuteModerationCommand = { command -> controller.executeConfirmedModerationCommand(channel.id, command) },
+
+                        onCreatePoll = { draft -> controller.createInteractivePoll(channel.id, draft) },
+
+                        onCreatePrediction = { draft -> controller.createInteractivePrediction(channel.id, draft) },
+
+                        onEndPoll = { pollId, archive -> controller.endInteractivePoll(channel.id, pollId, archive) },
+
+                        onLockPrediction = { predictionId -> controller.lockInteractivePrediction(channel.id, predictionId) },
+
+                        onCancelPrediction = { predictionId -> controller.cancelInteractivePrediction(channel.id, predictionId) },
+
+                        onResolvePrediction = { predictionId, outcomeId -> controller.resolveInteractivePrediction(channel.id, predictionId, outcomeId) },
                         onDraftChange = { controller.updateDraft(channel.id, it) },
                         onRetryMessage = controller::retryOutgoingMessage,
                         onDeleteMessage = controller::deleteMessage,

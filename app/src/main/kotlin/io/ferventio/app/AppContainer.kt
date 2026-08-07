@@ -8,6 +8,7 @@ import io.ferventio.app.data.SettingsStore
 import io.ferventio.app.data.local.ChatHistoryRepository
 import io.ferventio.app.data.local.FerventioDatabase
 import io.ferventio.app.application.FerventioController
+import io.ferventio.app.application.InteractiveChatCoordinator
 import io.ferventio.app.domain.HighlightRuleType
 import io.ferventio.app.emote.EmoteRepository
 import io.ferventio.app.network.FerventioBackendClient
@@ -37,6 +38,8 @@ class AppContainer(context: Context) {
     private val imageCacheManager = ImageCacheManager(context)
     private val historyRepository = ChatHistoryRepository(FerventioDatabase.getInstance(context))
 
+    val interactiveChatCoordinator = InteractiveChatCoordinator()
+
     val pushCoordinator = PushCoordinator(
         context = context,
         scope = applicationScope,
@@ -57,6 +60,25 @@ class AppContainer(context: Context) {
         onReplyReceived = pushCoordinator::showReplyNotification,
         onAutoModHeld = pushCoordinator::showAutoModNotification,
         onHighlightAlert = pushCoordinator::showHighlightAlert,
+        onInteractiveChatEvent = interactiveChatCoordinator::ingest,
+        onInteractiveChatRefresh = interactiveChatCoordinator::refresh,
+        onInteractivePollCreate = { auth, draft ->
+            interactiveChatCoordinator.createPoll(auth, draft)
+        },
+        onInteractivePredictionCreate = { auth, draft ->
+            interactiveChatCoordinator.createPrediction(auth, draft)
+        },
+        onInteractivePollEnd = { auth, pollId, status ->
+            interactiveChatCoordinator.endPoll(auth, pollId, status)
+        },
+        onInteractivePredictionEnd = { auth, predictionId, status, winningOutcomeId ->
+            interactiveChatCoordinator.endPrediction(
+                auth = auth,
+                predictionId = predictionId,
+                status = status,
+                winningOutcomeId = winningOutcomeId,
+            )
+        },
     )
 
     private val networkMonitor = NetworkMonitor(

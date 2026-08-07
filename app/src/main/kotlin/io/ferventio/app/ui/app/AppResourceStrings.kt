@@ -34,7 +34,7 @@ internal class AppResourceStrings internal constructor(
         *formatArgs,
     )
 
-    fun legacy(source: String): String = UiStringCatalog.resolve(context, source)
+    fun legacy(source: String): String = LegacyUiStringCatalog.resolve(context, source)
 }
 
 internal fun appResourceStrings(

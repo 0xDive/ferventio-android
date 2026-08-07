@@ -27,6 +27,8 @@ import io.ferventio.app.twitch.EventSubSubscriptionConflictException
 import io.ferventio.app.twitch.EventSubSetupException
 import io.ferventio.app.twitch.TwitchEventSubClient
 import io.ferventio.app.twitch.TwitchChatSendException
+import io.ferventio.app.twitch.PollEndStatus
+import io.ferventio.app.twitch.PredictionEndStatus
 import io.ferventio.app.network.FerventioBackendClient
 import io.ferventio.app.network.FerventioBackendException
 import io.ferventio.app.network.BackendSettingsPutResult
@@ -81,6 +83,12 @@ class FerventioController(
     private val onReplyReceived: (ChatMessage) -> Unit = {},
     private val onAutoModHeld: (AutoModHeldMessage) -> Unit = {},
     private val onHighlightAlert: (HighlightAlert) -> Unit = {},
+    private val onInteractiveChatEvent: (InteractiveChatOverlayEvent) -> Unit = {},
+    private val onInteractiveChatRefresh: suspend (InteractiveChatAuth) -> Unit = {},
+    private val onInteractivePollCreate: suspend (InteractiveChatAuth, PollDraft) -> Unit = { _, _ -> },
+    private val onInteractivePredictionCreate: suspend (InteractiveChatAuth, PredictionDraft) -> Unit = { _, _ -> },
+    private val onInteractivePollEnd: suspend (InteractiveChatAuth, String, PollEndStatus) -> Unit = { _, _, _ -> },
+    private val onInteractivePredictionEnd: suspend (InteractiveChatAuth, String, PredictionEndStatus, String?) -> Unit = { _, _, _, _ -> },
 ) {
     private val mutableState = MutableStateFlow(
         freshUiState(isBootstrapping = true),
@@ -135,6 +143,7 @@ class FerventioController(
     private val eventSubMutex = Mutex()
     private val tokenRefreshMutex = Mutex()
     private val settingsSyncMutex = Mutex()
+    private val nukeExecutionMutex = Mutex()
     private val eventSubGeneration = AtomicLong(0L)
     private val twitchEmoteGeneration = AtomicLong(0L)
     private val lastEventSubActivityPublishedAtMillis = AtomicLong(0L)
@@ -1985,6 +1994,334 @@ class FerventioController(
             durationSeconds = seconds,
         )
         showNotice("@$userLogin: timeout ${formatDuration(seconds)}")
+    }
+
+    fun createInteractivePoll(channelId: String, draft: PollDraft) {
+        val session = mutableState.value.session ?: return
+        if (!session.interactiveChatCapabilities(channelId).canManagePolls) return
+        if (InteractiveOverlayDraftValidator.validatePoll(draft).isNotEmpty()) return
+        scope.launch {
+            runCatching {
+                withAuthenticationRetry { context ->
+                    if (!context.session.interactiveChatCapabilities(channelId).canManagePolls) {
+                        return@withAuthenticationRetry
+                    }
+                    if (InteractiveOverlayDraftValidator.validatePoll(draft).isNotEmpty()) {
+                        return@withAuthenticationRetry
+                    }
+                    onInteractivePollCreate(
+                        InteractiveChatAuth(
+                            clientId = context.session.clientId,
+                            accessToken = context.accessToken,
+                            broadcasterId = channelId,
+                        ),
+                        draft,
+                    )
+                }
+            }.onFailure { error -> showError(error.userMessage()) }
+        }
+    }
+
+    fun createInteractivePrediction(channelId: String, draft: PredictionDraft) {
+        val session = mutableState.value.session ?: return
+        if (!session.interactiveChatCapabilities(channelId).canManagePredictions) return
+        if (InteractiveOverlayDraftValidator.validatePrediction(draft).isNotEmpty()) return
+        scope.launch {
+            runCatching {
+                withAuthenticationRetry { context ->
+                    if (!context.session.interactiveChatCapabilities(channelId).canManagePredictions) {
+                        return@withAuthenticationRetry
+                    }
+                    if (InteractiveOverlayDraftValidator.validatePrediction(draft).isNotEmpty()) {
+                        return@withAuthenticationRetry
+                    }
+                    onInteractivePredictionCreate(
+                        InteractiveChatAuth(
+                            clientId = context.session.clientId,
+                            accessToken = context.accessToken,
+                            broadcasterId = channelId,
+                        ),
+                        draft,
+                    )
+                }
+            }.onFailure { error -> showError(error.userMessage()) }
+        }
+    }
+
+    fun endInteractivePoll(channelId: String, pollId: String, archive: Boolean) {
+        val session = mutableState.value.session ?: return
+        if (!session.interactiveChatCapabilities(channelId).canManagePolls) return
+        scope.launch {
+            runCatching {
+                withAuthenticationRetry { context ->
+                    if (!context.session.interactiveChatCapabilities(channelId).canManagePolls) {
+                        return@withAuthenticationRetry
+                    }
+                    onInteractivePollEnd(
+                        InteractiveChatAuth(
+                            clientId = context.session.clientId,
+                            accessToken = context.accessToken,
+                            broadcasterId = channelId,
+                        ),
+                        pollId,
+                        if (archive) PollEndStatus.ARCHIVED else PollEndStatus.TERMINATED,
+                    )
+                }
+            }.onFailure { error -> showError(error.userMessage()) }
+        }
+    }
+
+    fun lockInteractivePrediction(channelId: String, predictionId: String) {
+        endInteractivePrediction(channelId, predictionId, PredictionEndStatus.LOCKED)
+    }
+
+    fun cancelInteractivePrediction(channelId: String, predictionId: String) {
+        endInteractivePrediction(channelId, predictionId, PredictionEndStatus.CANCELED)
+    }
+
+    fun resolveInteractivePrediction(channelId: String, predictionId: String, winningOutcomeId: String) {
+        endInteractivePrediction(
+            channelId = channelId,
+            predictionId = predictionId,
+            status = PredictionEndStatus.RESOLVED,
+            winningOutcomeId = winningOutcomeId,
+        )
+    }
+
+    private fun endInteractivePrediction(
+        channelId: String,
+        predictionId: String,
+        status: PredictionEndStatus,
+        winningOutcomeId: String? = null,
+    ) {
+        val session = mutableState.value.session ?: return
+        if (!session.interactiveChatCapabilities(channelId).canManagePredictions) return
+        scope.launch {
+            runCatching {
+                withAuthenticationRetry { context ->
+                    if (!context.session.interactiveChatCapabilities(channelId).canManagePredictions) {
+                        return@withAuthenticationRetry
+                    }
+                    onInteractivePredictionEnd(
+                        InteractiveChatAuth(
+                            clientId = context.session.clientId,
+                            accessToken = context.accessToken,
+                            broadcasterId = channelId,
+                        ),
+                        predictionId,
+                        status,
+                        winningOutcomeId,
+                    )
+                }
+            }.onFailure { error -> showError(error.userMessage()) }
+        }
+    }
+
+    fun executeConfirmedModerationCommand(
+        channelId: String,
+        command: ConfirmedModerationCommand,
+    ) {
+        when (command) {
+            is ConfirmedModerationCommand.Ban -> moderateChannel(channelId) { context ->
+                val user = api.getUserByLogin(context.session.clientId, context.accessToken, command.userLogin)
+                api.banUser(
+                    clientId = context.session.clientId,
+                    token = context.accessToken,
+                    broadcasterId = channelId,
+                    moderatorId = context.session.userId,
+                    targetUserId = user.id,
+                    reason = command.reason?.takeIf(String::isNotBlank) ?: "Ferventio moderation",
+                )
+                runCatching {
+                    historyRepository.recordModerationAction(
+                        channelId = channelId,
+                        targetUserId = user.id,
+                        targetUserLogin = user.login,
+                        action = "BAN",
+                        reason = command.reason,
+                    )
+                }
+            }
+
+            is ConfirmedModerationCommand.Timeout -> moderateChannel(channelId) { context ->
+                val user = api.getUserByLogin(context.session.clientId, context.accessToken, command.userLogin)
+                api.timeoutUser(
+                    clientId = context.session.clientId,
+                    token = context.accessToken,
+                    broadcasterId = channelId,
+                    moderatorId = context.session.userId,
+                    targetUserId = user.id,
+                    durationSeconds = command.durationSeconds,
+                    reason = command.reason?.takeIf(String::isNotBlank) ?: "Ferventio moderation",
+                )
+                runCatching {
+                    historyRepository.recordModerationAction(
+                        channelId = channelId,
+                        targetUserId = user.id,
+                        targetUserLogin = user.login,
+                        action = "TIMEOUT",
+                        durationSeconds = command.durationSeconds,
+                        reason = command.reason,
+                    )
+                }
+            }
+
+            is ConfirmedModerationCommand.Unban -> moderateChannel(channelId) { context ->
+                val user = api.getUserByLogin(context.session.clientId, context.accessToken, command.userLogin)
+                api.unbanUser(
+                    clientId = context.session.clientId,
+                    token = context.accessToken,
+                    broadcasterId = channelId,
+                    moderatorId = context.session.userId,
+                    targetUserId = user.id,
+                )
+                runCatching {
+                    historyRepository.recordModerationAction(
+                        channelId = channelId,
+                        targetUserId = user.id,
+                        targetUserLogin = user.login,
+                        action = "UNBAN",
+                    )
+                }
+            }
+
+            is ConfirmedModerationCommand.Delete -> moderateChannel(channelId) { context ->
+                val message = mutableState.value.messagesByChannel[channelId]
+                    .orEmpty()
+                    .firstOrNull { candidate ->
+                        candidate.id == command.messageId || candidate.serverMessageId == command.messageId
+                    }
+                val twitchMessageId = message?.serverMessageId?.takeIf(String::isNotBlank) ?: command.messageId
+                api.deleteMessage(
+                    clientId = context.session.clientId,
+                    token = context.accessToken,
+                    broadcasterId = channelId,
+                    moderatorId = context.session.userId,
+                    messageId = twitchMessageId,
+                )
+                message?.let { markMessageDeleted(channelId, it.id) }
+                runCatching {
+                    historyRepository.recordModerationAction(
+                        channelId = channelId,
+                        targetUserId = message?.userId,
+                        targetUserLogin = message?.userLogin,
+                        messageId = message?.id ?: twitchMessageId,
+                        action = "DELETE",
+                    )
+                }
+            }
+
+            ConfirmedModerationCommand.Clear -> clearModeratedChat(channelId)
+            is ConfirmedModerationCommand.Slow -> updateModerationChatSettings(
+                channelId = channelId,
+                slowMode = true,
+                slowSeconds = command.seconds,
+            )
+            ConfirmedModerationCommand.SlowOff -> updateModerationChatSettings(
+                channelId = channelId,
+                slowMode = false,
+            )
+            is ConfirmedModerationCommand.Followers -> updateModerationChatSettings(
+                channelId = channelId,
+                followerMode = true,
+                followerMinutes = command.minutes,
+            )
+            ConfirmedModerationCommand.FollowersOff -> updateModerationChatSettings(
+                channelId = channelId,
+                followerMode = false,
+            )
+            ConfirmedModerationCommand.Subscribers -> updateModerationChatSettings(
+                channelId = channelId,
+                subscriberMode = true,
+            )
+            ConfirmedModerationCommand.SubscribersOff -> updateModerationChatSettings(
+                channelId = channelId,
+                subscriberMode = false,
+            )
+            ConfirmedModerationCommand.EmoteOnly -> updateModerationChatSettings(
+                channelId = channelId,
+                emoteMode = true,
+            )
+            ConfirmedModerationCommand.EmoteOnlyOff -> updateModerationChatSettings(
+                channelId = channelId,
+                emoteMode = false,
+            )
+        }
+    }
+
+    fun executeNuke(channelId: String, plan: NukeExecutionPlan) {
+        val current = mutableState.value
+        if (channelId !in current.moderatedChannelIds) {
+            showError("У тебя нет прав модератора в этом канале")
+            return
+        }
+        if (current.session == null) {
+            showError("Войди через Twitch для модерации")
+            return
+        }
+        if (credentials == null) {
+            showError("Нет OAuth-токена")
+            return
+        }
+
+        scope.launch {
+            runCatching {
+                nukeExecutionMutex.withLock {
+                    io.ferventio.app.moderation.NukeExecutionCoordinator(
+                        moderationAction = io.ferventio.app.moderation.NukeModerationAction {
+                            user, durationSeconds, reason ->
+                            require(user.userId.isNotBlank()) {
+                                "Nuke target @${user.userLogin} has no Twitch user id"
+                            }
+                            // Retry authentication per frozen target. Retrying the whole batch after
+                            // a mid-flight 401 could otherwise repeat already successful timeouts.
+                            withAuthenticationRetry { context ->
+                                api.timeoutUser(
+                                    clientId = context.session.clientId,
+                                    token = context.accessToken,
+                                    broadcasterId = channelId,
+                                    moderatorId = context.session.userId,
+                                    targetUserId = user.userId,
+                                    durationSeconds = durationSeconds,
+                                    reason = reason,
+                                )
+                            }
+                            // Twitch success must not become a moderation failure only because the
+                            // optional local history write failed.
+                            runCatching {
+                                historyRepository.recordModerationAction(
+                                    channelId = channelId,
+                                    targetUserId = user.userId,
+                                    targetUserLogin = user.userLogin,
+                                    action = "TIMEOUT",
+                                    durationSeconds = durationSeconds,
+                                    reason = reason,
+                                )
+                            }
+                        },
+                    ).execute(
+                        plan = plan,
+                        policy = io.ferventio.app.moderation.NukeExecutionPolicy(
+                            reason = "Ferventio /nuke",
+                        ),
+                    )
+                }
+            }.onSuccess { result ->
+                if (result.failedUsers == 0) {
+                    showNotice("Nuke: timeout применён к ${result.succeededUsers} пользователям")
+                } else {
+                    val firstFailure = result.failures.firstOrNull()?.message
+                    showError(
+                        buildString {
+                            append("Nuke: ${result.succeededUsers} успешно, ${result.failedUsers} ошибок")
+                            if (!firstFailure.isNullOrBlank()) append(": $firstFailure")
+                        },
+                    )
+                }
+            }.onFailure { error ->
+                showError("Nuke: ${error.userMessage()}")
+            }
+        }
     }
 
     fun banUser(channelId: String, userId: String, userLogin: String) = moderateChannel(channelId) { context ->
@@ -4923,6 +5260,7 @@ class FerventioController(
         }
 
         val generation = eventSubGeneration.incrementAndGet()
+        onInteractiveChatEvent(InteractiveChatOverlayEvent.ClearChannel(session.userId))
         val previousJob = eventSubJob
         val previousClient = eventSubClient
 
@@ -4965,6 +5303,9 @@ class FerventioController(
                     },
                     onEvent = { event ->
                         if (generation == eventSubGeneration.get()) enqueueChatEvent(event)
+                    },
+                    onInteractiveEvent = { event ->
+                        if (generation == eventSubGeneration.get()) onInteractiveChatEvent(event)
                     },
                     onActivity = { activity ->
                         generation == eventSubGeneration.get() && recordEventSubActivity(activity)
@@ -5255,7 +5596,9 @@ class FerventioController(
     ) = coroutineScope {
         val semaphore = Semaphore(EVENTSUB_SETUP_CONCURRENCY)
         val requests = channels.flatMap { channel ->
-            EVENT_TYPES.mapNotNull { type ->
+            val eventTypes = EVENT_TYPES +
+                io.ferventio.app.domain.InteractiveEventSubSubscriptionPolicy.eventTypesFor(session, channel)
+            eventTypes.mapNotNull { type ->
                 when {
                     (channel.id to type) in alreadyCreated -> null
                     type in MODERATOR_EVENT_TYPES && channel.id !in mutableState.value.moderatedChannelIds -> null
@@ -5283,6 +5626,28 @@ class FerventioController(
         }.awaitAll()
 
         if (generation != eventSubGeneration.get()) return@coroutineScope
+
+        val interactiveTypes = channels
+            .firstOrNull { it.id == session.userId }
+            ?.let { io.ferventio.app.domain.InteractiveEventSubSubscriptionPolicy.eventTypesFor(session, it) }
+            .orEmpty()
+        if (interactiveTypes.containsAll(io.ferventio.app.domain.InteractiveEventSubSubscriptionPolicy.ALL_EVENT_TYPES)) {
+            runCatching {
+                onInteractiveChatRefresh(
+                    InteractiveChatAuth(
+                        clientId = session.clientId,
+                        accessToken = accessToken,
+                        broadcasterId = session.userId,
+                    ),
+                )
+            }.onFailure { error ->
+                SafeLog.w(
+                    "FerventioController",
+                    "Interactive chat hydration failed",
+                    error,
+                )
+            }
+        }
 
         val successful = attempts.filter { it.error == null }
         val allSuccessful = alreadyCreated + successful.map { it.channel.id to it.type }
@@ -6451,8 +6816,9 @@ class FerventioController(
         else -> "1"
     }
 
-    private fun eventSubIdentityConditionKey(type: String): String = when (type) {
-        "automod.message.hold", "automod.message.update", "channel.moderate" -> "moderator_user_id"
+    private fun eventSubIdentityConditionKey(type: String): String? = when {
+        type in io.ferventio.app.domain.InteractiveEventSubSubscriptionPolicy.ALL_EVENT_TYPES -> null
+        type in MODERATOR_EVENT_TYPES -> "moderator_user_id"
         else -> "user_id"
     }
 

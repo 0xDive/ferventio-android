@@ -980,14 +980,14 @@ class TwitchApiClient : Closeable {
         userId: String,
         type: String,
         version: String = "1",
-        identityConditionKey: String = "user_id",
+        identityConditionKey: String? = "user_id",
     ) {
         val payload = buildJsonObject {
             put("type", JsonPrimitive(type))
             put("version", JsonPrimitive(version))
             put("condition", buildJsonObject {
                 put("broadcaster_user_id", JsonPrimitive(broadcasterId))
-                put(identityConditionKey, JsonPrimitive(userId))
+                identityConditionKey?.let { key -> put(key, JsonPrimitive(userId)) }
             })
             put("transport", buildJsonObject {
                 put("method", JsonPrimitive("websocket"))

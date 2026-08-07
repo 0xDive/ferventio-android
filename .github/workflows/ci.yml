@@ -49,6 +49,9 @@ jobs:
       - name: Architecture boundaries
         run: python3 scripts/architecture/check-module-boundaries.py --root .
 
+      - name: Resource localization contract
+        run: python3 scripts/localization/check_ui_localization.py
+
       - name: Compile isolated build logic
         run: ./gradlew -p build-logic clean check --no-configuration-cache --stacktrace
 

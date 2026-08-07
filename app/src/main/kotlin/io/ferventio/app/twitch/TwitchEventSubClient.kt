@@ -21,6 +21,7 @@ import io.ferventio.app.security.JsonInputGuard
 import io.ferventio.app.security.SafeLog
 import io.ferventio.app.security.SensitiveDataRedactor
 import io.ferventio.app.domain.ConnectionStatus
+import io.ferventio.app.domain.InteractiveChatOverlayEvent
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
@@ -55,6 +56,7 @@ class TwitchEventSubClient(
     private val onRevocation: (EventSubRevocation) -> Unit,
     private val onMalformedEnvelope: (Throwable) -> Unit,
     private val onError: (Throwable) -> Unit,
+    private val onInteractiveEvent: (InteractiveChatOverlayEvent) -> Unit = {},
     private val clockMillis: () -> Long = System::currentTimeMillis,
     private val jitterFraction: () -> Double = { Random.nextDouble() },
 ) : Closeable {
@@ -173,7 +175,10 @@ class TwitchEventSubClient(
                                 break
                             }
 
-                            "notification" -> envelope.event?.let(onEvent)
+                            "notification" -> {
+                                envelope.event?.let(onEvent)
+                                envelope.interactiveEvent?.let(onInteractiveEvent)
+                            }
                             "revocation" -> {
                                 val revocation = EventSubRevocation(
                                     subscriptionType = envelope.subscriptionType.orEmpty(),
@@ -380,6 +385,7 @@ data class EventSubEnvelope(
     val subscriptionType: String? = null,
     val revocationStatus: String? = null,
     val event: ChatEvent? = null,
+    val interactiveEvent: InteractiveChatOverlayEvent? = null,
     val parseError: String? = null,
 )
 
@@ -429,6 +435,20 @@ object EventSubParser {
                         error,
                     )
                 }.getOrNull()
+                val interactiveEvent = runCatching {
+                    TwitchInteractiveEventSubParser.parse(
+                        subscriptionType = subscriptionType,
+                        event = event,
+                        observedAtMillis = timestamp.orEmpty().toEpochMillisOrNow(),
+                    )
+                }.onFailure { error ->
+                    if (parseFailure == null) parseFailure = error
+                    SafeLog.w(
+                        TwitchEventSubClient.TAG,
+                        "Ignoring malformed interactive EventSub notification: $subscriptionType",
+                        error,
+                    )
+                }.getOrNull()
                 val eventWithMetadata = when (parsedEvent) {
                     is ChatEvent.Message -> ChatEvent.Message(
                         parsedEvent.message.copy(eventSubMessageId = messageId),
@@ -441,6 +461,7 @@ object EventSubParser {
                     messageTimestamp = timestamp,
                     subscriptionType = subscriptionType,
                     event = eventWithMetadata,
+                    interactiveEvent = interactiveEvent,
                     parseError = parseFailure?.message,
                 )
             }

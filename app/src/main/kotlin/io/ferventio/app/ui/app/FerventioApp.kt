@@ -212,7 +212,9 @@ import io.ferventio.app.domain.ConnectionStatus
 import io.ferventio.app.domain.OutgoingMessageState
 import io.ferventio.app.domain.ReplyThreadResolver
 import io.ferventio.app.application.FerventioController
+import io.ferventio.app.application.InteractiveChatCoordinator
 import io.ferventio.app.domain.FerventioUiState
+import io.ferventio.app.domain.InteractiveChatOverlayState
 import io.ferventio.app.domain.ScrollRestorationPolicy
 import io.ferventio.app.domain.TwitchUser
 import io.ferventio.app.domain.ThirdPartyEmoteAsset
@@ -239,6 +241,7 @@ import androidx.core.graphics.toColorInt
 @Composable
 fun FerventioApp(
     controller: FerventioController,
+    interactiveChatCoordinator: InteractiveChatCoordinator,
     pushCoordinator: PushCoordinator,
     onExportSettings: () -> Unit,
     onImportSettings: () -> Unit,
@@ -246,6 +249,7 @@ fun FerventioApp(
     onClearCrashReports: () -> Unit,
 ) {
     val state by controller.state.collectAsStateWithLifecycle()
+    val interactiveChatState by interactiveChatCoordinator.state.collectAsStateWithLifecycle()
     val pushState by pushCoordinator.state.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val uriHandler = LocalUriHandler.current
@@ -284,6 +288,7 @@ fun FerventioApp(
                     state.isBootstrapping -> LoadingScreen(state.isChannelsLoading)
                     else -> AuthenticatedShell(
                         state = state,
+                        interactiveChatState = interactiveChatState,
                         controller = controller,
                         snackbarHostState = snackbarHostState,
                         pushState = pushState,
@@ -325,6 +330,7 @@ private fun ChatScreen(
     onOpenSettings: () -> Unit,
 ) {
     var showAddChannel by rememberSaveable { mutableStateOf(false) }
+    var showActionSearch by rememberSaveable { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val hideKeyboard = {
@@ -353,6 +359,12 @@ private fun ChatScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = {
+                        hideKeyboard()
+                        showActionSearch = true
+                    }) {
+                        Icon(Icons.Default.Tune, contentDescription = localizedString("Действия и поиск"))
+                    }
                     IconButton(onClick = {
                         hideKeyboard()
                         showAddChannel = true
@@ -425,6 +437,35 @@ private fun ChatScreen(
             onAdd = {
                 controller.addChannel(it)
                 showAddChannel = false
+            },
+        )
+    }
+
+    if (showActionSearch) {
+        GlobalActionSearchSheet(
+            state = state,
+            onDismiss = { showActionSearch = false },
+            onAction = { action ->
+                when {
+                    action.id == "navigation:settings" -> onOpenSettings()
+                    action.id == "navigation:add-channel" -> showAddChannel = true
+                    action.id == "navigation:reconnect" -> {
+                        state.selectedChannelId?.let { channelId ->
+                            controller.updateDraft(channelId, "/reconnect")
+                        }
+                    }
+                    action.id.startsWith("channel:") -> {
+                        controller.selectChannel(action.id.substringAfter("channel:"))
+                    }
+                    action.id.startsWith("command:") -> {
+                        state.selectedChannelId?.let { channelId ->
+                            controller.updateDraft(
+                                channelId,
+                                "/${action.id.substringAfter("command:")} ",
+                            )
+                        }
+                    }
+                }
             },
         )
     }
