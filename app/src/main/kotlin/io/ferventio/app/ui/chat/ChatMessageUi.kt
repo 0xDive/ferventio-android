@@ -247,6 +247,17 @@ internal data class MessageRenderAssets(
 )
 
 @Immutable
+internal data class QuickModerationUiStrings(
+    val banButton: String,
+    val deleteButton: String,
+    val banTitle: String,
+    val banBody: String,
+    val deleteTitle: String,
+    val deleteBody: String,
+    val cancel: String,
+)
+
+@Immutable
 internal data class ImmutableBadgeAssetList(
     val items: List<ChatBadgeAsset>,
 ) {
@@ -318,6 +329,12 @@ internal fun MessageRow(
     showAvatar: Boolean,
     showBadges: Boolean,
     showTimestamp: Boolean,
+    showQuickBanButton: Boolean = false,
+    showQuickDeleteButton: Boolean = false,
+    canModerate: Boolean = false,
+    quickModerationStrings: QuickModerationUiStrings? = null,
+    onQuickBan: (ChatMessage) -> Unit = {},
+    onQuickDelete: (ChatMessage) -> Unit = {},
     showDeletedMessageContent: Boolean,
     animateEmotes: Boolean,
     emoteScalePercent: Int,
@@ -364,6 +381,21 @@ internal fun MessageRow(
     val isReplyToOwn = ownUserId != null &&
         message.userId != ownUserId &&
         message.reply?.parentUserId == ownUserId
+    val isBroadcaster = message.badges.any { badge -> badge.setId == "broadcaster" }
+    val canQuickBan = showQuickBanButton &&
+        canModerate &&
+        !message.isDeleted &&
+        !message.isSystem &&
+        message.userId.isNotBlank() &&
+        message.userId != ownUserId &&
+        !isBroadcaster
+    val canQuickDelete = showQuickDeleteButton &&
+        canModerate &&
+        !message.isDeleted &&
+        !message.isSystem &&
+        message.id.isNotBlank()
+    val showQuickActionStrip = showTimestamp && quickModerationStrings != null && (canQuickBan || canQuickDelete)
+    var pendingQuickAction by remember(message.id) { mutableStateOf<String?>(null) }
 
     var revealIgnored by remember(message.id, decoration.ignoreDisplayMode) { mutableStateOf(false) }
     if (decoration.isIgnored && !revealIgnored) {
@@ -543,7 +575,7 @@ internal fun MessageRow(
             buildChatLine(
                 message = message,
                 shownText = shownText,
-                showTimestamp = showTimestamp,
+                showTimestamp = showTimestamp && !showQuickActionStrip,
                 showAvatar = showAvatar,
                 showBadges = showBadges,
                 frankerFaceZBadgeCount = if (showBadges) frankerFaceZBadgeItems.size else 0,
@@ -658,40 +690,114 @@ internal fun MessageRow(
             }
         }
 
-        VerbatimText(
-            text = line.text,
-            modifier = Modifier
-                .fillMaxWidth()
-                .pointerInput(message.id, canReply, line.identityRanges, line.emoteRanges, line.linkRanges) {
-                    detectTapGestures(
-                        onTap = { position ->
-                            val offset = textLayoutResult.value?.getOffsetForPosition(position) ?: -1
-                            val link = line.linkRanges.firstOrNull { offset in it.range }
-                            when {
-                                link != null -> runCatching { uriHandler.openUri(link.url) }
-                                line.identityRanges.any { offset in it } -> onOpenUser(message)
-                                canReply -> onReply(message)
-                            }
-                        },
-                        onLongPress = { position ->
-                            val offset = textLayoutResult.value?.getOffsetForPosition(position) ?: -1
-                            val emote = line.emoteRanges.firstOrNull { offset in it.range }?.info
-                            if (emote != null) onOpenEmote(emote) else onOpenActions(message)
-                        },
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.Top,
+        ) {
+            if (showQuickActionStrip) {
+                VerbatimText(
+                    formatChatTimestamp(message.timestampMillis),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = lineTimestampColor,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+                Spacer(Modifier.width(4.dp))
+                if (canQuickBan) {
+                    Icon(
+                        Icons.Default.Block,
+                        contentDescription = quickModerationStrings?.banButton,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier
+                            .size(17.dp)
+                            .clickable { pendingQuickAction = "ban" },
                     )
-                },
-            inlineContent = inlineContent,
-            onTextLayout = { textLayoutResult.value = it },
-            maxLines = if (wrapMessageLines) Int.MAX_VALUE else 1,
-            overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.bodyLarge.copy(
-                lineHeight = when (messageDensity) {
-                    MessageDensity.COMPACT -> 1.15.em
-                    MessageDensity.NORMAL -> 1.35.em
-                    MessageDensity.RELAXED -> 1.55.em
-                },
-            ),
-        )
+                    Spacer(Modifier.width(3.dp))
+                }
+                if (canQuickDelete) {
+                    Icon(
+                        Icons.Default.Delete,
+                        contentDescription = quickModerationStrings?.deleteButton,
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier
+                            .size(17.dp)
+                            .clickable { pendingQuickAction = "delete" },
+                    )
+                    Spacer(Modifier.width(5.dp))
+                }
+            }
+            VerbatimText(
+                text = line.text,
+                modifier = Modifier
+                    .weight(1f)
+                    .pointerInput(message.id, canReply, line.identityRanges, line.emoteRanges, line.linkRanges) {
+                        detectTapGestures(
+                            onTap = { position ->
+                                val offset = textLayoutResult.value?.getOffsetForPosition(position) ?: -1
+                                val link = line.linkRanges.firstOrNull { offset in it.range }
+                                when {
+                                    link != null -> runCatching { uriHandler.openUri(link.url) }
+                                    line.identityRanges.any { offset in it } -> onOpenUser(message)
+                                    canReply -> onReply(message)
+                                }
+                            },
+                            onLongPress = { position ->
+                                val offset = textLayoutResult.value?.getOffsetForPosition(position) ?: -1
+                                val emote = line.emoteRanges.firstOrNull { offset in it.range }?.info
+                                if (emote != null) onOpenEmote(emote) else onOpenActions(message)
+                            },
+                        )
+                    },
+                inlineContent = inlineContent,
+                onTextLayout = { textLayoutResult.value = it },
+                maxLines = if (wrapMessageLines) Int.MAX_VALUE else 1,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    lineHeight = when (messageDensity) {
+                        MessageDensity.COMPACT -> 1.15.em
+                        MessageDensity.NORMAL -> 1.35.em
+                        MessageDensity.RELAXED -> 1.55.em
+                    },
+                ),
+            )
+        }
+
+        quickModerationStrings?.let { strings ->
+            when (pendingQuickAction) {
+                "ban" -> AlertDialog(
+                    onDismissRequest = { pendingQuickAction = null },
+                    title = { LocalizedText(strings.banTitle) },
+                    text = {
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            LocalizedText(strings.banBody)
+                            VerbatimText("@${message.userLogin.ifBlank { message.userDisplayName }}", fontWeight = FontWeight.Bold)
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            pendingQuickAction = null
+                            onQuickBan(message)
+                        }) { LocalizedText(strings.banButton) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { pendingQuickAction = null }) { LocalizedText(strings.cancel) }
+                    },
+                )
+                "delete" -> AlertDialog(
+                    onDismissRequest = { pendingQuickAction = null },
+                    title = { LocalizedText(strings.deleteTitle) },
+                    text = { LocalizedText(strings.deleteBody) },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            pendingQuickAction = null
+                            onQuickDelete(message)
+                        }) { LocalizedText(strings.deleteButton) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { pendingQuickAction = null }) { LocalizedText(strings.cancel) }
+                    },
+                )
+            }
+        }
         if (message.outgoingState != OutgoingMessageState.NONE) {
             OutgoingMessageStatus(
                 state = message.outgoingState,

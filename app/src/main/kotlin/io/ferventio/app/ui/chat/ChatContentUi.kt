@@ -149,6 +149,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalUriHandler
@@ -280,6 +281,7 @@ internal fun ChannelChatContent(
     onDraftChange: (String) -> Unit = {},
     onRetryMessage: (ChatMessage) -> Unit = {},
     onDeleteMessage: (ChatMessage) -> Unit = {},
+    onQuickBan: (ChatMessage) -> Unit = {},
     onPinMessage: (ChatMessage) -> Unit = {},
     onUnpinMessage: (String, String) -> Unit = { _, _ -> },
     onRefreshPinnedMessage: (String) -> Unit = {},
@@ -304,9 +306,20 @@ internal fun ChannelChatContent(
 ) {
     val resourceStrings = rememberAppResourceStrings(state.appLanguage)
     val repeatCollapsePreference = rememberRepeatCollapsePreferenceState()
+    val quickModerationPreference = rememberQuickModerationPreferenceState()
     val effectiveRepeatCollapseEnabled = repeatCollapseEnabled ?: repeatCollapsePreference.enabled
     val input = state.draftsByChannel[channelId].orEmpty()
     val canWrite = state.isAuthenticated
+    val canModerateChannel = channelId in state.moderatedChannelIds
+    val quickModerationStrings = QuickModerationUiStrings(
+        banButton = resourceStrings.string(R.string.ferventio_quick_ban_button),
+        deleteButton = resourceStrings.string(R.string.ferventio_quick_delete_button),
+        banTitle = resourceStrings.string(R.string.ferventio_quick_ban_confirm_title),
+        banBody = resourceStrings.string(R.string.ferventio_quick_ban_confirm_body),
+        deleteTitle = resourceStrings.string(R.string.ferventio_quick_delete_confirm_title),
+        deleteBody = resourceStrings.string(R.string.ferventio_quick_delete_confirm_body),
+        cancel = resourceStrings.string(R.string.ferventio_quick_action_cancel),
+    )
     val interactiveCapabilities = state.session?.interactiveChatCapabilities(channelId) ?: InteractiveChatCapabilities()
     var replyTarget by remember(instanceKey) { mutableStateOf<ChatMessage?>(null) }
     var replyThreadTarget by remember(instanceKey) { mutableStateOf<ChatMessage?>(null) }
@@ -460,6 +473,8 @@ internal fun ChannelChatContent(
     var resumeEligibleAfterUserScroll by remember(instanceKey) { mutableStateOf(false) }
     val latestFollowLiveChat by rememberUpdatedState(followLiveChat)
     val isDragged by listState.interactionSource.collectIsDraggedAsState()
+    val liveFollowPauseThresholdPx = with(LocalDensity.current) { 24.dp.toPx() }
+    var accumulatedUpwardDragPx by remember(instanceKey) { mutableStateOf(0f) }
     val pauseLiveFollowingForUserScroll: () -> Unit = {
         // Keep the pause sticky even when the latest row is still partly visible. Once the
         // gesture has actually moved into older content, returning to the bottom may resume.
@@ -471,11 +486,25 @@ internal fun ChannelChatContent(
         followLiveChat = false
     }
     val latestPauseLiveFollowingForUserScroll = rememberUpdatedState(pauseLiveFollowingForUserScroll)
-    val userScrollConnection = remember(instanceKey) {
+    LaunchedEffect(isDragged) {
+        if (!isDragged) accumulatedUpwardDragPx = 0f
+    }
+    val userScrollConnection = remember(instanceKey, liveFollowPauseThresholdPx) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
                 if (source == NestedScrollSource.UserInput && available.y != 0f) {
-                    latestPauseLiveFollowingForUserScroll.value()
+                    accumulatedUpwardDragPx = LiveChatFollowPolicy.accumulateUpwardDrag(
+                        currentPx = accumulatedUpwardDragPx,
+                        availableY = available.y,
+                    )
+                    if (
+                        LiveChatFollowPolicy.shouldPauseForUserDrag(
+                            accumulatedUpwardDragPx = accumulatedUpwardDragPx,
+                            pauseThresholdPx = liveFollowPauseThresholdPx,
+                        )
+                    ) {
+                        latestPauseLiveFollowingForUserScroll.value()
+                    }
                 }
                 return Offset.Zero
             }
@@ -1048,6 +1077,12 @@ internal fun ChannelChatContent(
                             showAvatar = state.showAvatars,
                             showBadges = state.showBadges,
                             showTimestamp = state.showTimestamps,
+                            showQuickBanButton = quickModerationPreference.showBan,
+                            showQuickDeleteButton = quickModerationPreference.showDelete,
+                            canModerate = canModerateChannel,
+                            quickModerationStrings = quickModerationStrings,
+                            onQuickBan = onQuickBan,
+                            onQuickDelete = onDeleteMessage,
                             showDeletedMessageContent = state.showDeletedMessageContent,
                             animateEmotes = state.animateEmotes &&
                                 !listState.isScrollInProgress &&
@@ -1428,6 +1463,9 @@ internal fun ChannelChatContent(
                 matchedUsers = resourceStrings.string(R.string.ferventio_nuke_matched_users),
                 excludedMatches = resourceStrings.string(R.string.ferventio_nuke_excluded_matches),
                 samples = resourceStrings.string(R.string.ferventio_nuke_samples),
+                showAllMatches = resourceStrings.string(R.string.ferventio_nuke_show_all_matches),
+                showExamples = resourceStrings.string(R.string.ferventio_nuke_show_examples),
+                allMatchedUsers = resourceStrings.string(R.string.ferventio_nuke_all_matched_users),
                 noMatches = resourceStrings.string(R.string.ferventio_nuke_no_matches),
                 confirm = resourceStrings.string(R.string.ferventio_nuke_confirm),
                 cancel = resourceStrings.string(R.string.ferventio_nuke_cancel),

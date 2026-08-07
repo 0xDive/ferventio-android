@@ -254,14 +254,21 @@ internal enum class SearchTypePreset(val title: String, val types: Set<ChatMessa
 internal fun SearchScreen(
     state: FerventioUiState,
     controller: FerventioController,
+    initialChannelId: String? = null,
     snackbarHostState: SnackbarHostState,
     onBack: () -> Unit,
     onOpenMessage: (ChatMessage) -> Unit,
 ) {
-    var query by rememberSaveable { mutableStateOf("") }
-    var scope by rememberSaveable { mutableStateOf(ChatSearchScope.ALL_CHANNELS) }
-    var dateRange by rememberSaveable { mutableStateOf(ChatSearchDateRange.ALL) }
-    var typePreset by rememberSaveable { mutableStateOf(SearchTypePreset.ALL) }
+    var query by rememberSaveable(initialChannelId) { mutableStateOf("") }
+    var scope by rememberSaveable(initialChannelId) {
+        mutableStateOf(
+            if (initialChannelId != null) ChatSearchScope.CURRENT_CHANNEL
+            else ChatSearchScope.ALL_CHANNELS,
+        )
+    }
+    var dateRange by rememberSaveable(initialChannelId) { mutableStateOf(ChatSearchDateRange.ALL) }
+    var typePreset by rememberSaveable(initialChannelId) { mutableStateOf(SearchTypePreset.ALL) }
+    val currentSearchChannelId = initialChannelId ?: state.selectedChannelId
     var results by remember { mutableStateOf<List<ChatMessage>>(emptyList()) }
     var isLoading by remember { mutableStateOf(false) }
     var searchError by remember { mutableStateOf<String?>(null) }
@@ -277,7 +284,7 @@ internal fun SearchScreen(
     val hasSearchCriteria = trimmed.isNotBlank() ||
         dateRange != ChatSearchDateRange.ALL || typePreset != SearchTypePreset.ALL
 
-    LaunchedEffect(trimmed, scope, dateRange, typePreset, state.selectedChannelId) {
+    LaunchedEffect(trimmed, scope, dateRange, typePreset, currentSearchChannelId) {
         searchError = null
         if (!hasSearchCriteria || parseError != null) {
             results = emptyList()
@@ -290,7 +297,7 @@ internal fun SearchScreen(
             ChatSearchRequest(
                 rawQuery = trimmed,
                 scope = scope,
-                currentChannelId = state.selectedChannelId,
+                currentChannelId = currentSearchChannelId,
                 dateRange = dateRange,
                 messageTypes = typePreset.types,
             ),
@@ -367,7 +374,7 @@ internal fun SearchScreen(
                     FilterChip(
                         selected = scope == ChatSearchScope.CURRENT_CHANNEL,
                         onClick = { scope = ChatSearchScope.CURRENT_CHANNEL },
-                        enabled = state.selectedChannelId != null,
+                        enabled = currentSearchChannelId != null,
                         label = { LocalizedText("Текущий канал") },
                     )
                 }

@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -39,6 +40,19 @@ internal data class InteractiveOverlayUiStrings(
     val resolvePrediction: String,
 )
 
+private enum class InteractiveManagementAction {
+    END_POLL,
+    ARCHIVE_POLL,
+    LOCK_PREDICTION,
+    CANCEL_PREDICTION,
+    RESOLVE_PREDICTION,
+}
+
+private data class PendingInteractiveManagementAction(
+    val action: InteractiveManagementAction,
+    val outcomeId: String? = null,
+)
+
 @Composable
 internal fun InteractiveChatOverlayStack(
     poll: PollOverlay?,
@@ -62,6 +76,14 @@ internal fun InteractiveChatOverlayStack(
     if (poll == null && prediction == null && !canCreatePoll && !canCreatePrediction) return
 
     var creationKind by remember { mutableStateOf<InteractiveCreationKind?>(null) }
+    var pendingManagementAction by remember(
+        poll?.id,
+        poll?.status,
+        prediction?.id,
+        prediction?.status,
+    ) {
+        mutableStateOf<PendingInteractiveManagementAction?>(null)
+    }
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -86,8 +108,16 @@ internal fun InteractiveChatOverlayStack(
                 poll = it,
                 strings = strings,
                 canManage = canManagePoll,
-                onEnd = onEndPoll,
-                onArchive = onArchivePoll,
+                onEnd = {
+                    pendingManagementAction = PendingInteractiveManagementAction(
+                        InteractiveManagementAction.END_POLL,
+                    )
+                },
+                onArchive = {
+                    pendingManagementAction = PendingInteractiveManagementAction(
+                        InteractiveManagementAction.ARCHIVE_POLL,
+                    )
+                },
             )
         }
         prediction?.let {
@@ -95,9 +125,22 @@ internal fun InteractiveChatOverlayStack(
                 prediction = it,
                 strings = strings,
                 canManage = canManagePrediction,
-                onLock = onLockPrediction,
-                onCancel = onCancelPrediction,
-                onResolve = onResolvePrediction,
+                onLock = {
+                    pendingManagementAction = PendingInteractiveManagementAction(
+                        InteractiveManagementAction.LOCK_PREDICTION,
+                    )
+                },
+                onCancel = {
+                    pendingManagementAction = PendingInteractiveManagementAction(
+                        InteractiveManagementAction.CANCEL_PREDICTION,
+                    )
+                },
+                onResolve = { outcomeId ->
+                    pendingManagementAction = PendingInteractiveManagementAction(
+                        action = InteractiveManagementAction.RESOLVE_PREDICTION,
+                        outcomeId = outcomeId,
+                    )
+                },
             )
         }
     }
@@ -109,6 +152,43 @@ internal fun InteractiveChatOverlayStack(
             onDismiss = { creationKind = null },
             onCreatePoll = onCreatePoll,
             onCreatePrediction = onCreatePrediction,
+        )
+    }
+
+    pendingManagementAction?.let { pending ->
+        val actionLabel = when (pending.action) {
+            InteractiveManagementAction.END_POLL -> strings.endPoll
+            InteractiveManagementAction.ARCHIVE_POLL -> strings.archivePoll
+            InteractiveManagementAction.LOCK_PREDICTION -> strings.lockPrediction
+            InteractiveManagementAction.CANCEL_PREDICTION -> strings.cancelPrediction
+            InteractiveManagementAction.RESOLVE_PREDICTION -> strings.resolvePrediction
+        }
+        AlertDialog(
+            onDismissRequest = { pendingManagementAction = null },
+            title = { LocalizedText(actionLabel) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingManagementAction = null
+                        when (pending.action) {
+                            InteractiveManagementAction.END_POLL -> onEndPoll()
+                            InteractiveManagementAction.ARCHIVE_POLL -> onArchivePoll()
+                            InteractiveManagementAction.LOCK_PREDICTION -> onLockPrediction()
+                            InteractiveManagementAction.CANCEL_PREDICTION -> onCancelPrediction()
+                            InteractiveManagementAction.RESOLVE_PREDICTION -> {
+                                pending.outcomeId?.let(onResolvePrediction)
+                            }
+                        }
+                    },
+                ) {
+                    LocalizedText(actionLabel)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingManagementAction = null }) {
+                    LocalizedText(creationStrings.cancel)
+                }
+            },
         )
     }
 }

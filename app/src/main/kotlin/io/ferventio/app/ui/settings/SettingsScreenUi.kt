@@ -296,6 +296,7 @@ internal fun SettingsScreen(
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
     val repeatCollapsePreference = rememberRepeatCollapsePreferenceState()
+    val quickModerationPreference = rememberQuickModerationPreferenceState()
     val uriHandler = LocalUriHandler.current
     val uiScope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
@@ -663,6 +664,18 @@ internal fun SettingsScreen(
                                     description = "Показывать локальное время отправки слева.",
                                     checked = state.showTimestamps,
                                     onCheckedChange = controller::setShowTimestamps,
+                                )
+                                SettingsSwitchRow(
+                                    title = resourceStrings.string(R.string.ferventio_quick_ban_setting),
+                                    description = resourceStrings.string(R.string.ferventio_quick_ban_setting_summary),
+                                    checked = quickModerationPreference.showBan,
+                                    onCheckedChange = quickModerationPreference::setShowBan,
+                                )
+                                SettingsSwitchRow(
+                                    title = resourceStrings.string(R.string.ferventio_quick_delete_setting),
+                                    description = resourceStrings.string(R.string.ferventio_quick_delete_setting_summary),
+                                    checked = quickModerationPreference.showDelete,
+                                    onCheckedChange = quickModerationPreference::setShowDelete,
                                 )
                                 SettingsSwitchRow(
                                     title = "Текст удалённых сообщений",

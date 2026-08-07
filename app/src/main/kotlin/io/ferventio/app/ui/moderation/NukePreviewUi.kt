@@ -37,6 +37,7 @@ import io.ferventio.app.domain.NukePreviewConfig
 import io.ferventio.app.domain.NukePreviewPlanner
 import io.ferventio.app.domain.NukePreviewResult
 import io.ferventio.app.domain.NukePreviewSample
+import io.ferventio.app.domain.NukeTargetUser
 
 internal data class NukePreviewUiStrings(
     val title: String,
@@ -52,6 +53,9 @@ internal data class NukePreviewUiStrings(
     val matchedUsers: String,
     val excludedMatches: String,
     val samples: String,
+    val showAllMatches: String,
+    val showExamples: String,
+    val allMatchedUsers: String,
     val noMatches: String,
     val confirm: String,
     val cancel: String,
@@ -67,6 +71,7 @@ internal fun NukePreviewSheet(
     onConfirm: (NukeExecutionPlan) -> Unit,
 ) {
     var config by remember(initialConfig) { mutableStateOf(initialConfig) }
+    var showAllMatches by remember(config) { mutableStateOf(false) }
     val previewedAtMillis = remember(messages, config) { System.currentTimeMillis() }
     val previewResult = remember(messages, config, previewedAtMillis) {
         NukePreviewPlanner.build(
@@ -84,6 +89,10 @@ internal fun NukePreviewSheet(
                 previewedAtMillis = previewedAtMillis,
             )
         }
+    }
+    val allMatchedMessages = remember(messages, preview?.matchedMessageIds) {
+        val ids = preview?.matchedMessageIds?.toHashSet().orEmpty()
+        if (ids.isEmpty()) emptyList() else messages.filter { it.id in ids }
     }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
@@ -224,18 +233,55 @@ internal fun NukePreviewSheet(
             }
 
             if (!preview?.samples.isNullOrEmpty()) {
-                item(key = "sample-title") {
-                    LocalizedText(
-                        strings.samples,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                    )
+                item(key = "preview-mode") {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        LocalizedText(
+                            if (showAllMatches) strings.matchedMessages else strings.samples,
+                            modifier = Modifier.weight(1f),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                        )
+                        if (preview.matchedMessageCount > preview.samples.size) {
+                            TextButton(onClick = { showAllMatches = !showAllMatches }) {
+                                LocalizedText(
+                                    if (showAllMatches) strings.showExamples
+                                    else "${strings.showAllMatches} (${preview.matchedMessageCount})",
+                                )
+                            }
+                        }
+                    }
                 }
-                items(
-                    items = preview.samples,
-                    key = NukePreviewSample::messageId,
-                ) { sample ->
-                    NukeSampleRow(sample)
+
+                if (showAllMatches) {
+                    items(
+                        items = allMatchedMessages,
+                        key = { message -> "nuke-match:${message.id}" },
+                    ) { message ->
+                        NukeMatchedMessageRow(message)
+                    }
+                    item(key = "all-user-title") {
+                        LocalizedText(
+                            strings.allMatchedUsers,
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                    items(
+                        items = preview.matchedUsers,
+                        key = { user -> "nuke-user:${user.userId.ifBlank { user.userLogin }}" },
+                    ) { user ->
+                        NukeTargetUserRow(user)
+                    }
+                } else {
+                    items(
+                        items = preview.samples,
+                        key = NukePreviewSample::messageId,
+                    ) { sample ->
+                        NukeSampleRow(sample)
+                    }
                 }
             }
 
@@ -297,6 +343,22 @@ private fun NukeFact(label: String, value: Int) {
 
 @Composable
 private fun NukeSampleRow(sample: NukePreviewSample) {
+    NukeMessageSurface(
+        user = sample.userDisplayName.ifBlank { sample.userLogin },
+        text = sample.text,
+    )
+}
+
+@Composable
+private fun NukeMatchedMessageRow(message: ChatMessage) {
+    NukeMessageSurface(
+        user = message.userDisplayName.ifBlank { message.userLogin },
+        text = message.text,
+    )
+}
+
+@Composable
+private fun NukeMessageSurface(user: String, text: String) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
@@ -307,18 +369,40 @@ private fun NukeSampleRow(sample: NukePreviewSample) {
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
             VerbatimText(
-                sample.userDisplayName.ifBlank { sample.userLogin },
+                user,
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.SemiBold,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             VerbatimText(
-                sample.text,
+                text,
                 style = MaterialTheme.typography.bodySmall,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
             )
+        }
+    }
+}
+
+@Composable
+private fun NukeTargetUserRow(user: NukeTargetUser) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+    ) {
+        Column(Modifier.padding(horizontal = 10.dp, vertical = 8.dp)) {
+            VerbatimText(
+                user.userDisplayName.ifBlank { user.userLogin },
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+            if (user.userLogin.isNotBlank()) {
+                VerbatimText(
+                    "@${user.userLogin}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

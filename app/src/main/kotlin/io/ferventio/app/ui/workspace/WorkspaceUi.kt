@@ -98,6 +98,8 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.ferventio.app.R
 import io.ferventio.app.domain.ChannelAttention
 import io.ferventio.app.domain.AttentionEntry
 import io.ferventio.app.domain.ChatChannel
@@ -137,6 +139,7 @@ internal fun AuthenticatedShell(
     onClearCrashReports: () -> Unit,
 ) {
     var section by rememberSaveable { mutableStateOf(MainSection.CHATS) }
+    var requestedSearchChannelId by rememberSaveable { mutableStateOf<String?>(null) }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val hideKeyboard = {
@@ -177,7 +180,10 @@ internal fun AuthenticatedShell(
                 controller = controller,
                 snackbarHostState = snackbarHostState,
                 onOpenMentions = { navigate(MainSection.MENTIONS) },
-                onOpenSearch = { navigate(MainSection.SEARCH) },
+                onOpenSearch = { channelId ->
+                    requestedSearchChannelId = channelId
+                    navigate(MainSection.SEARCH)
+                },
                 onOpenSettings = { navigate(MainSection.SETTINGS) },
             )
 
@@ -195,6 +201,7 @@ internal fun AuthenticatedShell(
             MainSection.SEARCH -> SearchScreen(
                 state = state,
                 controller = controller,
+                initialChannelId = requestedSearchChannelId,
                 snackbarHostState = snackbarHostState,
                 onBack = { navigate(MainSection.CHATS) },
                 onOpenMessage = controller::openSearchResult,
@@ -225,7 +232,7 @@ private fun ChatsWorkspaceScreen(
     controller: FerventioController,
     snackbarHostState: SnackbarHostState,
     onOpenMentions: () -> Unit,
-    onOpenSearch: () -> Unit,
+    onOpenSearch: (String?) -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     var showAddChannel by rememberSaveable { mutableStateOf(false) }
@@ -235,7 +242,10 @@ private fun ChatsWorkspaceScreen(
     var showChatModes by rememberSaveable { mutableStateOf(false) }
     var showChatUsers by rememberSaveable { mutableStateOf(false) }
     var showActionSearch by rememberSaveable { mutableStateOf(false) }
+    var showChannelPoints by rememberSaveable { mutableStateOf(false) }
     var showMainMenu by rememberSaveable { mutableStateOf(false) }
+    val channelPointsState by controller.channelPointsState.collectAsStateWithLifecycle()
+    val workspaceStrings = rememberAppResourceStrings(state.appLanguage)
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val drawerScope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
@@ -249,11 +259,18 @@ private fun ChatsWorkspaceScreen(
         drawerScope.launch { drawerState.open() }
     }
     val activeTab = state.workspaceLayout.activeTab
+    val activeSplitId = activeTab?.activeSplitId
+    val activeChannelId = activeTab
+        ?.splits
+        ?.firstOrNull { split -> split.id == activeSplitId }
+        ?.channelId
+        ?: state.selectedChannelId
+    val activeChannel = state.channels.firstOrNull { channel -> channel.id == activeChannelId }
     val selectedChannel = state.selectedChannel
-    val selectedTitle = selectedChannel?.let { channel ->
+    val selectedTitle = activeChannel?.let { channel ->
         state.channelTabTitles[channel.id]?.takeIf(String::isNotBlank) ?: channel.displayName
     } ?: "Чаты"
-    val selectedAttention = selectedChannel?.id?.let(state.channelAttention::get)
+    val selectedAttention = activeChannelId?.let(state.channelAttention::get)
 
     BackHandler(enabled = drawerState.isOpen) {
         drawerScope.launch { drawerState.close() }
@@ -373,25 +390,28 @@ private fun ChatsWorkspaceScreen(
                                 )
                             }
                         }
-                        val canModerateSelected = selectedChannel?.id
+                        val canModerateSelected = activeChannelId
                             ?.let(state.moderatedChannelIds::contains) == true
                         IconButton(
                             onClick = {
                                 hideKeyboard()
-                                showActionSearch = true
+                                onOpenSearch(activeChannelId)
                             },
                             modifier = Modifier.size(38.dp),
                         ) {
-                            Icon(Icons.Default.Search, contentDescription = localizedString("Действия и поиск"))
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = workspaceStrings.string(R.string.ferventio_workspace_search_chat),
+                            )
                         }
                         IconButton(
                             onClick = {
-                                if (selectedChannel != null) {
+                                if (activeChannel != null) {
                                     hideKeyboard()
                                     showChatUsers = true
                                 }
                             },
-                            enabled = selectedChannel != null,
+                            enabled = activeChannel != null,
                             modifier = Modifier.size(38.dp),
                         ) {
                             Icon(Icons.Default.People, contentDescription = localizedString("Пользователи чата"))
@@ -400,7 +420,7 @@ private fun ChatsWorkspaceScreen(
                             IconButton(
                                 onClick = {
                                     hideKeyboard()
-                                    controller.selectModerationChannel(selectedChannel.id)
+                                    activeChannelId?.let(controller::selectModerationChannel)
                                     showChatModes = true
                                 },
                                 modifier = Modifier.size(38.dp),
@@ -438,12 +458,22 @@ private fun ChatsWorkspaceScreen(
                                     },
                                 )
                                 DropdownMenuItem(
-                                    text = { LocalizedText("Поиск") },
+                                    text = { LocalizedText(workspaceStrings.string(R.string.ferventio_workspace_actions)) },
                                     onClick = {
                                         showMainMenu = false
-                                        onOpenSearch()
+                                        showActionSearch = true
                                     },
                                 )
+                                if (state.isAuthenticated && activeChannel != null) {
+                                    DropdownMenuItem(
+                                        text = { LocalizedText(workspaceStrings.string(R.string.ferventio_channel_points_title)) },
+                                        onClick = {
+                                            showMainMenu = false
+                                            showChannelPoints = true
+                                            controller.refreshChannelPoints(activeChannel.id)
+                                        },
+                                    )
+                                }
                                 DropdownMenuItem(
                                     text = { LocalizedText("Настройки") },
                                     onClick = {
@@ -514,14 +544,9 @@ private fun ChatsWorkspaceScreen(
 
     if (showActionSearch) {
         val currentTab = state.workspaceLayout.activeTab
-        val activeSplitId = currentTab?.activeSplitId
-        val activeSplitChannelId = currentTab
-            ?.splits
-            ?.firstOrNull { split -> split.id == activeSplitId }
-            ?.channelId
-            ?: state.selectedChannelId
         GlobalActionSearchSheet(
             state = state,
+            activeChannelId = activeChannelId,
             onDismiss = { showActionSearch = false },
             onAction = { action ->
                 when {
@@ -530,14 +555,14 @@ private fun ChatsWorkspaceScreen(
                     action.id == "navigation:reconnect" -> controller.reconnectEventSub()
                     action.id.startsWith("channel:") -> {
                         val channelId = action.id.substringAfter("channel:")
-                        if (activeSplitId != null && currentTab.splits.size > 1) {
+                        if (activeSplitId != null && (currentTab?.splits?.size ?: 0) > 1) {
                             controller.setChatSplitChannel(activeSplitId, channelId)
                         } else {
                             controller.selectChannel(channelId)
                         }
                     }
                     action.id.startsWith("command:") -> {
-                        activeSplitChannelId?.let { channelId ->
+                        activeChannelId?.let { channelId ->
                             controller.updateDraft(
                                 channelId,
                                 "/${action.id.substringAfter("command:")} ",
@@ -545,6 +570,21 @@ private fun ChatsWorkspaceScreen(
                         }
                     }
                 }
+            },
+        )
+    }
+
+    if (showChannelPoints && activeChannel != null) {
+        ChannelPointsSheet(
+            state = channelPointsState.channel(activeChannel.id),
+            appLanguage = state.appLanguage,
+            onRefresh = { controller.refreshChannelPoints(activeChannel.id) },
+            onRedeem = { reward, input ->
+                controller.redeemChannelPointsReward(activeChannel.id, reward, input)
+            },
+            onDismiss = {
+                showChannelPoints = false
+                controller.clearChannelPointsError(activeChannel.id)
             },
         )
     }
@@ -583,7 +623,7 @@ private fun ChatsWorkspaceScreen(
     }
 
     if (showChatModes) {
-        selectedChannel?.id?.let { channelId ->
+        activeChannelId?.let { channelId ->
             ChatModesBottomSheet(
                 channelId = channelId,
                 state = state.moderation,
@@ -594,7 +634,7 @@ private fun ChatsWorkspaceScreen(
     }
 
     if (showChatUsers) {
-        selectedChannel?.id?.let { channelId ->
+        activeChannelId?.let { channelId ->
             ChatUsersBottomSheet(
                 channelId = channelId,
                 state = state.moderation,
