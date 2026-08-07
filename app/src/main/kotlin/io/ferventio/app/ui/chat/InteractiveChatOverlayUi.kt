@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import io.ferventio.app.domain.InteractiveMutationStatus
 import io.ferventio.app.domain.PollDraft
 import io.ferventio.app.domain.PollOverlay
 import io.ferventio.app.domain.PredictionDraft
@@ -38,6 +39,8 @@ internal data class InteractiveOverlayUiStrings(
     val lockPrediction: String,
     val cancelPrediction: String,
     val resolvePrediction: String,
+    val working: String,
+    val actionFailed: String,
 )
 
 private enum class InteractiveManagementAction {
@@ -57,6 +60,7 @@ private data class PendingInteractiveManagementAction(
 internal fun InteractiveChatOverlayStack(
     poll: PollOverlay?,
     prediction: PredictionOverlay?,
+    mutation: InteractiveMutationStatus?,
     strings: InteractiveOverlayUiStrings,
     creationStrings: InteractiveCreationUiStrings,
     canManagePoll: Boolean,
@@ -70,10 +74,19 @@ internal fun InteractiveChatOverlayStack(
     onResolvePrediction: (String) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    val canCreatePoll = canManagePoll && poll?.isActive != true
-    val canCreatePrediction = canManagePrediction &&
+    val mutationInFlight = mutation?.inFlight == true
+    val canCreatePollBase = canManagePoll && poll?.isActive != true
+    val canCreatePredictionBase = canManagePrediction &&
         prediction?.status !in setOf(PredictionStatus.ACTIVE, PredictionStatus.LOCKED)
-    if (poll == null && prediction == null && !canCreatePoll && !canCreatePrediction) return
+    val canCreatePoll = canCreatePollBase && !mutationInFlight
+    val canCreatePrediction = canCreatePredictionBase && !mutationInFlight
+    if (
+        poll == null &&
+        prediction == null &&
+        !canCreatePollBase &&
+        !canCreatePredictionBase &&
+        mutation == null
+    ) return
 
     var creationKind by remember { mutableStateOf<InteractiveCreationKind?>(null) }
     var pendingManagementAction by remember(
@@ -89,6 +102,20 @@ internal fun InteractiveChatOverlayStack(
         modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        if (mutationInFlight) {
+            LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+            LocalizedText(
+                strings.working,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else if (mutation?.failed == true) {
+            LocalizedText(
+                strings.actionFailed,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
         if (canCreatePoll || canCreatePrediction) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (canCreatePoll) {
@@ -108,6 +135,7 @@ internal fun InteractiveChatOverlayStack(
                 poll = it,
                 strings = strings,
                 canManage = canManagePoll,
+                enabled = !mutationInFlight,
                 onEnd = {
                     pendingManagementAction = PendingInteractiveManagementAction(
                         InteractiveManagementAction.END_POLL,
@@ -125,6 +153,7 @@ internal fun InteractiveChatOverlayStack(
                 prediction = it,
                 strings = strings,
                 canManage = canManagePrediction,
+                enabled = !mutationInFlight,
                 onLock = {
                     pendingManagementAction = PendingInteractiveManagementAction(
                         InteractiveManagementAction.LOCK_PREDICTION,
@@ -168,6 +197,7 @@ internal fun InteractiveChatOverlayStack(
             title = { LocalizedText(actionLabel) },
             confirmButton = {
                 TextButton(
+                    enabled = !mutationInFlight,
                     onClick = {
                         pendingManagementAction = null
                         when (pending.action) {
@@ -198,6 +228,7 @@ private fun PollOverlayCard(
     poll: PollOverlay,
     strings: InteractiveOverlayUiStrings,
     canManage: Boolean,
+    enabled: Boolean,
     onEnd: () -> Unit,
     onArchive: () -> Unit,
 ) {
@@ -244,10 +275,10 @@ private fun PollOverlayCard(
             }
             if (canManage && poll.isActive) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = onEnd) {
+                    OutlinedButton(enabled = enabled, onClick = onEnd) {
                         LocalizedText(strings.endPoll)
                     }
-                    TextButton(onClick = onArchive) {
+                    TextButton(enabled = enabled, onClick = onArchive) {
                         LocalizedText(strings.archivePoll)
                     }
                 }
@@ -261,6 +292,7 @@ private fun PredictionOverlayCard(
     prediction: PredictionOverlay,
     strings: InteractiveOverlayUiStrings,
     canManage: Boolean,
+    enabled: Boolean,
     onLock: () -> Unit,
     onCancel: () -> Unit,
     onResolve: (String) -> Unit,
@@ -305,7 +337,7 @@ private fun PredictionOverlayCard(
                         modifier = Modifier.fillMaxWidth(),
                     )
                     if (canManage && prediction.status == PredictionStatus.LOCKED) {
-                        TextButton(onClick = { onResolve(outcome.id) }) {
+                        TextButton(enabled = enabled, onClick = { onResolve(outcome.id) }) {
                             LocalizedText("${strings.resolvePrediction}: ${outcome.title}")
                         }
                     }
@@ -314,13 +346,13 @@ private fun PredictionOverlayCard(
             if (canManage) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (prediction.status == PredictionStatus.ACTIVE) {
-                        OutlinedButton(onClick = onLock) {
+                        OutlinedButton(enabled = enabled, onClick = onLock) {
                             LocalizedText(strings.lockPrediction)
                         }
                     }
                     if (prediction.status == PredictionStatus.ACTIVE || prediction.status == PredictionStatus.LOCKED) {
                         Spacer(Modifier.width(1.dp))
-                        TextButton(onClick = onCancel) {
+                        TextButton(enabled = enabled, onClick = onCancel) {
                             LocalizedText(strings.cancelPrediction)
                         }
                     }

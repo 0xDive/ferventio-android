@@ -3,6 +3,7 @@ package io.ferventio.app.application
 import io.ferventio.app.domain.InteractiveChatOverlayEvent
 import io.ferventio.app.domain.InteractiveChatOverlayReducer
 import io.ferventio.app.domain.InteractiveChatOverlayState
+import io.ferventio.app.domain.InteractiveMutationKind
 import io.ferventio.app.domain.PollDraft
 import io.ferventio.app.domain.PollOverlay
 import io.ferventio.app.domain.PollStatus
@@ -12,6 +13,7 @@ import io.ferventio.app.domain.PredictionStatus
 import io.ferventio.app.twitch.PollEndStatus
 import io.ferventio.app.twitch.PredictionEndStatus
 import java.io.Closeable
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -78,7 +80,7 @@ class InteractiveChatCoordinator internal constructor(
     }
 
     suspend fun createPoll(auth: InteractiveChatAuth, draft: PollDraft): PollOverlay =
-        mutationMutex.withLock {
+        runMutation(auth, InteractiveMutationKind.CREATE_POLL) {
             api.createPoll(auth, draft).also(::ingestPoll)
         }
 
@@ -86,14 +88,20 @@ class InteractiveChatCoordinator internal constructor(
         auth: InteractiveChatAuth,
         pollId: String,
         status: PollEndStatus,
-    ): PollOverlay = mutationMutex.withLock {
+    ): PollOverlay = runMutation(
+        auth = auth,
+        kind = when (status) {
+            PollEndStatus.TERMINATED -> InteractiveMutationKind.END_POLL
+            PollEndStatus.ARCHIVED -> InteractiveMutationKind.ARCHIVE_POLL
+        },
+    ) {
         api.endPoll(auth, pollId, status).also(::ingestPoll)
     }
 
     suspend fun createPrediction(
         auth: InteractiveChatAuth,
         draft: PredictionDraft,
-    ): PredictionOverlay = mutationMutex.withLock {
+    ): PredictionOverlay = runMutation(auth, InteractiveMutationKind.CREATE_PREDICTION) {
         api.createPrediction(auth, draft).also(::ingestPrediction)
     }
 
@@ -102,13 +110,39 @@ class InteractiveChatCoordinator internal constructor(
         predictionId: String,
         status: PredictionEndStatus,
         winningOutcomeId: String? = null,
-    ): PredictionOverlay = mutationMutex.withLock {
+    ): PredictionOverlay = runMutation(
+        auth = auth,
+        kind = when (status) {
+            PredictionEndStatus.LOCKED -> InteractiveMutationKind.LOCK_PREDICTION
+            PredictionEndStatus.CANCELED -> InteractiveMutationKind.CANCEL_PREDICTION
+            PredictionEndStatus.RESOLVED -> InteractiveMutationKind.RESOLVE_PREDICTION
+        },
+    ) {
         api.endPrediction(
             auth = auth,
             predictionId = predictionId,
             status = status,
             winningOutcomeId = winningOutcomeId,
         ).also(::ingestPrediction)
+    }
+
+    private suspend fun <T> runMutation(
+        auth: InteractiveChatAuth,
+        kind: InteractiveMutationKind,
+        block: suspend () -> T,
+    ): T = mutationMutex.withLock {
+        ingest(InteractiveChatOverlayEvent.MutationStarted(auth.broadcasterId, kind))
+        try {
+            block().also {
+                ingest(InteractiveChatOverlayEvent.MutationSucceeded(auth.broadcasterId, kind))
+            }
+        } catch (cancelled: CancellationException) {
+            ingest(InteractiveChatOverlayEvent.MutationSucceeded(auth.broadcasterId, kind))
+            throw cancelled
+        } catch (error: Throwable) {
+            ingest(InteractiveChatOverlayEvent.MutationFailed(auth.broadcasterId, kind))
+            throw error
+        }
     }
 
     fun ingest(event: InteractiveChatOverlayEvent) {

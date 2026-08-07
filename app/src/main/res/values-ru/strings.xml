@@ -200,6 +200,8 @@
     <string name="ferventio_interactive_lock_prediction">Закрыть приём ставок</string>
     <string name="ferventio_interactive_cancel_prediction">Отменить прогноз</string>
     <string name="ferventio_interactive_resolve_prediction">Завершить</string>
+    <string name="ferventio_interactive_working">Обновляем Twitch…</string>
+    <string name="ferventio_interactive_action_failed">Не удалось выполнить действие. Попробуй ещё раз.</string>
 
         <string name="ferventio_workspace_search_chat">Поиск по чату</string>
     <string name="ferventio_workspace_actions">Действия</string>

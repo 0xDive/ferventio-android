@@ -92,14 +92,43 @@ data class PredictionOverlay(
     }
 }
 
+enum class InteractiveMutationKind {
+    CREATE_POLL,
+    END_POLL,
+    ARCHIVE_POLL,
+    CREATE_PREDICTION,
+    LOCK_PREDICTION,
+    CANCEL_PREDICTION,
+    RESOLVE_PREDICTION,
+}
+
+data class InteractiveMutationStatus(
+    val kind: InteractiveMutationKind,
+    val inFlight: Boolean = true,
+    val failed: Boolean = false,
+)
+
 data class InteractiveChatOverlayState(
     val pollsByChannel: Map<String, PollOverlay> = emptyMap(),
     val predictionsByChannel: Map<String, PredictionOverlay> = emptyMap(),
+    val mutationsByChannel: Map<String, InteractiveMutationStatus> = emptyMap(),
 )
 
 sealed interface InteractiveChatOverlayEvent {
     data class PollSnapshot(val poll: PollOverlay) : InteractiveChatOverlayEvent
     data class PredictionSnapshot(val prediction: PredictionOverlay) : InteractiveChatOverlayEvent
+    data class MutationStarted(
+        val channelId: String,
+        val kind: InteractiveMutationKind,
+    ) : InteractiveChatOverlayEvent
+    data class MutationSucceeded(
+        val channelId: String,
+        val kind: InteractiveMutationKind,
+    ) : InteractiveChatOverlayEvent
+    data class MutationFailed(
+        val channelId: String,
+        val kind: InteractiveMutationKind,
+    ) : InteractiveChatOverlayEvent
     data class ClearChannel(val channelId: String) : InteractiveChatOverlayEvent
 }
 
@@ -129,9 +158,32 @@ object InteractiveChatOverlayReducer {
             )
         }
 
+        is InteractiveChatOverlayEvent.MutationStarted -> state.copy(
+            mutationsByChannel = state.mutationsByChannel + (
+                event.channelId to InteractiveMutationStatus(kind = event.kind)
+            ),
+        )
+
+        is InteractiveChatOverlayEvent.MutationSucceeded -> {
+            val current = state.mutationsByChannel[event.channelId]
+            if (current?.kind != event.kind) state
+            else state.copy(mutationsByChannel = state.mutationsByChannel - event.channelId)
+        }
+
+        is InteractiveChatOverlayEvent.MutationFailed -> {
+            val current = state.mutationsByChannel[event.channelId]
+            if (current?.kind != event.kind) state
+            else state.copy(
+                mutationsByChannel = state.mutationsByChannel + (
+                    event.channelId to current.copy(inFlight = false, failed = true)
+                ),
+            )
+        }
+
         is InteractiveChatOverlayEvent.ClearChannel -> state.copy(
             pollsByChannel = state.pollsByChannel - event.channelId,
             predictionsByChannel = state.predictionsByChannel - event.channelId,
+            mutationsByChannel = state.mutationsByChannel - event.channelId,
         )
     }
 }

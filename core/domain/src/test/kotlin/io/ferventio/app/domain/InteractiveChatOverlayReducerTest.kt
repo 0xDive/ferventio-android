@@ -52,11 +52,58 @@ class InteractiveChatOverlayReducerTest {
     }
 
     @Test
+    fun `mutation lifecycle is tracked per channel`() {
+        var state = InteractiveChatOverlayState()
+        state = InteractiveChatOverlayReducer.reduce(
+            state,
+            InteractiveChatOverlayEvent.MutationStarted(
+                channelId = "channel",
+                kind = InteractiveMutationKind.CANCEL_PREDICTION,
+            ),
+        )
+        assertTrue(state.mutationsByChannel.getValue("channel").inFlight)
+
+        state = InteractiveChatOverlayReducer.reduce(
+            state,
+            InteractiveChatOverlayEvent.MutationFailed(
+                channelId = "channel",
+                kind = InteractiveMutationKind.CANCEL_PREDICTION,
+            ),
+        )
+        val failed = state.mutationsByChannel.getValue("channel")
+        assertTrue(failed.failed)
+        assertTrue(!failed.inFlight)
+
+        state = InteractiveChatOverlayReducer.reduce(
+            state,
+            InteractiveChatOverlayEvent.MutationStarted(
+                channelId = "channel",
+                kind = InteractiveMutationKind.LOCK_PREDICTION,
+            ),
+        )
+        state = InteractiveChatOverlayReducer.reduce(
+            state,
+            InteractiveChatOverlayEvent.MutationSucceeded(
+                channelId = "channel",
+                kind = InteractiveMutationKind.LOCK_PREDICTION,
+            ),
+        )
+        assertTrue(state.mutationsByChannel.isEmpty())
+    }
+
+    @Test
     fun `clear channel removes both overlays`() {
         val state = InteractiveChatOverlayState(
             pollsByChannel = mapOf("channel" to poll(updatedAt = 100L, votes = 1)),
             predictionsByChannel = mapOf(
                 "channel" to prediction(status = PredictionStatus.ACTIVE, updatedAt = 100L),
+            ),
+            mutationsByChannel = mapOf(
+                "channel" to InteractiveMutationStatus(
+                    kind = InteractiveMutationKind.END_POLL,
+                    inFlight = false,
+                    failed = true,
+                ),
             ),
         )
 
@@ -67,6 +114,7 @@ class InteractiveChatOverlayReducerTest {
 
         assertTrue(reduced.pollsByChannel.isEmpty())
         assertTrue(reduced.predictionsByChannel.isEmpty())
+        assertTrue(reduced.mutationsByChannel.isEmpty())
     }
 
     @Test
