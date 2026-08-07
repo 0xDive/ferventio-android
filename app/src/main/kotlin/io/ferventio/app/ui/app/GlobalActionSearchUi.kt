@@ -64,7 +64,10 @@ internal object GlobalActionCatalog {
     fun build(
         state: FerventioUiState,
         strings: GlobalActionCatalogStrings,
+        activeChannelId: String? = state.selectedChannelId,
     ): List<SearchableAction> = buildList {
+        val canModerate = activeChannelId != null && activeChannelId in state.moderatedChannelIds
+
         add(
             SearchableAction(
                 id = "navigation:settings",
@@ -106,18 +109,47 @@ internal object GlobalActionCatalog {
         }
 
         CommandRegistry.builtIns.forEach { definition ->
-            add(SearchableActionFactory.fromCommandDefinition(definition))
+            val action = SearchableActionFactory.fromCommandDefinition(definition)
+            if (action.kind != SearchableActionKind.MODERATION || canModerate) {
+                add(action)
+            }
         }
         state.customCommands
-            .filter { it.enabled }
-            .forEach { command -> add(SearchableActionFactory.fromCustomCommand(command)) }
+            .filter { command -> command.enabled }
+            .forEach { command ->
+                val action = SearchableActionFactory.fromCustomCommand(command)
+                if (action.kind != SearchableActionKind.MODERATION || canModerate) {
+                    add(action)
+                }
+            }
     }.distinctBy(SearchableAction::id)
+
+    /**
+     * The action palette is not global content search. Commands stay out of the
+     * normal action list and become discoverable only when the user explicitly
+     * enters slash-command mode.
+     */
+    fun visibleForQuery(
+        query: String,
+        actions: List<SearchableAction>,
+    ) = ActionSearchIndex.search(
+        query = query,
+        actions = if (query.trimStart().startsWith('/')) {
+            actions
+        } else {
+            actions.filterNot { action ->
+                action.kind == SearchableActionKind.COMMAND ||
+                    action.kind == SearchableActionKind.MODERATION
+            }
+        },
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun GlobalActionSearchSheet(
     state: FerventioUiState,
+    activeChannelId: String?,
     onDismiss: () -> Unit,
     onAction: (SearchableAction) -> Unit,
 ) {
@@ -137,10 +169,10 @@ internal fun GlobalActionSearchSheet(
         requiresConfirmation = resourceStrings.string(R.string.ferventio_action_search_requires_confirmation),
     )
     var query by remember { mutableStateOf("") }
-    val actions = remember(state.channels, state.customCommands, strings.catalog) {
-        GlobalActionCatalog.build(state, strings.catalog)
+    val actions = remember(state.channels, state.customCommands, state.moderatedChannelIds, activeChannelId, strings.catalog) {
+        GlobalActionCatalog.build(state, strings.catalog, activeChannelId)
     }
-    val matches = remember(query, actions) { ActionSearchIndex.search(query, actions) }
+    val matches = remember(query, actions) { GlobalActionCatalog.visibleForQuery(query, actions) }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(

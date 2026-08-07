@@ -444,6 +444,7 @@ private fun ChatScreen(
     if (showActionSearch) {
         GlobalActionSearchSheet(
             state = state,
+            activeChannelId = state.selectedChannelId,
             onDismiss = { showActionSearch = false },
             onAction = { action ->
                 when {

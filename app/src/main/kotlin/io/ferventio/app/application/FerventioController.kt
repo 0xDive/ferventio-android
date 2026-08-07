@@ -16,6 +16,7 @@ import io.ferventio.app.emote.EmoteRepository
 import io.ferventio.app.twitch.TwitchApiClient
 import io.ferventio.app.twitch.TwitchPinnedChatGqlClient
 import io.ferventio.app.twitch.TwitchPinnedChatGqlException
+import io.ferventio.app.twitch.TwitchUnofficialChattersClient
 import io.ferventio.app.twitch.TwitchRecentMessagesClient
 import io.ferventio.app.twitch.TwitchApiException
 import io.ferventio.app.twitch.TwitchAnonymousChatClient
@@ -27,6 +28,7 @@ import io.ferventio.app.twitch.EventSubSubscriptionConflictException
 import io.ferventio.app.twitch.EventSubSetupException
 import io.ferventio.app.twitch.TwitchEventSubClient
 import io.ferventio.app.twitch.TwitchChatSendException
+import io.ferventio.app.twitch.TwitchChannelPointsReward
 import io.ferventio.app.twitch.PollEndStatus
 import io.ferventio.app.twitch.PredictionEndStatus
 import io.ferventio.app.network.FerventioBackendClient
@@ -72,7 +74,9 @@ class FerventioController(
     private val settingsStore: SettingsStore,
     private val tokenStore: SecureTokenStore,
     private val api: TwitchApiClient,
+    private val channelPointsCoordinator: ChannelPointsCoordinator = ChannelPointsCoordinator(),
     private val pinnedChatClient: TwitchPinnedChatGqlClient = TwitchPinnedChatGqlClient(),
+    private val unofficialChattersClient: TwitchUnofficialChattersClient = TwitchUnofficialChattersClient(),
     private val recentMessagesClient: TwitchRecentMessagesClient =
         TwitchRecentMessagesClient(BuildConfig.RECENT_MESSAGES_URL),
     private val backend: FerventioBackendClient,
@@ -94,6 +98,7 @@ class FerventioController(
         freshUiState(isBootstrapping = true),
     )
     val state: StateFlow<FerventioUiState> = mutableState.asStateFlow()
+    val channelPointsState: StateFlow<ChannelPointsUiState> = channelPointsCoordinator.state
 
     private var backendCredential: BackendSessionCredential? = null
     private var credentials: TwitchAccessLease? = null
@@ -2249,6 +2254,54 @@ class FerventioController(
         }
     }
 
+    fun refreshChannelPoints(channelId: String) {
+        val channel = mutableState.value.channels.firstOrNull { it.id == channelId } ?: return
+        if (!mutableState.value.isAuthenticated) return
+        scope.launch {
+            runCatching {
+                withAuthenticationRetry { auth ->
+                    channelPointsCoordinator.refresh(
+                        auth = ChannelPointsAuth(
+                            clientId = auth.session.clientId,
+                            accessToken = auth.accessToken,
+                        ),
+                        channelId = channel.id,
+                        channelLogin = channel.login,
+                    )
+                }
+            }
+        }
+    }
+
+    fun redeemChannelPointsReward(
+        channelId: String,
+        reward: TwitchChannelPointsReward,
+        textInput: String?,
+    ) {
+        val channel = mutableState.value.channels.firstOrNull { it.id == channelId } ?: return
+        if (!mutableState.value.isAuthenticated) return
+        scope.launch {
+            runCatching {
+                withAuthenticationRetry { auth ->
+                    channelPointsCoordinator.redeem(
+                        auth = ChannelPointsAuth(
+                            clientId = auth.session.clientId,
+                            accessToken = auth.accessToken,
+                        ),
+                        channelId = channel.id,
+                        channelLogin = channel.login,
+                        reward = reward,
+                        textInput = textInput,
+                    )
+                }
+            }
+        }
+    }
+
+    fun clearChannelPointsError(channelId: String) {
+        channelPointsCoordinator.clearError(channelId)
+    }
+
     fun executeNuke(channelId: String, plan: NukeExecutionPlan) {
         val current = mutableState.value
         if (channelId !in current.moderatedChannelIds) {
@@ -2988,8 +3041,10 @@ class FerventioController(
         if (current.channels.none { it.id == channelId }) return
 
         if (stateTab == ModerationPeopleTab.CHATTERS) {
+            val channel = current.channels.firstOrNull { it.id == channelId } ?: return
             val observed = observedChatters(current, channelId)
-            val canReadCompleteList = channelId in current.moderatedChannelIds && current.isAuthenticated
+            val observedByLogin = observed.associateBy { it.login.lowercase() }
+            val canReadOfficialList = channelId in current.moderatedChannelIds && current.isAuthenticated
             val session = current.session
             val accessToken = credentials?.accessToken
             mutableState.update { state ->
@@ -2998,27 +3053,44 @@ class FerventioController(
                         peopleTab = stateTab,
                         chatters = observed,
                         chattersAreComplete = false,
-                        isRefreshingPeople = canReadCompleteList && session != null && accessToken != null,
-                        peopleNotice = if (canReadCompleteList) null else OBSERVED_CHATTERS_NOTICE,
+                        isRefreshingPeople = true,
+                        peopleNotice = null,
                         errorMessage = null,
                     ),
                 )
             }
-            if (!canReadCompleteList || session == null || accessToken == null) return
 
             scope.launch {
-                val result = runCatching {
-                    api.getChatters(
-                        clientId = session.clientId,
-                        token = accessToken,
-                        broadcasterId = channelId,
-                        moderatorId = session.userId,
-                        first = 1_000,
-                    ).users.map { ModerationUser(it.id, it.login, it.displayName) }
+                val official = if (canReadOfficialList && session != null && accessToken != null) {
+                    runCatching {
+                        api.getChatters(
+                            clientId = session.clientId,
+                            token = accessToken,
+                            broadcasterId = channelId,
+                            moderatorId = session.userId,
+                            first = 1_000,
+                        ).users.map { ModerationUser(it.id, it.login, it.displayName) }
+                    }.getOrNull()
+                } else {
+                    null
                 }
+                val unofficial = if (official == null) {
+                    runCatching {
+                        unofficialChattersClient.getChatters(channel.login).map { chatter ->
+                            val observedUser = observedByLogin[chatter.login.lowercase()]
+                            ModerationUser(
+                                id = chatter.id.ifBlank { "gql:${chatter.login.lowercase()}" },
+                                login = chatter.login,
+                                displayName = observedUser?.displayName?.ifBlank { chatter.login } ?: chatter.login,
+                            )
+                        }
+                    }.getOrNull()
+                } else {
+                    null
+                }
+                val remote = official ?: unofficial
                 mutableState.update { state ->
                     if (state.moderation.selectedChannelId != channelId) return@update state
-                    val remote = result.getOrNull()
                     state.copy(
                         moderation = state.moderation.copy(
                             peopleTab = ModerationPeopleTab.CHATTERS,
