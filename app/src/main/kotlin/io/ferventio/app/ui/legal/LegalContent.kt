@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -25,7 +24,7 @@ internal fun PrivacyPolicyCard(section: PrivacyPolicySection) {
     SettingsSection(section.title) {
         section.paragraphs.forEachIndexed { index, paragraph ->
             if (index > 0) Spacer(Modifier.height(2.dp))
-            Text(
+            LocalizedText(
                 text = paragraph,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -40,18 +39,18 @@ internal fun OpenSourceNoticeCard(
     onOpenUrl: (String) -> Unit,
 ) {
     SettingsSection(notice.name) {
-        Text(notice.version, fontWeight = FontWeight.SemiBold)
-        Text(
+        LocalizedText(notice.version, fontWeight = FontWeight.SemiBold)
+        LocalizedText(
             notice.description,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Text("Лицензия: ${notice.licenseId}")
+        LocalizedText("Лицензия: ${notice.licenseId}")
         OutlinedButton(
             onClick = { onOpenUrl(notice.projectUrl) },
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("Открыть страницу проекта")
+            LocalizedText("Открыть страницу проекта")
         }
     }
 }
@@ -60,7 +59,7 @@ internal fun OpenSourceNoticeCard(
 internal fun LicenseTextCard(license: LicenseText) {
     var expanded by rememberSaveable(license.id) { mutableStateOf(false) }
     SettingsSection(license.name) {
-        Text(
+        LocalizedText(
             "Полный текст лицензии включён в приложение и доступен офлайн.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -69,7 +68,7 @@ internal fun LicenseTextCard(license: LicenseText) {
             onClick = { expanded = !expanded },
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(if (expanded) "Скрыть текст лицензии" else "Показать текст лицензии")
+            LocalizedText(if (expanded) "Скрыть текст лицензии" else "Показать текст лицензии")
         }
         if (expanded) {
             HorizontalDivider()
@@ -77,7 +76,7 @@ internal fun LicenseTextCard(license: LicenseText) {
                 modifier = Modifier.padding(top = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(
+                LocalizedText(
                     license.text,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

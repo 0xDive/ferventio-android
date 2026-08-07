@@ -103,7 +103,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -271,29 +270,31 @@ fun FerventioApp(
         }
     }
 
-    FerventioTheme(
-        themeMode = state.themeMode,
-        fontScalePercent = state.fontScalePercent,
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .semantics { testTagsAsResourceId = true },
+    ProvideAppResourceStrings(state.appLanguage) {
+        FerventioTheme(
+            themeMode = state.themeMode,
+            fontScalePercent = state.fontScalePercent,
         ) {
-            when {
-                state.isBootstrapping -> LoadingScreen(state.isChannelsLoading)
-                else -> AuthenticatedShell(
-                    state = state,
-                    controller = controller,
-                    snackbarHostState = snackbarHostState,
-                    pushState = pushState,
-                    onTestPush = pushCoordinator::sendTest,
-                    onReconnectPush = pushCoordinator::reconnect,
-                    onExportSettings = onExportSettings,
-                    onImportSettings = onImportSettings,
-                    onExportCrashReports = onExportCrashReports,
-                    onClearCrashReports = onClearCrashReports,
-                )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .semantics { testTagsAsResourceId = true },
+            ) {
+                when {
+                    state.isBootstrapping -> LoadingScreen(state.isChannelsLoading)
+                    else -> AuthenticatedShell(
+                        state = state,
+                        controller = controller,
+                        snackbarHostState = snackbarHostState,
+                        pushState = pushState,
+                        onTestPush = pushCoordinator::sendTest,
+                        onReconnectPush = pushCoordinator::reconnect,
+                        onExportSettings = onExportSettings,
+                        onImportSettings = onImportSettings,
+                        onExportCrashReports = onExportCrashReports,
+                        onClearCrashReports = onClearCrashReports,
+                    )
+                }
             }
         }
     }
@@ -310,7 +311,7 @@ private fun LoadingScreen(isChannelsLoading: Boolean) {
             Spacer(Modifier.height(20.dp))
             CircularProgressIndicator()
             Spacer(Modifier.height(12.dp))
-            Text(if (isChannelsLoading) "Восстанавливаем каналы и историю…" else "Проверяем Twitch-сессию…")
+            LocalizedText(if (isChannelsLoading) "Восстанавливаем каналы и историю…" else "Проверяем Twitch-сессию…")
         }
     }
 }
@@ -343,8 +344,8 @@ private fun ChatScreen(
                 modifier = Modifier.statusBarsPadding(),
                 title = {
                     Column {
-                        Text("Ferventio", fontWeight = FontWeight.Bold)
-                        Text(
+                        VerbatimText("Ferventio", fontWeight = FontWeight.Bold)
+                        LocalizedText(
                             text = connectionLabel(state.connectionStatus),
                             style = MaterialTheme.typography.labelSmall,
                             color = connectionColor(state.connectionStatus),
@@ -356,13 +357,13 @@ private fun ChatScreen(
                         hideKeyboard()
                         showAddChannel = true
                     }) {
-                        Icon(Icons.Default.Add, contentDescription = "Добавить канал")
+                        Icon(Icons.Default.Add, contentDescription = localizedString("Добавить канал"))
                     }
                     IconButton(onClick = {
                         hideKeyboard()
                         onOpenSettings()
                     }) {
-                        Icon(Icons.Default.Settings, contentDescription = "Настройки")
+                        Icon(Icons.Default.Settings, contentDescription = localizedString("Настройки"))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -474,8 +475,8 @@ private fun ChannelsLoading() {
         ) {
             CircularProgressIndicator()
             Spacer(Modifier.height(14.dp))
-            Text("Загружаем сохранённые каналы…", fontWeight = FontWeight.SemiBold)
-            Text(
+            LocalizedText("Загружаем сохранённые каналы…", fontWeight = FontWeight.SemiBold)
+            LocalizedText(
                 "Локальный кэш появится сразу, данные Twitch обновятся в фоне.",
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -498,9 +499,9 @@ private fun EmptyChannels(onAddChannel: () -> Unit) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(28.dp),
             ) {
-                Text("Пока нет каналов", style = MaterialTheme.typography.headlineSmall)
+                LocalizedText("Пока нет каналов", style = MaterialTheme.typography.headlineSmall)
                 Spacer(Modifier.height(8.dp))
-                Text(
+                LocalizedText(
                     "Добавь Twitch-канал. Читать публичный чат можно без аккаунта; вход нужен для отправки и модерации.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -508,7 +509,7 @@ private fun EmptyChannels(onAddChannel: () -> Unit) {
                 Button(onClick = onAddChannel) {
                     Icon(Icons.Default.Add, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
-                    Text("Добавить канал")
+                    LocalizedText("Добавить канал")
                 }
             }
         }
@@ -529,7 +530,7 @@ private fun ChannelTabs(
             shape = MaterialTheme.shapes.extraLarge,
             color = MaterialTheme.colorScheme.surfaceVariant,
         ) {
-            Text(
+            VerbatimText(
                 text = "#${channels.first().displayName}",
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 9.dp),
                 style = MaterialTheme.typography.titleMedium,
@@ -558,7 +559,7 @@ private fun ChannelTabs(
                     selected = index == selectedIndex,
                     onClick = { onSelect(channel.id) },
                     text = {
-                        Text(
+                        VerbatimText(
                             text = "#${channel.displayName}",
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,

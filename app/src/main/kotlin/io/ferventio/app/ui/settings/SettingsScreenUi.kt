@@ -103,7 +103,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -175,6 +174,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.ferventio.app.R
 import io.ferventio.app.BuildConfig
 import io.ferventio.app.domain.AutoModHeldMessage
 import io.ferventio.app.domain.AutoModMessageStatus
@@ -259,7 +259,7 @@ internal enum class SettingsPage {
 
 internal fun SettingsPage.title(strings: AppStrings): String = when (this) {
     SettingsPage.ROOT -> strings.settingsTitle
-    SettingsPage.ACCOUNT -> "Аккаунт"
+    SettingsPage.ACCOUNT -> strings.twitchAccount
     SettingsPage.APPEARANCE -> strings.messagesAndAppearance
     SettingsPage.CHAT -> strings.inputAndBehavior
     SettingsPage.USER_CARD -> strings.userCard
@@ -313,6 +313,8 @@ internal fun SettingsScreen(
         focusManager.clearFocus(force = true)
     }
     val strings = rememberAppStrings(state.appLanguage)
+    val resourceStrings = rememberAppResourceStrings(state.appLanguage)
+    val diagnosticsCopiedText = localizedString("Диагностика скопирована")
 
     LaunchedEffect(settingsListDragged) {
         if (settingsListDragged) hideKeyboard()
@@ -343,11 +345,11 @@ internal fun SettingsScreen(
         topBar = {
             TopAppBar(
                 modifier = Modifier.statusBarsPadding(),
-                title = { Text(page.title(strings), fontWeight = FontWeight.Bold) },
+                title = { LocalizedText(page.title(strings), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     if (page != SettingsPage.ROOT) {
                         IconButton(onClick = navigateBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = localizedString("Назад"))
                         }
                     }
                 },
@@ -406,25 +408,23 @@ internal fun SettingsScreen(
                                         Spacer(Modifier.width(12.dp))
                                     }
                                     Column(Modifier.weight(1f)) {
-                                        Text(
+                                        VerbatimText(
                                             profile?.displayName ?: state.session?.login.orEmpty(),
                                             style = MaterialTheme.typography.titleLarge,
                                             fontWeight = FontWeight.Bold,
                                         )
                                         state.session?.login?.let {
-                                            Text("@$it", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                            VerbatimText("@$it", color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
-                                        Text(
+                                        LocalizedText(
                                             "Каналов: ${state.channels.size} · модераторских: ${state.moderatedChannelIds.count { id -> state.channels.any { it.id == id } }}",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                     }
                                 }
-                                Text(
-                                    "Авторизация сохранена. Если сервис входа временно недоступен, приложение продолжит " +
-                                        "работать напрямую с Twitch, пока активна текущая сессия. При выходе каналы и " +
-                                        "локальная история не удаляются.",
+                                LocalizedText(
+                                    "Авторизация сохранена. Если сервис входа временно недоступен, приложение продолжит работать напрямую с Twitch, пока активна текущая сессия. При выходе каналы и локальная история не удаляются.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -435,7 +435,7 @@ internal fun SettingsScreen(
                                     ) {
                                         Icon(Icons.Default.Refresh, contentDescription = null)
                                         Spacer(Modifier.width(6.dp))
-                                        Text("Повторно авторизовать Twitch")
+                                        LocalizedText("Повторно авторизовать Twitch")
                                     }
                                 } else {
                                     Surface(
@@ -448,9 +448,9 @@ internal fun SettingsScreen(
                                         ) {
                                             CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
                                             Spacer(Modifier.height(8.dp))
-                                            Text("Ожидаем повторной авторизации в браузере", textAlign = TextAlign.Center)
+                                            LocalizedText("Ожидаем повторной авторизации в браузере", textAlign = TextAlign.Center)
                                             TextButton(onClick = controller::cancelServerAuthorization) {
-                                                Text("Отменить")
+                                                LocalizedText("Отменить")
                                             }
                                         }
                                     }
@@ -462,7 +462,7 @@ internal fun SettingsScreen(
                                 ) {
                                     Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null)
                                     Spacer(Modifier.width(6.dp))
-                                    Text("Выйти из Twitch")
+                                    LocalizedText("Выйти из Twitch")
                                 }
 
                                 OutlinedButton(
@@ -476,11 +476,10 @@ internal fun SettingsScreen(
                                         Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null)
                                     }
                                     Spacer(Modifier.width(6.dp))
-                                    Text(if (state.isRevokingDevice) "Отзываем устройство…" else "Отозвать это устройство")
+                                    LocalizedText(if (state.isRevokingDevice) "Отзываем устройство…" else "Отозвать это устройство")
                                 }
-                                Text(
-                                    "Удаляет все серверные сессии, OAuth-переходы и push-данные этой установки. " +
-                                        "Другие устройства аккаунта не затрагиваются.",
+                                LocalizedText(
+                                    "Удаляет все серверные сессии, OAuth-переходы и push-данные этой установки. Другие устройства аккаунта не затрагиваются.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -496,7 +495,7 @@ internal fun SettingsScreen(
                                         Icon(Icons.Default.DeleteForever, contentDescription = null)
                                     }
                                     Spacer(Modifier.width(6.dp))
-                                    Text(
+                                    LocalizedText(
                                         if (state.isRevokingAllSessions) {
                                             "Отзываем все сессии…"
                                         } else {
@@ -504,31 +503,27 @@ internal fun SettingsScreen(
                                         },
                                     )
                                 }
-                                Text(
-                                    "Завершает вход на всех устройствах Ferventio этого Twitch-аккаунта, удаляет их push-данные " +
-                                        "и требует повторной авторизации. Локальная история и настройки на устройствах не удаляются.",
+                                LocalizedText(
+                                    "Завершает вход на всех устройствах Ferventio этого Twitch-аккаунта, удаляет их push-данные и требует повторной авторизации. Локальная история и настройки на устройствах не удаляются.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             } else {
-                                Text(
+                                LocalizedText(
                                     if (state.reauthorizationRequired) "Требуется повторная авторизация" else "Без аккаунта",
                                     style = MaterialTheme.typography.titleLarge,
                                     fontWeight = FontWeight.Bold,
                                 )
-                                Text(
+                                LocalizedText(
                                     if (state.reauthorizationRequired) {
-                                        "Серверная или Twitch-сессия завершена. Каналы и локальная история сохранены; " +
-                                            "повтори вход, чтобы вернуть отправку сообщений и модерацию."
+                                        "Серверная или Twitch-сессия завершена. Каналы и локальная история сохранены; повтори вход, чтобы вернуть отправку сообщений и модерацию."
                                     } else {
-                                        "Публичные Twitch-чаты доступны только для чтения. Отправка сообщений, " +
-                                            "платные Twitch-emotes, карточки из Helix и модерация требуют входа."
+                                        "Публичные Twitch-чаты доступны только для чтения. Отправка сообщений, платные Twitch-emotes, карточки из Helix и модерация требуют входа."
                                     },
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
-                                Text(
-                                    "Откроется безопасная страница входа Ferventio. После подтверждения Twitch " +
-                                        "приложение автоматически вернётся к чатам.",
+                                LocalizedText(
+                                    "Откроется безопасная страница входа Ferventio. После подтверждения Twitch приложение автоматически вернётся к чатам.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -537,7 +532,7 @@ internal fun SettingsScreen(
                                         onClick = controller::startServerAuthorization,
                                         modifier = Modifier.fillMaxWidth(),
                                     ) {
-                                        Text(
+                                        LocalizedText(
                                             if (state.reauthorizationRequired) {
                                                 "Повторно авторизовать Twitch"
                                             } else {
@@ -556,9 +551,9 @@ internal fun SettingsScreen(
                                         ) {
                                             CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.dp)
                                             Spacer(Modifier.height(8.dp))
-                                            Text("Ожидаем завершения входа в браузере", textAlign = TextAlign.Center)
+                                            LocalizedText("Ожидаем завершения входа в браузере", textAlign = TextAlign.Center)
                                             TextButton(onClick = controller::cancelServerAuthorization) {
-                                                Text("Отменить вход")
+                                                LocalizedText("Отменить вход")
                                             }
                                         }
                                     }
@@ -570,7 +565,7 @@ internal fun SettingsScreen(
                     SettingsPage.APPEARANCE -> {
                         item {
                             SettingsSection("Тема и масштаб") {
-                                Text("Тема", fontWeight = FontWeight.SemiBold)
+                                LocalizedText("Тема", fontWeight = FontWeight.SemiBold)
                                 ChoiceButtons(
                                     values = AppThemeMode.entries,
                                     selected = state.themeMode,
@@ -583,7 +578,7 @@ internal fun SettingsScreen(
                                     },
                                     onSelect = controller::setThemeMode,
                                 )
-                                Text("Размер шрифта", fontWeight = FontWeight.SemiBold)
+                                LocalizedText("Размер шрифта", fontWeight = FontWeight.SemiBold)
                                 ChoiceButtons(
                                     values = listOf(85, 100, 115, 130),
                                     selected = state.fontScalePercent,
@@ -591,7 +586,7 @@ internal fun SettingsScreen(
                                     onSelect = controller::setFontScalePercent,
                                 )
                                 if (state.fontScalePercent !in listOf(85, 100, 115, 130)) {
-                                    Text(
+                                    LocalizedText(
                                         "Текущий масштаб: ${state.fontScalePercent}%",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -601,7 +596,7 @@ internal fun SettingsScreen(
                         }
                         item {
                             SettingsSection("Сообщения") {
-                                Text("Плотность сообщений", fontWeight = FontWeight.SemiBold)
+                                LocalizedText("Плотность сообщений", fontWeight = FontWeight.SemiBold)
                                 ChoiceButtons(
                                     values = MessageDensity.entries,
                                     selected = state.messageDensity,
@@ -614,7 +609,7 @@ internal fun SettingsScreen(
                                     },
                                     onSelect = controller::setMessageDensity,
                                 )
-                                Text("Стиль имени", fontWeight = FontWeight.SemiBold)
+                                LocalizedText("Стиль имени", fontWeight = FontWeight.SemiBold)
                                 ChoiceButtons(
                                     values = ChatNameStyle.entries,
                                     selected = state.chatNameStyle,
@@ -634,12 +629,12 @@ internal fun SettingsScreen(
                                     onCheckedChange = controller::setWrapMessageLines,
                                 )
                                 SettingsSwitchRow(
-                                    title = "Автопрокрутка новых сообщений",
-                                    description = "Автоматически оставаться у актуального сообщения, когда чат находится внизу.",
+                                    title = resourceStrings.string(R.string.ferventio_auto_scroll_new_messages),
+                                    description = resourceStrings.string(R.string.ferventio_auto_scroll_new_messages_summary),
                                     checked = state.autoScrollEnabled,
                                     onCheckedChange = controller::setAutoScrollEnabled,
                                 )
-                                Text("Цвет упоминаний", fontWeight = FontWeight.SemiBold)
+                                LocalizedText("Цвет упоминаний", fontWeight = FontWeight.SemiBold)
                                 MentionColorPicker(
                                     selectedArgb = state.mentionColorArgb,
                                     onSelect = controller::setMentionColorArgb,
@@ -702,7 +697,7 @@ internal fun SettingsScreen(
                                     checked = state.animateEmotes,
                                     onCheckedChange = controller::setAnimateEmotes,
                                 )
-                                Text("Размер emotes", fontWeight = FontWeight.SemiBold)
+                                LocalizedText("Размер emotes", fontWeight = FontWeight.SemiBold)
                                 ChoiceButtons(
                                     values = listOf(90, 100, 125, 150),
                                     selected = state.emoteScalePercent,
@@ -736,7 +731,7 @@ internal fun SettingsScreen(
                                     checked = state.showComposerEmoteImages,
                                     onCheckedChange = controller::setShowComposerEmoteImages,
                                 )
-                                Text(
+                                LocalizedText(
                                     "Черновик и история отправленных сообщений сохраняются отдельно для каждого канала. На аппаратной клавиатуре ↑/↓ открывают историю, а Tab выбирает подсказку.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -748,7 +743,7 @@ internal fun SettingsScreen(
                     SettingsPage.USER_CARD -> {
                         item {
                             SettingsSection("Порядок кнопок модерации") {
-                                Text(
+                                LocalizedText(
                                     "Кнопки в карточке пользователя отображаются в этом порядке. Перемещай их стрелками.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -780,7 +775,7 @@ internal fun SettingsScreen(
                                             contentDescription = null,
                                         )
                                         Spacer(Modifier.width(9.dp))
-                                        Text(
+                                        LocalizedText(
                                             moderationActionLabel(actionId, strings),
                                             modifier = Modifier.weight(1f),
                                             fontWeight = FontWeight.SemiBold,
@@ -789,13 +784,13 @@ internal fun SettingsScreen(
                                             onClick = { controller.moveUserCardModerationAction(actionId, -1) },
                                             enabled = index > 0,
                                         ) {
-                                            Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Поднять")
+                                            Icon(Icons.Default.KeyboardArrowUp, contentDescription = localizedString("Поднять"))
                                         }
                                         IconButton(
                                             onClick = { controller.moveUserCardModerationAction(actionId, 1) },
                                             enabled = index < ordered.lastIndex,
                                         ) {
-                                            Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Опустить")
+                                            Icon(Icons.Default.KeyboardArrowDown, contentDescription = localizedString("Опустить"))
                                         }
                                     }
                                 }
@@ -809,7 +804,7 @@ internal fun SettingsScreen(
                         }
                         item {
                             SettingsSection("Timeout-интервалы") {
-                                Text(
+                                LocalizedText(
                                     "Интервалы можно задавать как 10s, 5m, 2h или 1d. Новый интервал добавляется в конец списка кнопок.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -821,7 +816,7 @@ internal fun SettingsScreen(
                                     ) {
                                         Icon(Icons.Default.Timer, contentDescription = null)
                                         Spacer(Modifier.width(9.dp))
-                                        Text(
+                                        LocalizedText(
                                             formatLocalizedDuration(seconds, strings),
                                             modifier = Modifier.weight(1f),
                                             fontWeight = FontWeight.SemiBold,
@@ -841,8 +836,8 @@ internal fun SettingsScreen(
                                     value = userCardTimeoutInput,
                                     onValueChange = { userCardTimeoutInput = it.take(12) },
                                     modifier = Modifier.fillMaxWidth(),
-                                    label = { Text("Новый интервал") },
-                                    placeholder = { Text("например, 30s или 6h") },
+                                    label = { LocalizedText("Новый интервал") },
+                                    placeholder = { LocalizedText("например, 30s или 6h") },
                                     singleLine = true,
                                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                                     keyboardActions = KeyboardActions(
@@ -866,12 +861,12 @@ internal fun SettingsScreen(
                                     ) {
                                         Icon(Icons.Default.Add, contentDescription = null)
                                         Spacer(Modifier.width(5.dp))
-                                        Text("Добавить")
+                                        LocalizedText("Добавить")
                                     }
                                     TextButton(onClick = controller::resetUserCardTimeoutPresets) {
                                         Icon(Icons.Default.Restore, contentDescription = null)
                                         Spacer(Modifier.width(5.dp))
-                                        Text("По умолчанию")
+                                        LocalizedText("По умолчанию")
                                     }
                                 }
                             }
@@ -880,15 +875,15 @@ internal fun SettingsScreen(
 
                     SettingsPage.HISTORY -> item {
                         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            SettingsSection("Последние сообщения") {
+                            SettingsSection(resourceStrings.string(R.string.ferventio_recent_messages_section)) {
                                 SettingsSwitchRow(
-                                    title = "Загружать сообщения до открытия чата",
-                                    description = "При открытии канала приложение запросит до 100 последних публичных сообщений у стороннего сервиса Recent Messages.",
+                                    title = resourceStrings.string(R.string.ferventio_recent_messages_enabled),
+                                    description = resourceStrings.string(R.string.ferventio_recent_messages_enabled_summary),
                                     checked = state.recentMessagesEnabled,
                                     onCheckedChange = controller::setRecentMessagesEnabled,
                                 )
-                                Text(
-                                    "Сервис временно хранит публичные сообщения Twitch и получает IP-адрес при запросе. Функция выключена по умолчанию.",
+                                LocalizedText(
+                                    resourceStrings.string(R.string.ferventio_recent_messages_privacy_note),
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 TextButton(
@@ -896,55 +891,74 @@ internal fun SettingsScreen(
                                 ) {
                                     Icon(Icons.Default.Public, contentDescription = null)
                                     Spacer(Modifier.width(6.dp))
-                                    Text("Открыть информацию о сервисе")
+                                    LocalizedText(resourceStrings.string(R.string.ferventio_recent_messages_service_info))
                                 }
                             }
-                            SettingsSection("Room") {
+                            SettingsSection(resourceStrings.string(R.string.ferventio_local_history_section)) {
                                 SettingsSwitchRow(
-                                    title = "Сохранять сообщения",
-                                    description = "История хранится только на этом устройстве.",
+                                    title = resourceStrings.string(R.string.ferventio_local_history_save_messages),
+                                    description = resourceStrings.string(R.string.ferventio_local_history_device_only),
                                     checked = state.localHistoryEnabled,
                                     onCheckedChange = controller::setLocalHistoryEnabled,
                                 )
                                 if (state.isHistoryLoading) {
                                     LinearProgressIndicator(Modifier.fillMaxWidth())
-                                    Text("Восстанавливаем сообщения…", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    LocalizedText(resourceStrings.string(R.string.ferventio_local_history_restoring), color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 } else {
-                                    Text(
-                                        "Восстановлено сообщений: ${state.restoredHistoryMessageCount}",
+                                    LocalizedText(
+                                        resourceStrings.string(R.string.ferventio_local_history_restored_count, state.restoredHistoryMessageCount),
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
                                 state.historyErrorMessage?.let { error ->
-                                    Text(error, color = MaterialTheme.colorScheme.error)
+                                    LocalizedText(error, color = MaterialTheme.colorScheme.error)
                                 }
                                 if (state.localHistoryEnabled) {
-                                    Text("Сообщений на канал", fontWeight = FontWeight.SemiBold)
+                                    LocalizedText(resourceStrings.string(R.string.ferventio_local_history_messages_per_channel), fontWeight = FontWeight.SemiBold)
                                     ChoiceButtons(
                                         values = listOf(250, 500, 1_000),
                                         selected = state.localHistoryLimit,
                                         label = Int::toString,
                                         onSelect = controller::setLocalHistoryLimit,
                                     )
-                                    Text("Срок хранения", fontWeight = FontWeight.SemiBold)
+                                    LocalizedText(resourceStrings.string(R.string.ferventio_local_history_retention), fontWeight = FontWeight.SemiBold)
                                     ChoiceButtons(
                                         values = listOf(1, 7, 30, 0),
                                         selected = state.localHistoryRetentionDays,
-                                        label = { days -> if (days == 0) "Без ограничения" else "$days дн." },
+                                        label = { days ->
+                                            if (days == 0) {
+                                                resourceStrings.string(R.string.ferventio_local_history_unlimited)
+                                            } else {
+                                                resourceStrings.quantity(
+                                                    R.plurals.ferventio_local_history_retention_days,
+                                                    days,
+                                                    days,
+                                                )
+                                            }
+                                        },
                                         onSelect = controller::setLocalHistoryRetentionDays,
                                     )
-                                    Text("Максимальный размер базы", fontWeight = FontWeight.SemiBold)
+                                    LocalizedText(resourceStrings.string(R.string.ferventio_local_history_max_database_size), fontWeight = FontWeight.SemiBold)
                                     ChoiceButtons(
                                         values = listOf(50, 100, 250, 0),
                                         selected = state.localHistoryMaxSizeMb,
-                                        label = { sizeMb -> if (sizeMb == 0) "Без ограничения" else "$sizeMb МБ" },
+                                        label = { sizeMb ->
+                                            if (sizeMb == 0) {
+                                                resourceStrings.string(R.string.ferventio_local_history_unlimited)
+                                            } else {
+                                                resourceStrings.string(
+                                                    R.string.ferventio_local_history_size_megabytes,
+                                                    sizeMb,
+                                                )
+                                            }
+                                        },
                                         onSelect = controller::setLocalHistoryMaxSizeMb,
                                     )
                                 }
                                 TextButton(onClick = { confirmClearHistory = true }) {
                                     Icon(Icons.Default.Delete, contentDescription = null)
                                     Spacer(Modifier.width(6.dp))
-                                    Text("Очистить локальную историю")
+                                    LocalizedText(resourceStrings.string(R.string.ferventio_local_history_clear))
                                 }
                             }
 
@@ -953,7 +967,7 @@ internal fun SettingsScreen(
 
                     SettingsPage.IMAGE_CACHE -> item {
                         SettingsSection("Coil image cache") {
-                            Text(
+                            LocalizedText(
                                 "Очищает memory cache и disk cache изображений emotes, badges и аватаров.",
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -961,7 +975,7 @@ internal fun SettingsScreen(
                                 LinearProgressIndicator(Modifier.fillMaxWidth())
                             }
                             state.imageCacheStatusMessage?.let { status ->
-                                Text(status, style = MaterialTheme.typography.bodySmall)
+                                LocalizedText(status, style = MaterialTheme.typography.bodySmall)
                             }
                             Button(
                                 onClick = controller::clearImageCache,
@@ -969,7 +983,7 @@ internal fun SettingsScreen(
                             ) {
                                 Icon(Icons.Default.DeleteSweep, contentDescription = null)
                                 Spacer(Modifier.width(6.dp))
-                                Text("Очистить image cache")
+                                LocalizedText("Очистить image cache")
                             }
                         }
                     }
@@ -977,7 +991,7 @@ internal fun SettingsScreen(
                     SettingsPage.BACKUP_SYNC -> {
                         item {
                             SettingsSection("Экспорт и импорт") {
-                                Text(
+                                LocalizedText(
                                     "Резервная копия содержит настройки интерфейса, каналы, workspaces, filters, highlights, ignore rules, команды и избранные emotes. Локальная история сообщений и Twitch-токены не экспортируются.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -992,7 +1006,7 @@ internal fun SettingsScreen(
                                     ) {
                                         Icon(Icons.Default.ContentCopy, contentDescription = null)
                                         Spacer(Modifier.width(5.dp))
-                                        Text("Экспорт")
+                                        LocalizedText("Экспорт")
                                     }
                                     OutlinedButton(
                                         onClick = onImportSettings,
@@ -1000,7 +1014,7 @@ internal fun SettingsScreen(
                                     ) {
                                         Icon(Icons.Default.Restore, contentDescription = null)
                                         Spacer(Modifier.width(5.dp))
-                                        Text("Импорт")
+                                        LocalizedText("Импорт")
                                     }
                                 }
                                 state.backupStatusMessage?.takeIf(String::isNotBlank)?.let { status ->
@@ -1013,13 +1027,13 @@ internal fun SettingsScreen(
                                             modifier = Modifier.padding(10.dp),
                                             verticalAlignment = Alignment.CenterVertically,
                                         ) {
-                                            Text(
+                                            LocalizedText(
                                                 status,
                                                 modifier = Modifier.weight(1f),
                                                 style = MaterialTheme.typography.bodySmall,
                                             )
                                             IconButton(onClick = controller::clearBackupStatus) {
-                                                Icon(Icons.Default.Close, contentDescription = "Скрыть")
+                                                Icon(Icons.Default.Close, contentDescription = localizedString("Скрыть"))
                                             }
                                         }
                                     }
@@ -1030,9 +1044,9 @@ internal fun SettingsScreen(
                                 ) {
                                     Icon(Icons.Default.Restore, contentDescription = null)
                                     Spacer(Modifier.width(5.dp))
-                                    Text("Восстановить состояние до последнего импорта")
+                                    LocalizedText("Восстановить состояние до последнего импорта")
                                 }
-                                Text(
+                                LocalizedText(
                                     "Перед каждым импортом Ferventio автоматически сохраняет текущее состояние. Формат файла имеет версию и SHA-256 содержимого; повреждённый или неподдерживаемый файл не применяется.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1048,31 +1062,31 @@ internal fun SettingsScreen(
                                     onCheckedChange = controller::setSettingsSyncEnabled,
                                 )
                                 if (!state.isAuthenticated) {
-                                    Text(
+                                    LocalizedText(
                                         "Для синхронизации нужно войти в Twitch через Ferventio Server.",
                                         color = MaterialTheme.colorScheme.error,
                                         style = MaterialTheme.typography.bodySmall,
                                     )
                                 }
-                                Text(
+                                LocalizedText(
                                     "Статус: ${settingsSyncStatusLabel(state.settingsSyncStatus)}",
                                     color = settingsSyncStatusColor(state.settingsSyncStatus),
                                     fontWeight = FontWeight.SemiBold,
                                 )
-                                Text(
+                                LocalizedText(
                                     "Текущая серверная ревизия: ${state.settingsSyncRevision}",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 if (state.settingsSyncLastSyncedAtMillis > 0L) {
-                                    Text(
+                                    LocalizedText(
                                         "Последняя синхронизация: ${formatPushTime(state.settingsSyncLastSyncedAtMillis)}",
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
                                 state.settingsSyncErrorMessage?.let { error ->
-                                    Text(error, color = MaterialTheme.colorScheme.error)
+                                    LocalizedText(error, color = MaterialTheme.colorScheme.error)
                                 }
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
@@ -1089,7 +1103,7 @@ internal fun SettingsScreen(
                                             Icon(Icons.Default.Refresh, contentDescription = null)
                                         }
                                         Spacer(Modifier.width(5.dp))
-                                        Text("Синхронизировать")
+                                        LocalizedText("Синхронизировать")
                                     }
                                     OutlinedButton(
                                         onClick = controller::loadSettingsSyncHistory,
@@ -1098,7 +1112,7 @@ internal fun SettingsScreen(
                                     ) {
                                         Icon(Icons.Default.History, contentDescription = null)
                                         Spacer(Modifier.width(5.dp))
-                                        Text("История")
+                                        LocalizedText("История")
                                     }
                                 }
                                 state.settingsSyncConflict?.let { conflict ->
@@ -1111,12 +1125,12 @@ internal fun SettingsScreen(
                                             modifier = Modifier.padding(12.dp),
                                             verticalArrangement = Arrangement.spacedBy(8.dp),
                                         ) {
-                                            Text(
+                                            LocalizedText(
                                                 "Конфликт ревизий",
                                                 fontWeight = FontWeight.Bold,
                                                 color = MaterialTheme.colorScheme.onErrorContainer,
                                             )
-                                            Text(
+                                            LocalizedText(
                                                 "Серверная ревизия ${conflict.serverRevision}, обновлена ${formatSyncTimestamp(conflict.serverUpdatedAt)}. Изменения есть и на этом устройстве, поэтому Ferventio не перезаписывает их автоматически.",
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onErrorContainer,
@@ -1125,11 +1139,11 @@ internal fun SettingsScreen(
                                                 OutlinedButton(
                                                     onClick = controller::useServerSettings,
                                                     modifier = Modifier.weight(1f),
-                                                ) { Text("Использовать сервер") }
+                                                ) { LocalizedText("Использовать сервер") }
                                                 Button(
                                                     onClick = controller::overwriteServerSettings,
                                                     modifier = Modifier.weight(1f),
-                                                ) { Text("Заменить сервер") }
+                                                ) { LocalizedText("Заменить сервер") }
                                             }
                                         }
                                     }
@@ -1145,13 +1159,18 @@ internal fun SettingsScreen(
                                             verticalAlignment = Alignment.CenterVertically,
                                         ) {
                                             Column(Modifier.weight(1f)) {
-                                                Text("Ревизия ${entry.revision}", fontWeight = FontWeight.SemiBold)
-                                                Text(
-                                                    buildString {
-                                                        append(formatSyncTimestamp(entry.updatedAt))
-                                                        entry.appVersion?.takeIf(String::isNotBlank)?.let { append(" · Ferventio ").append(it) }
-                                                        append(" · устройство ").append(entry.updatedByInstallationId.take(8))
-                                                    },
+                                                LocalizedText("Ревизия ${entry.revision}", fontWeight = FontWeight.SemiBold)
+                                                val revisionDetails = listOfNotNull(
+                                                    formatSyncTimestamp(entry.updatedAt),
+                                                    entry.appVersion
+                                                        ?.takeIf(String::isNotBlank)
+                                                        ?.let { "Ferventio $it" },
+                                                    localizedString(
+                                                        "устройство ${entry.updatedByInstallationId.take(8)}",
+                                                    ),
+                                                ).joinToString(" · ")
+                                                VerbatimText(
+                                                    revisionDetails,
                                                     style = MaterialTheme.typography.bodySmall,
                                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                                 )
@@ -1160,7 +1179,7 @@ internal fun SettingsScreen(
                                                 onClick = { controller.restoreSettingsSyncRevision(entry.revision) },
                                                 enabled = entry.revision != state.settingsSyncRevision &&
                                                     state.settingsSyncStatus != SettingsSyncStatus.SYNCING,
-                                            ) { Text("Восстановить") }
+                                            ) { LocalizedText("Восстановить") }
                                         }
                                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                                     }
@@ -1195,10 +1214,9 @@ internal fun SettingsScreen(
                                 checked = state.replyNotificationsEnabled,
                                 onCheckedChange = controller::setReplyNotificationsEnabled,
                             )
-                            Text(pushStatusLabel(pushState), color = pushStatusColor(pushState.status))
-                            Text(
-                                "Уведомления подключаются автоматически после входа в Twitch. " +
-                                    "Вводить адрес сервера или отдельно включать push не нужно.",
+                            LocalizedText(pushStatusLabel(pushState), color = pushStatusColor(pushState.status))
+                            LocalizedText(
+                                "Уведомления подключаются автоматически после входа в Twitch. Вводить адрес сервера или отдельно включать push не нужно.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -1217,23 +1235,22 @@ internal fun SettingsScreen(
                             ) {
                                 Icon(Icons.Default.Notifications, contentDescription = null)
                                 Spacer(Modifier.width(6.dp))
-                                Text("Настройки уведомлений Android")
+                                LocalizedText("Настройки уведомлений Android")
                             }
                             if (pushState.foregroundServiceRequired) {
-                                Text(
-                                    "FOSS-сборка получает уведомления самостоятельно через постоянное защищённое соединение. " +
-                                        "Android будет показывать служебное уведомление, пока автономный push включён.",
+                                LocalizedText(
+                                    "FOSS-сборка получает уведомления самостоятельно через постоянное защищённое соединение. Android будет показывать служебное уведомление, пока автономный push включён.",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                                 pushState.lastConnectedAtMillis?.let { timestamp ->
-                                    Text("Последнее подключение: ${formatPushTime(timestamp)}")
+                                    LocalizedText("Последнее подключение: ${formatPushTime(timestamp)}")
                                 }
                                 pushState.lastHeartbeatAtMillis?.let { timestamp ->
-                                    Text("Последний heartbeat: ${formatPushTime(timestamp)}")
+                                    LocalizedText("Последний heartbeat: ${formatPushTime(timestamp)}")
                                 }
                                 if (pushState.reconnectAttempt > 0) {
-                                    Text("Попытка переподключения: ${pushState.reconnectAttempt}")
+                                    LocalizedText("Попытка переподключения: ${pushState.reconnectAttempt}")
                                 }
                                 OutlinedButton(
                                     onClick = {
@@ -1244,7 +1261,7 @@ internal fun SettingsScreen(
                                         )
                                     },
                                     modifier = Modifier.fillMaxWidth(),
-                                ) { Text("Настройки батареи") }
+                                ) { LocalizedText("Настройки батареи") }
                             }
                             if (pushState.enabled) {
                                 Row(
@@ -1252,10 +1269,10 @@ internal fun SettingsScreen(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 ) {
                                     OutlinedButton(onClick = onReconnectPush, modifier = Modifier.weight(1f)) {
-                                        Text("Переподключить")
+                                        LocalizedText("Переподключить")
                                     }
                                     OutlinedButton(onClick = onTestPush, modifier = Modifier.weight(1f)) {
-                                        Text("Отправить тест")
+                                        LocalizedText("Отправить тест")
                                     }
                                 }
                             }
@@ -1266,13 +1283,13 @@ internal fun SettingsScreen(
                         if (state.isAuthenticated) {
                             item {
                                 SettingsSection("EventSub") {
-                                    Text(
+                                    LocalizedText(
                                         "Состояние: ${connectionLabel(state.connectionStatus)}",
                                         color = connectionColor(state.connectionStatus),
                                         fontWeight = FontWeight.SemiBold,
                                     )
-                                    state.connectionDetail?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                                    Text(
+                                    state.connectionDetail?.let { LocalizedText(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                                    LocalizedText(
                                         "Системные события: ${state.eventSubNoticeChannelIds.size}/${state.channels.size} каналов",
                                         color = if (state.eventSubNoticeChannelIds.size == state.channels.size) {
                                             MaterialTheme.colorScheme.primary
@@ -1281,31 +1298,31 @@ internal fun SettingsScreen(
                                         },
                                     )
                                     if (state.eventSubNoticeFailures.isNotEmpty()) {
-                                        Text(
+                                        VerbatimText(
                                             state.eventSubNoticeFailures.entries.joinToString("\n") { (channel, error) ->
-                                                "#$channel: $error"
+                                                "#$channel: ${resourceStrings.legacy(error)}"
                                             },
                                             color = MaterialTheme.colorScheme.error,
                                             style = MaterialTheme.typography.bodySmall,
                                         )
                                     }
-                                    state.lastConnectionError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                                    state.lastConnectionError?.let { LocalizedText(it, color = MaterialTheme.colorScheme.error) }
                                     TextButton(onClick = controller::reconnectEventSub) {
                                         Icon(Icons.Default.Refresh, contentDescription = null)
                                         Spacer(Modifier.width(6.dp))
-                                        Text("Переподключить")
+                                        LocalizedText("Переподключить")
                                     }
                                     TextButton(onClick = {
                                         clipboardManager.setText(AnnotatedString(controller.buildEventSubDiagnosticReport()))
-                                        uiScope.launch { snackbarHostState.showSnackbar("Диагностика скопирована") }
-                                    }) { Text("Копировать диагностику") }
+                                        uiScope.launch { snackbarHostState.showSnackbar(diagnosticsCopiedText) }
+                                    }) { LocalizedText("Копировать диагностику") }
                                 }
                             }
                         }
                         item {
                             SettingsSection("Хранилище") {
-                                Text("Room schema: 9", fontWeight = FontWeight.SemiBold)
-                                Text(
+                                VerbatimText("Room schema: 9", fontWeight = FontWeight.SemiBold)
+                                LocalizedText(
                                     "Активные миграции: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9. История, Mentions и позиция прокрутки сохраняются без destructive migration.",
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -1317,12 +1334,12 @@ internal fun SettingsScreen(
                         val aboutLinks = configuredAboutLinks(strings)
                         item {
                             SettingsSection(strings.aboutProjectTitle) {
-                                Text("Версия ${BuildConfig.VERSION_NAME}", fontWeight = FontWeight.Bold)
-                                Text(
+                                LocalizedText("Версия ${BuildConfig.VERSION_NAME}", fontWeight = FontWeight.Bold)
+                                LocalizedText(
                                     strings.aboutSummary,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
-                                Text(
+                                LocalizedText(
                                     strings.aboutProjectDescription,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1355,7 +1372,7 @@ internal fun SettingsScreen(
                                     ) {
                                         Icon(Icons.Default.Info, contentDescription = null)
                                         Spacer(Modifier.width(6.dp))
-                                        Text(strings.privacyPolicy)
+                                        LocalizedText(strings.privacyPolicy)
                                     }
                                 }
                                 OutlinedButton(
@@ -1364,7 +1381,7 @@ internal fun SettingsScreen(
                                 ) {
                                     Icon(Icons.Default.ContentCopy, contentDescription = null)
                                     Spacer(Modifier.width(6.dp))
-                                    Text(strings.openSourceLicenses)
+                                    LocalizedText(strings.openSourceLicenses)
                                 }
                                 if (
                                     BuildConfig.SHOW_PRIVACY_POLICY_IN_APP &&
@@ -1374,7 +1391,7 @@ internal fun SettingsScreen(
                                         onClick = { uriHandler.openUri(BuildConfig.PRIVACY_POLICY_URL) },
                                         modifier = Modifier.fillMaxWidth(),
                                     ) {
-                                        Text(strings.openPublishedWebVersion)
+                                        LocalizedText(strings.openPublishedWebVersion)
                                     }
                                 }
                             }
@@ -1382,7 +1399,7 @@ internal fun SettingsScreen(
                         if (BuildConfig.LOCAL_CRASH_REPORTING) {
                             item {
                                 SettingsSection(strings.localCrashReports) {
-                                    Text(
+                                    LocalizedText(
                                         strings.localCrashReportsDescription,
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -1393,7 +1410,7 @@ internal fun SettingsScreen(
                                     ) {
                                         Icon(Icons.Default.BugReport, contentDescription = null)
                                         Spacer(Modifier.width(6.dp))
-                                        Text(strings.exportReports)
+                                        LocalizedText(strings.exportReports)
                                     }
                                     TextButton(
                                         onClick = { confirmClearCrashReports = true },
@@ -1401,7 +1418,7 @@ internal fun SettingsScreen(
                                     ) {
                                         Icon(Icons.Default.DeleteSweep, contentDescription = null)
                                         Spacer(Modifier.width(6.dp))
-                                        Text(strings.deleteLocalReports)
+                                        LocalizedText(strings.deleteLocalReports)
                                     }
                                 }
                             }
@@ -1422,10 +1439,10 @@ internal fun SettingsScreen(
                                     onValueChange = { languageQuery = it.take(80) },
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true,
-                                    label = { Text(strings.languageSearchHint) },
+                                    label = { LocalizedText(strings.languageSearchHint) },
                                 )
                                 if (visibleLanguages.isEmpty()) {
-                                    Text(
+                                    LocalizedText(
                                         strings.languageNoResults,
                                         modifier = Modifier.fillMaxWidth().padding(24.dp),
                                         textAlign = TextAlign.Center,
@@ -1456,8 +1473,8 @@ internal fun SettingsScreen(
                     SettingsPage.PRIVACY -> {
                         item {
                             SettingsSection(strings.privacyTitle) {
-                                Text("Действует с $PRIVACY_POLICY_EFFECTIVE_DATE", fontWeight = FontWeight.Bold)
-                                Text(
+                                LocalizedText("Действует с $PRIVACY_POLICY_EFFECTIVE_DATE", fontWeight = FontWeight.Bold)
+                                LocalizedText(
                                     "Текст встроен в приложение и доступен офлайн. Параметры оператора и контакта задаются для конкретной release-сборки.",
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -1479,7 +1496,7 @@ internal fun SettingsScreen(
                     SettingsPage.LICENSES -> {
                         item {
                             SettingsSection(strings.licensesTitle) {
-                                Text(
+                                LocalizedText(
                                     "Ferventio включает перечисленные runtime-компоненты. Test-only инструменты в список не входят. Полные license texts доступны ниже без сети.",
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -1507,9 +1524,9 @@ internal fun SettingsScreen(
     if (confirmRevokeDevice) {
         AlertDialog(
             onDismissRequest = { if (!state.isRevokingDevice) confirmRevokeDevice = false },
-            title = { Text("Отозвать это устройство?") },
+            title = { LocalizedText("Отозвать это устройство?") },
             text = {
-                Text(
+                LocalizedText(
                     "Сервер удалит все сессии и push-данные этой установки. Локальные каналы, история и настройки останутся на устройстве.",
                 )
             },
@@ -1520,13 +1537,13 @@ internal fun SettingsScreen(
                         confirmRevokeDevice = false
                         controller.revokeDevice()
                     },
-                ) { Text("Отозвать") }
+                ) { LocalizedText("Отозвать") }
             },
             dismissButton = {
                 TextButton(
                     enabled = !state.isRevokingDevice,
                     onClick = { confirmRevokeDevice = false },
-                ) { Text("Отмена") }
+                ) { LocalizedText("Отмена") }
             },
         )
     }
@@ -1536,11 +1553,10 @@ internal fun SettingsScreen(
             onDismissRequest = {
                 if (!state.isRevokingAllSessions) confirmRevokeAllSessions = false
             },
-            title = { Text("Отозвать все сессии аккаунта?") },
+            title = { LocalizedText("Отозвать все сессии аккаунта?") },
             text = {
-                Text(
-                    "Все устройства Ferventio этого Twitch-аккаунта потеряют серверную авторизацию и push-доступ. " +
-                        "На каждом устройстве потребуется войти снова. Локальные каналы, история, drafts и настройки сохранятся.",
+                LocalizedText(
+                    "Все устройства Ferventio этого Twitch-аккаунта потеряют серверную авторизацию и push-доступ. На каждом устройстве потребуется войти снова. Локальные каналы, история, drafts и настройки сохранятся.",
                 )
             },
             confirmButton = {
@@ -1550,13 +1566,13 @@ internal fun SettingsScreen(
                         confirmRevokeAllSessions = false
                         controller.revokeAllSessions()
                     },
-                ) { Text("Отозвать все") }
+                ) { LocalizedText("Отозвать все") }
             },
             dismissButton = {
                 TextButton(
                     enabled = !state.isRevokingAllSessions,
                     onClick = { confirmRevokeAllSessions = false },
-                ) { Text("Отмена") }
+                ) { LocalizedText("Отмена") }
             },
         )
     }
@@ -1564,9 +1580,9 @@ internal fun SettingsScreen(
     if (confirmClearCrashReports) {
         AlertDialog(
             onDismissRequest = { confirmClearCrashReports = false },
-            title = { Text("Удалить локальные отчёты?") },
+            title = { LocalizedText("Удалить локальные отчёты?") },
             text = {
-                Text(
+                LocalizedText(
                     "Все сохранённые FOSS crash reports будут удалены с устройства. Настройки, каналы и история чата не изменятся.",
                 )
             },
@@ -1574,10 +1590,10 @@ internal fun SettingsScreen(
                 TextButton(onClick = {
                     confirmClearCrashReports = false
                     onClearCrashReports()
-                }) { Text("Удалить") }
+                }) { LocalizedText("Удалить") }
             },
             dismissButton = {
-                TextButton(onClick = { confirmClearCrashReports = false }) { Text("Отмена") }
+                TextButton(onClick = { confirmClearCrashReports = false }) { LocalizedText("Отмена") }
             },
         )
     }
@@ -1585,15 +1601,15 @@ internal fun SettingsScreen(
     if (confirmClearHistory) {
         AlertDialog(
             onDismissRequest = { confirmClearHistory = false },
-            title = { Text("Очистить историю?") },
-            text = { Text("Все сохранённые сообщения и позиции прокрутки будут удалены с устройства.") },
+            title = { LocalizedText("Очистить историю?") },
+            text = { LocalizedText("Все сохранённые сообщения и позиции прокрутки будут удалены с устройства.") },
             confirmButton = {
                 TextButton(onClick = {
                     confirmClearHistory = false
                     controller.clearLocalHistory()
-                }) { Text("Очистить") }
+                }) { LocalizedText("Очистить") }
             },
-            dismissButton = { TextButton(onClick = { confirmClearHistory = false }) { Text("Отмена") } },
+            dismissButton = { TextButton(onClick = { confirmClearHistory = false }) { LocalizedText("Отмена") } },
         )
     }
 }

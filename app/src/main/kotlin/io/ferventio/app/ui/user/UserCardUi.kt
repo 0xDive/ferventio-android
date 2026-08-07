@@ -103,7 +103,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -368,7 +367,7 @@ internal fun UserCardSheet(
                 contentAlignment = Alignment.Center,
             ) {
                 if (cardState.isLoading) CircularProgressIndicator()
-                else Text(cardState.errorMessage ?: "Нет данных")
+                else LocalizedText(cardState.errorMessage ?: "Нет данных")
             }
             return@ModalBottomSheet
         }
@@ -436,7 +435,7 @@ internal fun UserCardSheet(
                     )
                     Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(
+                        VerbatimText(
                             data.user.displayName,
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
@@ -444,14 +443,14 @@ internal fun UserCardSheet(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        Text(
+                        VerbatimText(
                             "@${data.user.login}",
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        Text("ID: ${data.user.id}", style = MaterialTheme.typography.bodySmall)
-                        Text(roleLabel, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                        VerbatimText("ID: ${data.user.id}", style = MaterialTheme.typography.bodySmall)
+                        LocalizedText(roleLabel, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
                         if (showBadges && (profileMessageBadges.isNotEmpty() || profileFfzBadges.isNotEmpty())) {
                             LazyRow(
                                 horizontalArrangement = Arrangement.spacedBy(5.dp),
@@ -487,37 +486,40 @@ internal fun UserCardSheet(
                         verticalArrangement = Arrangement.spacedBy(3.dp),
                     ) {
                         data.user.createdAt?.let {
-                            Text("Аккаунт создан: ${formatProfileDate(it)}", style = MaterialTheme.typography.bodySmall)
+                            LocalizedText("Аккаунт создан: ${formatProfileDate(it)}", style = MaterialTheme.typography.bodySmall)
                         }
                         data.followerInfo.followedAt?.let { followedAt ->
-                            Text(
+                            LocalizedText(
                                 "Фолловит с ${formatProfileDate(followedAt)}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                         when {
-                            data.subscriptionStatusHidden -> Text(
+                            data.subscriptionStatusHidden -> LocalizedText(
                                 "Данные подписки скрыты пользователем",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
-                            data.subscriberMonths != null -> Text(
-                                buildString {
-                                    append(
-                                        if (data.isCurrentlySubscribed == false) {
-                                            "Ранее подписывался: "
-                                        } else {
-                                            "Подписка: "
-                                        },
-                                    )
-                                    append(data.subscriberMonths)
-                                    append(" мес.")
-                                    data.subscriberTier?.let { tier -> append(", tier ").append(tier) }
-                                },
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                            data.isCurrentlySubscribed == true -> Text(
+                            data.subscriberMonths != null -> {
+                                val months = data.subscriberMonths
+                                val tier = data.subscriberTier
+                                val subscriptionText = when {
+                                    data.isCurrentlySubscribed == false && tier != null ->
+                                        "Ранее подписывался: $months мес., tier $tier"
+                                    data.isCurrentlySubscribed == false ->
+                                        "Ранее подписывался: $months мес."
+                                    tier != null ->
+                                        "Подписка: $months мес., tier $tier"
+                                    else ->
+                                        "Подписка: $months мес."
+                                }
+                                LocalizedText(
+                                    subscriptionText,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                            data.isCurrentlySubscribed == true -> LocalizedText(
                                 "Активная подписка",
                                 style = MaterialTheme.typography.bodySmall,
                             )
@@ -527,11 +529,11 @@ internal fun UserCardSheet(
             }
 
             cardState.errorMessage?.let { error ->
-                item(key = "profile-error") { Text(error, color = MaterialTheme.colorScheme.error) }
+                item(key = "profile-error") { LocalizedText(error, color = MaterialTheme.colorScheme.error) }
             }
 
             item(key = "profile-actions") {
-                Text("Действия", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                LocalizedText("Действия", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(6.dp))
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                     item {
@@ -541,14 +543,14 @@ internal fun UserCardSheet(
                         ) {
                             Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = null)
                             Spacer(Modifier.width(5.dp))
-                            Text("Ответить")
+                            LocalizedText("Ответить")
                         }
                     }
                     item {
                         FilledTonalButton(onClick = onMention, enabled = isAuthenticated) {
-                            Text("@")
+                            LocalizedText("@")
                             Spacer(Modifier.width(5.dp))
-                            Text("Упомянуть")
+                            LocalizedText("Упомянуть")
                         }
                     }
                     item {
@@ -557,7 +559,7 @@ internal fun UserCardSheet(
                         ) {
                             Icon(Icons.Default.ContentCopy, contentDescription = null)
                             Spacer(Modifier.width(5.dp))
-                            Text("Копировать")
+                            LocalizedText("Копировать")
                         }
                     }
                     item {
@@ -566,7 +568,7 @@ internal fun UserCardSheet(
                         ) {
                             Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null)
                             Spacer(Modifier.width(5.dp))
-                            Text("Twitch")
+                            LocalizedText("Twitch")
                         }
                     }
                     if (isAuthenticated) {
@@ -578,7 +580,7 @@ internal fun UserCardSheet(
                             ) {
                                 Icon(Icons.Default.Block, contentDescription = null)
                                 Spacer(Modifier.width(5.dp))
-                                Text(
+                                LocalizedText(
                                     userCardStrings.moderationBlock,
                                 )
                             }
@@ -608,7 +610,7 @@ internal fun UserCardSheet(
                             modifier = Modifier.padding(12.dp),
                             verticalArrangement = Arrangement.spacedBy(9.dp),
                         ) {
-                            Text(
+                            LocalizedText(
                                 userCardStrings.moderationTitle,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
@@ -626,7 +628,7 @@ internal fun UserCardSheet(
                                                 ) {
                                                     Icon(Icons.Default.Timer, contentDescription = null)
                                                     Spacer(Modifier.width(5.dp))
-                                                    Text(formatLocalizedDuration(seconds, userCardStrings))
+                                                    VerbatimText(formatLocalizedDuration(seconds, userCardStrings))
                                                 }
                                             }
                                         }
@@ -634,7 +636,7 @@ internal fun UserCardSheet(
                                         actionId == "warn" -> OutlinedButton(onClick = { showWarnDialog = true }) {
                                             Icon(Icons.Default.ErrorOutline, contentDescription = null)
                                             Spacer(Modifier.width(5.dp))
-                                            Text(userCardStrings.moderationWarn)
+                                            LocalizedText(userCardStrings.moderationWarn)
                                         }
 
                                         actionId == "ban" -> Button(
@@ -642,7 +644,7 @@ internal fun UserCardSheet(
                                         ) {
                                             Icon(Icons.Default.Block, contentDescription = null)
                                             Spacer(Modifier.width(5.dp))
-                                            Text(userCardStrings.moderationBan)
+                                            LocalizedText(userCardStrings.moderationBan)
                                         }
 
                                         actionId == "unban" -> OutlinedButton(
@@ -650,7 +652,7 @@ internal fun UserCardSheet(
                                         ) {
                                             Icon(Icons.Default.Restore, contentDescription = null)
                                             Spacer(Modifier.width(5.dp))
-                                            Text(userCardStrings.moderationUnban)
+                                            LocalizedText(userCardStrings.moderationUnban)
                                         }
                                     }
                                 }
@@ -661,12 +663,12 @@ internal fun UserCardSheet(
             }
 
             item(key = "recent-title") {
-                Text("Последние сообщения", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                LocalizedText("Последние сообщения", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
 
             if (data.recentMessages.isEmpty()) {
                 item(key = "recent-empty") {
-                    Text("В локальной истории сообщений нет", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    LocalizedText("В локальной истории сообщений нет", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             } else {
                 item(key = "recent-messages") {
@@ -720,7 +722,7 @@ internal fun UserCardSheet(
                             }
                         }
                     }
-                    Text(
+                    LocalizedText(
                         "Новые сообщения находятся снизу. Прокручивай вверх, чтобы увидеть более старые.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -746,8 +748,8 @@ internal fun UserCardSheet(
             }
             AlertDialog(
                 onDismissRequest = { pendingDangerAction = null },
-                title = { Text(title) },
-                text = { Text(body) },
+                title = { LocalizedText(title) },
+                text = { LocalizedText(body) },
                 confirmButton = {
                     TextButton(onClick = {
                         when (action) {
@@ -757,12 +759,12 @@ internal fun UserCardSheet(
                         }
                         pendingDangerAction = null
                     }) {
-                        Text(userCardStrings.moderationConfirm)
+                        LocalizedText(userCardStrings.moderationConfirm)
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { pendingDangerAction = null }) {
-                        Text(userCardStrings.moderationCancel)
+                        LocalizedText(userCardStrings.moderationCancel)
                     }
                 },
             )
@@ -777,7 +779,7 @@ internal fun UserCardSheet(
                 warnReason = ""
             },
             title = {
-                Text(
+                LocalizedText(
                     formatLocalizedString(
                         userCardStrings.moderationWarnTitleFormat,
                         data?.user?.login.orEmpty(),
@@ -789,9 +791,9 @@ internal fun UserCardSheet(
                     value = warnReason,
                     onValueChange = { warnReason = it.take(500) },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text(userCardStrings.moderationReason) },
+                    label = { LocalizedText(userCardStrings.moderationReason) },
                     supportingText = {
-                        Text(userCardStrings.moderationWarnSupportingText)
+                        LocalizedText(userCardStrings.moderationWarnSupportingText)
                     },
                     minLines = 2,
                     maxLines = 4,
@@ -809,13 +811,13 @@ internal fun UserCardSheet(
                         }
                     },
                     enabled = warnReason.isNotBlank(),
-                ) { Text(userCardStrings.moderationWarn) }
+                ) { LocalizedText(userCardStrings.moderationWarn) }
             },
             dismissButton = {
                 TextButton(onClick = {
                     showWarnDialog = false
                     warnReason = ""
-                }) { Text(userCardStrings.moderationCancel) }
+                }) { LocalizedText(userCardStrings.moderationCancel) }
             },
         )
     }

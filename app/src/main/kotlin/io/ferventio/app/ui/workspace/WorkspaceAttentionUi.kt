@@ -70,7 +70,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -137,7 +136,7 @@ internal fun MentionsScreen(
         onBack = onBack,
         actions = {
             if (state.mentionUnreadCount > 0) {
-                TextButton(onClick = controller::markAllMentionsRead) { Text("Прочитать все") }
+                TextButton(onClick = controller::markAllMentionsRead) { LocalizedText("Прочитать все") }
             }
         },
     ) {
@@ -191,20 +190,20 @@ internal fun AttentionResultRow(
                 verticalArrangement = Arrangement.spacedBy(3.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
+                    VerbatimText(
                         "#${channel?.displayName ?: entry.channelLogin}",
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.SemiBold,
                     )
                     Spacer(Modifier.width(7.dp))
-                    Text(
+                    VerbatimText(
                         entry.authorDisplayName,
                         modifier = Modifier.weight(1f),
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    Text(
+                    VerbatimText(
                         ATTENTION_TIMESTAMP_FORMATTER.format(
                             java.time.Instant.ofEpochMilli(entry.timestampMillis),
                         ),
@@ -212,14 +211,14 @@ internal fun AttentionResultRow(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Text(entry.text, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                VerbatimText(entry.text, maxLines = 3, overflow = TextOverflow.Ellipsis)
                 val labels = buildList {
                     if (entry.isDirectMention) add("Mention")
                     addAll(entry.highlightReasons)
                 }.distinct()
                 if (labels.isNotEmpty()) {
-                    Text(
-                        labels.joinToString(" · "),
+                    VerbatimText(
+                        localizedJoinToString(labels),
                         style = MaterialTheme.typography.labelSmall,
                         color = accent,
                         maxLines = 1,
@@ -328,10 +327,10 @@ internal fun SearchScreen(
                 modifier = Modifier.statusBarsPadding(),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад к чатам")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = localizedString("Назад к чатам"))
                     }
                 },
-                title = { Text("Поиск", fontWeight = FontWeight.Bold) },
+                title = { LocalizedText("Поиск", fontWeight = FontWeight.Bold) },
             )
         },
     ) { padding ->
@@ -347,10 +346,10 @@ internal fun SearchScreen(
                 onValueChange = { query = it.take(500) },
                 modifier = Modifier.fillMaxWidth(),
                 leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-                label = { Text("Текст или поисковые операторы") },
-                placeholder = { Text("from:user has:link is:deleted") },
+                label = { LocalizedText("Текст или поисковые операторы") },
+                placeholder = { LocalizedText("from:user has:link is:deleted") },
                 supportingText = {
-                    Text(parseError ?: "from:  in:  has:link  is:sub  is:timeout  regex:\"…\"  type:  after:  before:")
+                    LocalizedText(parseError ?: "from:  in:  has:link  is:sub  is:timeout  regex:\"…\"  type:  after:  before:")
                 },
                 isError = parseError != null,
                 singleLine = true,
@@ -361,7 +360,7 @@ internal fun SearchScreen(
                     FilterChip(
                         selected = scope == ChatSearchScope.ALL_CHANNELS,
                         onClick = { scope = ChatSearchScope.ALL_CHANNELS },
-                        label = { Text("Все каналы") },
+                        label = { LocalizedText("Все каналы") },
                     )
                 }
                 item {
@@ -369,7 +368,7 @@ internal fun SearchScreen(
                         selected = scope == ChatSearchScope.CURRENT_CHANNEL,
                         onClick = { scope = ChatSearchScope.CURRENT_CHANNEL },
                         enabled = state.selectedChannelId != null,
-                        label = { Text("Текущий канал") },
+                        label = { LocalizedText("Текущий канал") },
                     )
                 }
                 items(ChatSearchDateRange.entries) { range ->
@@ -377,7 +376,7 @@ internal fun SearchScreen(
                         selected = dateRange == range,
                         onClick = { dateRange = range },
                         label = {
-                            Text(
+                            LocalizedText(
                                 when (range) {
                                     ChatSearchDateRange.ALL -> "За всё время"
                                     ChatSearchDateRange.LAST_24_HOURS -> "24 часа"
@@ -395,13 +394,13 @@ internal fun SearchScreen(
                     FilterChip(
                         selected = typePreset == preset,
                         onClick = { typePreset = preset },
-                        label = { Text(preset.title) },
+                        label = { LocalizedText(preset.title) },
                     )
                 }
             }
 
             when {
-                !state.localHistoryEnabled -> Text(
+                !state.localHistoryEnabled -> LocalizedText(
                     "Сохранение новых сообщений выключено. Поиск выполняется по уже существующей базе.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -443,15 +442,15 @@ internal fun SearchScreen(
     contextTarget?.let { target ->
         AlertDialog(
             onDismissRequest = { contextTarget = null },
-            title = { Text("Контекст сообщения") },
+            title = { LocalizedText("Контекст сообщения") },
             text = {
                 when {
                     isContextLoading -> Box(
                         Modifier.fillMaxWidth().height(120.dp),
                         contentAlignment = Alignment.Center,
                     ) { CircularProgressIndicator() }
-                    contextError != null -> Text(contextError.orEmpty(), color = MaterialTheme.colorScheme.error)
-                    contextMessages.isEmpty() -> Text("Контекст не найден")
+                    contextError != null -> VerbatimText(contextError.orEmpty(), color = MaterialTheme.colorScheme.error)
+                    contextMessages.isEmpty() -> LocalizedText("Контекст не найден")
                     else -> LazyColumn(
                         modifier = Modifier.heightIn(max = 420.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -472,12 +471,12 @@ internal fun SearchScreen(
                                 shape = MaterialTheme.shapes.medium,
                             ) {
                                 Column(Modifier.padding(8.dp)) {
-                                    Text(
+                                    VerbatimText(
                                         message.userDisplayName,
                                         fontWeight = FontWeight.Bold,
                                         style = MaterialTheme.typography.labelLarge,
                                     )
-                                    Text(message.text, maxLines = 4, overflow = TextOverflow.Ellipsis)
+                                    VerbatimText(message.text, maxLines = 4, overflow = TextOverflow.Ellipsis)
                                 }
                             }
                         }
@@ -488,10 +487,10 @@ internal fun SearchScreen(
                 TextButton(onClick = {
                     contextTarget = null
                     onOpenMessage(target)
-                }) { Text("Перейти") }
+                }) { LocalizedText("Перейти") }
             },
             dismissButton = {
-                TextButton(onClick = { contextTarget = null }) { Text("Закрыть") }
+                TextButton(onClick = { contextTarget = null }) { LocalizedText("Закрыть") }
             },
         )
     }
@@ -514,10 +513,10 @@ internal fun SimpleListScaffold(
                 modifier = Modifier.statusBarsPadding(),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Назад к чатам")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = localizedString("Назад к чатам"))
                     }
                 },
-                title = { Text(title, fontWeight = FontWeight.Bold) },
+                title = { LocalizedText(title, fontWeight = FontWeight.Bold) },
                 actions = { actions() },
             )
         },
@@ -556,41 +555,41 @@ internal fun MessageResultRow(
     ) {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 9.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
+                VerbatimText(
                     "#${channel?.displayName ?: message.channelLogin}",
                     color = MaterialTheme.colorScheme.primary,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Spacer(Modifier.width(8.dp))
-                Text(
+                VerbatimText(
                     message.userDisplayName,
                     modifier = Modifier.weight(1f),
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Text(
+                VerbatimText(
                     ATTENTION_TIMESTAMP_FORMATTER.format(java.time.Instant.ofEpochMilli(message.timestampMillis)),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 Box {
                     IconButton(onClick = { menuExpanded = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = "Действия результата")
+                        Icon(Icons.Default.MoreVert, contentDescription = localizedString("Действия результата"))
                     }
                     DropdownMenu(
                         expanded = menuExpanded,
                         onDismissRequest = { menuExpanded = false },
                     ) {
                         DropdownMenuItem(
-                            text = { Text("Показать контекст") },
+                            text = { LocalizedText("Показать контекст") },
                             onClick = {
                                 menuExpanded = false
                                 onContext()
                             },
                         )
                         DropdownMenuItem(
-                            text = { Text("Карточка пользователя и модерация") },
+                            text = { LocalizedText("Карточка пользователя и модерация") },
                             onClick = {
                                 menuExpanded = false
                                 onOpenUser()
@@ -599,14 +598,14 @@ internal fun MessageResultRow(
                     }
                 }
             }
-            Text(message.text, maxLines = 4, overflow = TextOverflow.Ellipsis)
+            VerbatimText(message.text, maxLines = 4, overflow = TextOverflow.Ellipsis)
             val metadata = buildList {
                 add(message.type.name.lowercase())
                 if (message.isDeleted) add("удалено")
                 message.moderation.action?.let { action -> add(action.name.lowercase()) }
             }
-            Text(
-                metadata.joinToString(" · "),
+            VerbatimText(
+                localizedJoinToString(metadata),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -622,7 +621,7 @@ internal fun EmptySection(text: String) {
             .padding(32.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        LocalizedText(text, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

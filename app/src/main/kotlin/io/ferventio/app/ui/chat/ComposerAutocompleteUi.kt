@@ -20,7 +20,6 @@ import androidx.compose.material.icons.filled.AlternateEmail
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -98,13 +97,13 @@ internal fun InlineComposerAutocomplete(
                     SuggestionLeading(suggestion)
                     Spacer(Modifier.width(7.dp))
                     Column(Modifier.weight(1f)) {
-                        Text(
+                        VerbatimText(
                             text = suggestionTitle(suggestion),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             fontWeight = FontWeight.SemiBold,
                         )
-                        Text(
+                        VerbatimText(
                             text = suggestionSubtitle(suggestion),
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,

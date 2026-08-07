@@ -103,7 +103,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -244,6 +243,7 @@ internal fun PinnedMessageBanner(
     onOpen: () -> Unit,
     onUnpin: () -> Unit,
 ) {
+    val emptyMessageLabel = localizedString("Сообщение без текста")
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -264,16 +264,16 @@ internal fun PinnedMessageBanner(
             )
             Spacer(Modifier.width(8.dp))
             Column(Modifier.weight(1f)) {
-                Text(
-                    "Закреплено · ${pinned.senderUserName.ifBlank { pinned.senderUserLogin }}",
+                LocalizedText(
+                    "Закреплено · ${verbatimArgument(pinned.senderUserName.ifBlank { pinned.senderUserLogin })}",
                     style = MaterialTheme.typography.labelMedium,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSecondaryContainer,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                Text(
-                    pinned.text.ifBlank { "Сообщение без текста" },
+                VerbatimText(
+                    pinned.text.ifBlank { emptyMessageLabel },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.84f),
                     maxLines = 2,
@@ -282,7 +282,7 @@ internal fun PinnedMessageBanner(
             }
             if (canUnpin) {
                 IconButton(onClick = onUnpin) {
-                    Icon(Icons.Default.Close, contentDescription = "Открепить сообщение")
+                    Icon(Icons.Default.Close, contentDescription = localizedString("Открепить сообщение"))
                 }
             }
         }
@@ -310,6 +310,8 @@ internal fun MessageActionsSheet(
         !message.isDeleted &&
         message.id.isNotBlank()
     var confirmDelete by remember { mutableStateOf(false) }
+    val messageLabel = localizedString("Сообщение")
+    val emptyMessageLabel = localizedString("Сообщение без текста")
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -326,22 +328,22 @@ internal fun MessageActionsSheet(
                 modifier = Modifier.padding(horizontal = 18.dp, vertical = 5.dp),
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        message.userDisplayName.ifBlank { message.userLogin.ifBlank { "Сообщение" } },
+                    VerbatimText(
+                        message.userDisplayName.ifBlank { message.userLogin.ifBlank { messageLabel } },
                         modifier = Modifier.weight(1f),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    Text(
+                    VerbatimText(
                         formatChatTimestamp(message.timestampMillis),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                Text(
-                    message.text.ifBlank { "Сообщение без текста" },
+                VerbatimText(
+                    message.text.ifBlank { emptyMessageLabel },
                     modifier = Modifier.padding(top = 3.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -406,16 +408,20 @@ internal fun MessageActionsSheet(
     if (confirmDelete) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
-            title = { Text("Удалить сообщение?") },
-            text = { Text("Сообщение @${message.userLogin} будет удалено из чата.") },
+            title = { LocalizedText("Удалить сообщение?") },
+            text = {
+                LocalizedText(
+                    "Сообщение @${verbatimArgument(message.userLogin)} будет удалено из чата.",
+                )
+            },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false
                     onDelete()
-                }) { Text("Удалить") }
+                }) { LocalizedText("Удалить") }
             },
             dismissButton = {
-                TextButton(onClick = { confirmDelete = false }) { Text("Отмена") }
+                TextButton(onClick = { confirmDelete = false }) { LocalizedText("Отмена") }
             },
         )
     }
@@ -442,7 +448,7 @@ internal fun MessageActionRow(
             tint = contentColor,
         )
         Spacer(Modifier.width(14.dp))
-        Text(
+        LocalizedText(
             title,
             style = MaterialTheme.typography.bodyLarge,
             color = contentColor,
@@ -456,6 +462,10 @@ internal fun ChatRateLimitBanner(rateLimit: ChatRateLimitState) {
     var nowMillis by remember(retryAtMillis) { mutableLongStateOf(System.currentTimeMillis()) }
     val remainingSeconds = retryAtMillis
         ?.let { retryAt -> ((retryAt - nowMillis + 999L) / 1_000L).coerceAtLeast(0L) }
+    val rateLimitMessage = localizedString(rateLimit.message.ifBlank { "Лимит отправки Twitch" })
+    val retryMessage = remainingSeconds
+        ?.takeIf { it > 0 }
+        ?.let { localizedString("повтор через $it с") }
 
     LaunchedEffect(retryAtMillis) {
         while (retryAtMillis != null && nowMillis < retryAtMillis) {
@@ -482,11 +492,8 @@ internal fun ChatRateLimitBanner(rateLimit: ChatRateLimitState) {
                 tint = MaterialTheme.colorScheme.onErrorContainer,
             )
             Spacer(Modifier.width(7.dp))
-            Text(
-                text = buildString {
-                    append(rateLimit.message.ifBlank { "Лимит отправки Twitch" })
-                    remainingSeconds?.takeIf { it > 0 }?.let { append(" · повтор через ${it} с") }
-                },
+            VerbatimText(
+                text = listOfNotNull(rateLimitMessage, retryMessage).joinToString(" · "),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onErrorContainer,
             )
@@ -510,7 +517,7 @@ internal fun OutgoingMessageStatus(
         when (state) {
             OutgoingMessageState.SENDING -> {
                 CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 1.5.dp)
-                Text("Отправляется…", style = MaterialTheme.typography.labelSmall)
+                LocalizedText("Отправляется…", style = MaterialTheme.typography.labelSmall)
             }
 
             OutgoingMessageState.SENT -> {
@@ -520,7 +527,7 @@ internal fun OutgoingMessageStatus(
                     modifier = Modifier.size(14.dp),
                     tint = MaterialTheme.colorScheme.primary,
                 )
-                Text(
+                LocalizedText(
                     "Отправлено",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -534,7 +541,7 @@ internal fun OutgoingMessageStatus(
                     modifier = Modifier.size(14.dp),
                     tint = MaterialTheme.colorScheme.error,
                 )
-                Text(
+                LocalizedText(
                     error?.takeIf(String::isNotBlank) ?: "Не удалось отправить",
                     modifier = Modifier.weight(1f, fill = false),
                     maxLines = 2,
@@ -545,7 +552,7 @@ internal fun OutgoingMessageStatus(
                 TextButton(onClick = onRetry) {
                     Icon(Icons.Default.Replay, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Повторить")
+                    LocalizedText("Повторить")
                 }
             }
 

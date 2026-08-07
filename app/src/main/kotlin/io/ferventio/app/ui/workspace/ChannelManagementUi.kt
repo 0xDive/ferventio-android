@@ -70,7 +70,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -156,22 +155,22 @@ internal fun ChannelDrawerContent(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(Modifier.weight(1f)) {
-                    Text(
+                    LocalizedText(
                         "Каналы",
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
                     )
-                    Text(
+                    LocalizedText(
                         "Порядок совпадает со свайпами. Тяни канал за значок справа.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 IconButton(onClick = onAddChannel) {
-                    Icon(Icons.Default.Add, contentDescription = "Добавить канал")
+                    Icon(Icons.Default.Add, contentDescription = localizedString("Добавить канал"))
                 }
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, contentDescription = "Закрыть список каналов")
+                    Icon(Icons.Default.Close, contentDescription = localizedString("Закрыть список каналов"))
                 }
             }
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -200,7 +199,7 @@ internal fun ChannelDrawerContent(
                 }
                 if (channels.isEmpty()) {
                     item {
-                        Text(
+                        LocalizedText(
                             "Добавленных каналов пока нет",
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 16.dp),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -251,19 +250,19 @@ internal fun ChannelSwitchRow(
                 Spacer(Modifier.width(8.dp))
             }
             Column(Modifier.weight(1f)) {
-                Text(
+                VerbatimText(
                     tabTitle?.takeIf(String::isNotBlank) ?: "#${channel.displayName}",
                     fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
                 )
                 if (!tabTitle.isNullOrBlank()) {
-                    Text(
-                        "Twitch: #${channel.displayName}",
+                    LocalizedText(
+                        "Twitch: #${verbatimArgument(channel.displayName)}",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 if ((attention?.unreadCount ?: 0) > 0) {
-                    Text(
+                    LocalizedText(
                         "${attention?.unreadCount} непрочитанных · ${attention?.mentionCount ?: 0} mentions",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary,
@@ -272,7 +271,7 @@ internal fun ChannelSwitchRow(
             }
             Icon(
                 Icons.Default.DragHandle,
-                contentDescription = "Изменить порядок канала",
+                contentDescription = localizedString("Изменить порядок канала"),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier
                     .size(38.dp)
@@ -326,13 +325,13 @@ internal fun ChannelActionsSheet(
                 .padding(start = 16.dp, end = 16.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text(
+            VerbatimText(
                 tabTitle?.takeIf(String::isNotBlank) ?: "#${channel.displayName}",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
             )
-            Text(
-                "Twitch-канал #${channel.login}",
+            LocalizedText(
+                "Twitch-канал #${verbatimArgument(channel.login)}",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -379,7 +378,7 @@ internal fun ChannelActionRow(
         ) {
             Icon(icon, contentDescription = null)
             Spacer(Modifier.width(12.dp))
-            Text(title, fontWeight = FontWeight.Medium)
+            VerbatimText(title, fontWeight = FontWeight.Medium)
         }
     }
 }
@@ -394,28 +393,28 @@ internal fun RenameChannelTabDialog(
     var title by rememberSaveable(channel.id, currentTitle) { mutableStateOf(currentTitle) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Локальное название канала") },
+        title = { LocalizedText("Локальное название канала") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = title,
                     onValueChange = { title = it.take(32) },
                     modifier = Modifier.fillMaxWidth(),
-                    label = { Text("Локальное название") },
+                    label = { LocalizedText("Локальное название") },
                     singleLine = true,
                 )
-                Text(
-                    "Оставь поле пустым, чтобы снова показывать #${channel.displayName}.",
+                LocalizedText(
+                    "Оставь поле пустым, чтобы снова показывать #${verbatimArgument(channel.displayName)}.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
         },
         confirmButton = {
-            TextButton(onClick = { onSave(title) }) { Text("Сохранить") }
+            TextButton(onClick = { onSave(title) }) { LocalizedText("Сохранить") }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Отмена") }
+            TextButton(onClick = onDismiss) { LocalizedText("Отмена") }
         },
     )
 }
@@ -428,17 +427,17 @@ internal fun DeleteChannelDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Удалить #${channel.displayName}?") },
+        title = { LocalizedText("Удалить #${verbatimArgument(channel.displayName)}?") },
         text = {
-            Text("Канал исчезнет из открытых чатов. Локальная история останется на устройстве и восстановится при повторном добавлении канала.")
+            LocalizedText("Канал исчезнет из открытых чатов. Локальная история останется на устройстве и восстановится при повторном добавлении канала.")
         },
         confirmButton = {
             TextButton(onClick = onConfirm) {
-                Text("Удалить", color = MaterialTheme.colorScheme.error)
+                LocalizedText("Удалить", color = MaterialTheme.colorScheme.error)
             }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Отмена") }
+            TextButton(onClick = onDismiss) { LocalizedText("Отмена") }
         },
     )
 }

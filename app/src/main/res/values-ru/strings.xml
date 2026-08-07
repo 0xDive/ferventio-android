@@ -92,4 +92,30 @@
     <string name="ferventio_duration_minutes_format">%1$d мин</string>
     <string name="ferventio_duration_seconds_format">%1$d с</string>
     <string name="ferventio_remove_timeout_preset_format">Удалить интервал %1$s</string>
+
+    <string name="ferventio_auto_scroll_new_messages">Автопрокрутка новых сообщений</string>
+    <string name="ferventio_auto_scroll_new_messages_summary">Оставаться у актуального сообщения, пока вы не прокрутите чат. Для возврата используйте кнопку перехода к актуальному чату.</string>
+    <string name="ferventio_recent_messages_section">Последние сообщения</string>
+    <string name="ferventio_recent_messages_enabled">Загружать сообщения до открытия чата</string>
+    <string name="ferventio_recent_messages_enabled_summary">При открытии канала запрашивать до 100 последних публичных сообщений у стороннего сервиса Recent Messages.</string>
+    <string name="ferventio_recent_messages_privacy_note">Сервис временно хранит публичные сообщения Twitch и получает ваш IP-адрес при запросе. Функция выключена по умолчанию.</string>
+    <string name="ferventio_recent_messages_service_info">Открыть информацию о сервисе</string>
+    <string name="ferventio_local_history_section">История на устройстве</string>
+    <string name="ferventio_local_history_save_messages">Сохранять сообщения</string>
+    <string name="ferventio_local_history_device_only">История хранится только на этом устройстве.</string>
+    <string name="ferventio_local_history_restoring">Восстанавливаем сообщения…</string>
+    <string name="ferventio_local_history_restored_count">Восстановлено сообщений: %1$d</string>
+    <string name="ferventio_local_history_messages_per_channel">Сообщений на канал</string>
+    <string name="ferventio_local_history_retention">Срок хранения</string>
+    <string name="ferventio_local_history_unlimited">Без ограничения</string>
+    <plurals name="ferventio_local_history_retention_days">
+        <item quantity="one">%1$d день</item>
+        <item quantity="few">%1$d дня</item>
+        <item quantity="many">%1$d дней</item>
+        <item quantity="other">%1$d дня</item>
+    </plurals>
+    <string name="ferventio_local_history_max_database_size">Максимальный размер базы</string>
+    <string name="ferventio_local_history_size_megabytes">%1$d МБ</string>
+    <string name="ferventio_local_history_clear">Очистить локальную историю</string>
+    <string name="ferventio_jump_to_live_chat">К актуальному чату</string>
 </resources>

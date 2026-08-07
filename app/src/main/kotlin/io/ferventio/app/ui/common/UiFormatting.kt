@@ -103,7 +103,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -246,7 +245,7 @@ internal fun FerventioMark() {
         tonalElevation = 8.dp,
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Text(
+            VerbatimText(
                 text = "F",
                 style = MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.Black,

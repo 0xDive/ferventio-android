@@ -47,7 +47,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -114,10 +113,10 @@ internal fun ModerationScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Модерация", fontWeight = FontWeight.Bold) },
+                title = { LocalizedText("Модерация", fontWeight = FontWeight.Bold) },
                 actions = {
                     IconButton(onClick = { controller.refreshModerationDashboard(selectedChannelId) }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Обновить")
+                        Icon(Icons.Default.Refresh, contentDescription = localizedString("Обновить"))
                     }
                 },
             )
@@ -151,7 +150,7 @@ internal fun ModerationScreen(
                     FilterChip(
                         selected = item == panel,
                         onClick = { panel = item },
-                        label = { Text(item.title) },
+                        label = { LocalizedText(item.title) },
                     )
                 }
             }
@@ -195,7 +194,7 @@ internal fun ModerationScreen(
             }
 
             state.moderation.errorMessage?.takeIf(String::isNotBlank)?.let { error ->
-                Text(
+                LocalizedText(
                     text = error,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
@@ -214,6 +213,8 @@ internal fun AutoModInlineReviewCard(
     onDeny: () -> Unit,
 ) {
     val allowColor = if (isSystemInDarkTheme()) Color(0xFF39F23F) else Color(0xFF167D20)
+    val localizedReason = localizedString(autoModInlineReason(message))
+    val publishExplanation = localizedString("Разрешение опубликует сообщение в чате.")
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shape = RectangleShape,
@@ -232,7 +233,7 @@ internal fun AutoModInlineReviewCard(
                     modifier = Modifier.size(17.dp),
                 )
                 Spacer(Modifier.width(5.dp))
-                Text(
+                VerbatimText(
                     text = buildAnnotatedString {
                         withStyle(
                             SpanStyle(
@@ -240,13 +241,14 @@ internal fun AutoModInlineReviewCard(
                                 fontWeight = FontWeight.Bold,
                             ),
                         ) { append("AutoMod: ") }
-                        append(autoModInlineReason(message))
-                        append(" Разрешение опубликует сообщение в чате.")
+                        append(localizedReason)
+                        append(" ")
+                        append(publishExplanation)
                     },
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.weight(1f),
                 )
-                Text(
+                LocalizedText(
                     "Разрешить",
                     color = allowColor,
                     fontWeight = FontWeight.Bold,
@@ -255,7 +257,7 @@ internal fun AutoModInlineReviewCard(
                         .clickable(onClick = onApprove)
                         .padding(PaddingValues(horizontal = 5.dp, vertical = 4.dp)),
                 )
-                Text(
+                LocalizedText(
                     "Отклонить",
                     color = MaterialTheme.colorScheme.error,
                     fontWeight = FontWeight.Bold,
@@ -266,19 +268,19 @@ internal fun AutoModInlineReviewCard(
                 )
             }
             Row(verticalAlignment = Alignment.Top) {
-                Text(
+                VerbatimText(
                     formatAutoModTime(message.heldAt),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
                 )
                 Spacer(Modifier.width(5.dp))
-                Text(
+                VerbatimText(
                     "${message.userName.ifBlank { message.userLogin }}: ",
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.error,
                 )
-                Text(
+                VerbatimText(
                     text = autoModAnnotatedText(message),
                     style = MaterialTheme.typography.bodySmall,
                     modifier = Modifier.weight(1f),
@@ -314,7 +316,7 @@ internal fun ChatModesBottomSheet(
                 .fillMaxHeight(0.86f)
                 .padding(horizontal = 14.dp),
         ) {
-            Text(
+            LocalizedText(
                 "Режимы чата",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
@@ -329,7 +331,7 @@ internal fun ChatModesBottomSheet(
                 modifier = Modifier.weight(1f),
             )
             state.errorMessage?.takeIf(String::isNotBlank)?.let { error ->
-                Text(
+                LocalizedText(
                     error,
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
@@ -366,7 +368,7 @@ internal fun ChatUsersBottomSheet(
                 .fillMaxHeight(0.9f)
                 .padding(horizontal = 14.dp),
         ) {
-            Text(
+            LocalizedText(
                 "Пользователи",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
@@ -388,7 +390,7 @@ internal fun ChatUsersBottomSheet(
                 modifier = Modifier.weight(1f),
             )
             state.errorMessage?.takeIf(String::isNotBlank)?.let { error ->
-                Text(
+                LocalizedText(
                     error,
                     color = MaterialTheme.colorScheme.error,
                     style = MaterialTheme.typography.bodySmall,
@@ -396,7 +398,7 @@ internal fun ChatUsersBottomSheet(
                 )
             }
             if (canModerate && !state.chattersAreComplete && state.isRefreshingPeople) {
-                Text(
+                LocalizedText(
                     "Получаем полный список Twitch…",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -418,8 +420,8 @@ private fun EmptyModerationState() {
                 modifier = Modifier.size(40.dp),
             )
             Spacer(Modifier.height(10.dp))
-            Text("Нет добавленных каналов, где доступна модерация")
-            Text(
+            LocalizedText("Нет добавленных каналов, где доступна модерация")
+            LocalizedText(
                 "Права обновляются после повторного входа и подключения EventSub.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -441,13 +443,13 @@ private fun ModerationChannelPicker(
             onClick = { expanded = true },
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text("#${selected.displayName}", modifier = Modifier.weight(1f))
+            VerbatimText("#${selected.displayName}", modifier = Modifier.weight(1f))
             Icon(Icons.Default.ArrowDropDown, contentDescription = null)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             channels.forEach { channel ->
                 DropdownMenuItem(
-                    text = { Text("#${channel.displayName}") },
+                    text = { VerbatimText("#${channel.displayName}") },
                     onClick = {
                         expanded = false
                         onSelected(channel.id)
@@ -483,7 +485,7 @@ private fun AutoModPanel(
         ) {
             if (held.isEmpty()) {
                 item {
-                    Text(
+                    LocalizedText(
                         "Очередь AutoMod пуста",
                         style = MaterialTheme.typography.bodyLarge,
                         modifier = Modifier.padding(vertical = 24.dp),
@@ -511,16 +513,16 @@ private fun AutoModPanel(
     pendingDeny?.let { message ->
         AlertDialog(
             onDismissRequest = { pendingDeny = null },
-            title = { Text("Отклонить сообщение?") },
-            text = { Text("Сообщение @${message.userLogin} будет удалено из очереди AutoMod.") },
+            title = { LocalizedText("Отклонить сообщение?") },
+            text = { LocalizedText("Сообщение @${verbatimArgument(message.userLogin)} будет удалено из очереди AutoMod.") },
             confirmButton = {
                 Button(onClick = {
                     pendingDeny = null
                     onDecision(message.messageId, false)
-                }) { Text("Отклонить") }
+                }) { LocalizedText("Отклонить") }
             },
             dismissButton = {
-                TextButton(onClick = { pendingDeny = null }) { Text("Отмена") }
+                TextButton(onClick = { pendingDeny = null }) { LocalizedText("Отмена") }
             },
         )
     }
@@ -543,12 +545,12 @@ private fun AutoModMessageCard(
     ) {
         Column(Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
+                VerbatimText(
                     "@${message.userLogin}",
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.weight(1f),
                 )
-                Text(
+                LocalizedText(
                     autoModStatusText(message.status),
                     style = MaterialTheme.typography.labelMedium,
                     color = when (message.status) {
@@ -558,18 +560,20 @@ private fun AutoModMessageCard(
                     },
                 )
             }
-            Text(
+            VerbatimText(
                 text = autoModAnnotatedText(message),
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.padding(vertical = 8.dp),
             )
+            val categoryLabel = localizedString("категория")
+            val levelLabel = localizedString("уровень")
             val details = listOfNotNull(
                 message.reason?.takeIf(String::isNotBlank),
-                message.category?.takeIf(String::isNotBlank)?.let { "категория: $it" },
-                message.level?.let { "уровень: $it" },
+                message.category?.takeIf(String::isNotBlank)?.let { "$categoryLabel: $it" },
+                message.level?.let { "$levelLabel: $it" },
             ).joinToString(" · ")
             if (details.isNotBlank()) {
-                Text(
+                VerbatimText(
                     details,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -585,13 +589,13 @@ private fun AutoModMessageCard(
                     OutlinedButton(onClick = onDeny) {
                         Icon(Icons.Default.Close, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
-                        Text("Отклонить")
+                        LocalizedText("Отклонить")
                     }
                     Spacer(Modifier.width(8.dp))
                     Button(onClick = onApprove) {
                         Icon(Icons.Default.Check, contentDescription = null)
                         Spacer(Modifier.width(6.dp))
-                        Text("Разрешить")
+                        LocalizedText("Разрешить")
                     }
                 }
             }
@@ -670,14 +674,14 @@ private fun ChatModesPanel(
                 onUpdate(channelId, null, null, null, null, null, null, enabled)
             }
             HorizontalDivider(Modifier.padding(vertical = 14.dp))
-            Text("Опасные действия", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
+            LocalizedText("Опасные действия", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.error)
             OutlinedButton(
                 onClick = { confirmClear = true },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 8.dp),
             ) {
-                Text("Очистить весь чат", color = MaterialTheme.colorScheme.error)
+                LocalizedText("Очистить весь чат", color = MaterialTheme.colorScheme.error)
             }
         }
     }
@@ -685,15 +689,15 @@ private fun ChatModesPanel(
     if (confirmClear) {
         AlertDialog(
             onDismissRequest = { confirmClear = false },
-            title = { Text("Очистить чат?") },
-            text = { Text("Все сообщения в текущем чате будут удалены. Это действие нельзя отменить.") },
+            title = { LocalizedText("Очистить чат?") },
+            text = { LocalizedText("Все сообщения в текущем чате будут удалены. Это действие нельзя отменить.") },
             confirmButton = {
                 Button(onClick = {
                     confirmClear = false
                     onClear(channelId)
-                }) { Text("Очистить") }
+                }) { LocalizedText("Очистить") }
             },
-            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("Отмена") } },
+            dismissButton = { TextButton(onClick = { confirmClear = false }) { LocalizedText("Отмена") } },
         )
     }
 }
@@ -724,12 +728,12 @@ private fun PeoplePanel(
                 FilterChip(
                     selected = selectedTab == tab,
                     onClick = { onTabSelected(tab) },
-                    label = { Text(peopleTabTitle(tab)) },
+                    label = { LocalizedText(peopleTabTitle(tab)) },
                 )
             }
         }
         notice?.takeIf(String::isNotBlank)?.let { message ->
-            Text(
+            LocalizedText(
                 message,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -769,8 +773,8 @@ private fun PeoplePanel(
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Column(Modifier.weight(1f)) {
-                                Text(user.displayName, fontWeight = FontWeight.SemiBold)
-                                Text("@${user.login}", style = MaterialTheme.typography.bodySmall)
+                                VerbatimText(user.displayName, fontWeight = FontWeight.SemiBold)
+                                VerbatimText("@${user.login}", style = MaterialTheme.typography.bodySmall)
                             }
                         }
                         HorizontalDivider()
@@ -783,15 +787,15 @@ private fun PeoplePanel(
     pendingUnban?.let { user ->
         AlertDialog(
             onDismissRequest = { pendingUnban = null },
-            title = { Text("Разблокировать @${user.login}?") },
-            text = { Text("Ban или активный timeout будет снят немедленно.") },
+            title = { LocalizedText("Разблокировать @${verbatimArgument(user.login)}?") },
+            text = { LocalizedText("Ban или активный timeout будет снят немедленно.") },
             confirmButton = {
                 Button(onClick = {
                     pendingUnban = null
                     onUnban(user)
-                }) { Text("Разблокировать") }
+                }) { LocalizedText("Разблокировать") }
             },
-            dismissButton = { TextButton(onClick = { pendingUnban = null }) { Text("Отмена") } },
+            dismissButton = { TextButton(onClick = { pendingUnban = null }) { LocalizedText("Отмена") } },
         )
     }
 }
@@ -810,18 +814,23 @@ private fun BannedUserRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f)) {
-            Text(user.displayName, fontWeight = FontWeight.SemiBold)
-            Text(
-                buildString {
-                    append("@${user.login}")
-                    append(if (user.isPermanent) " · ban" else " · timeout до ${formatInstant(user.expiresAt)}")
-                    user.reason?.takeIf(String::isNotBlank)?.let { append(" · $it") }
-                },
+            VerbatimText(user.displayName, fontWeight = FontWeight.SemiBold)
+            val restriction = if (user.isPermanent) {
+                "ban"
+            } else {
+                localizedString("timeout до ${formatInstant(user.expiresAt)}")
+            }
+            VerbatimText(
+                listOfNotNull(
+                    "@${user.login}",
+                    restriction,
+                    user.reason?.takeIf(String::isNotBlank),
+                ).joinToString(" · "),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        TextButton(onClick = onUnban) { Text("Unban") }
+        TextButton(onClick = onUnban) { LocalizedText("Unban") }
     }
     HorizontalDivider()
 }
@@ -840,7 +849,7 @@ private fun SettingSwitchRow(
             .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(title, modifier = Modifier.weight(1f))
+        LocalizedText(title, modifier = Modifier.weight(1f))
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
@@ -866,18 +875,18 @@ private fun NumberSetting(
                 text = input.filter(Char::isDigit).take(6)
                 text.toIntOrNull()?.coerceIn(range)?.let(onValueChanged)
             },
-            label = { Text(label) },
+            label = { LocalizedText(label) },
             modifier = Modifier.weight(1f),
             singleLine = true,
         )
         Spacer(Modifier.width(8.dp))
-        Button(onClick = onApply) { Text("Применить") }
+        Button(onClick = onApply) { LocalizedText("Применить") }
     }
 }
 
 @Composable
 private fun SectionTitle(text: String) {
-    Text(
+    LocalizedText(
         text,
         style = MaterialTheme.typography.titleSmall,
         fontWeight = FontWeight.Bold,
@@ -887,7 +896,7 @@ private fun SectionTitle(text: String) {
 
 @Composable
 private fun EmptyListText(text: String) {
-    Text(
+    LocalizedText(
         text,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(vertical = 24.dp),

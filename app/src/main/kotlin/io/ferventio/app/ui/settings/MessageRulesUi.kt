@@ -34,7 +34,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -66,14 +65,13 @@ internal fun HighlightRulesSettings(
     var creating by remember { mutableStateOf(false) }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(
-            "Highlights проверяются один раз при получении сообщения. Правила могут выделять строку, " +
-                "проигрывать звук, показывать Android-уведомление и добавлять запись в общий список упоминаний.",
+        LocalizedText(
+            "Highlights проверяются один раз при получении сообщения. Правила могут выделять строку, проигрывать звук, показывать Android-уведомление и добавлять запись в общий список упоминаний.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (state.highlightRules.isEmpty()) {
-            Text("Правил пока нет", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            LocalizedText("Правил пока нет", color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
             state.highlightRules.forEachIndexed { index, rule ->
                 RuleCard(
@@ -91,7 +89,7 @@ internal fun HighlightRulesSettings(
         Button(onClick = { creating = true }, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.Default.Add, contentDescription = null)
             Spacer(Modifier.width(6.dp))
-            Text("Добавить highlight")
+            LocalizedText("Добавить highlight")
         }
         OutlinedButton(
             onClick = controller::addHighlightsFilteredSplit,
@@ -100,11 +98,10 @@ internal fun HighlightRulesSettings(
         ) {
             Icon(Icons.Default.FilterAlt, contentDescription = null)
             Spacer(Modifier.width(6.dp))
-            Text("Добавить filtered split Highlights")
+            LocalizedText("Добавить filtered split Highlights")
         }
-        Text(
-            "Filtered split показывает правила, у которых включён соответствующий переключатель. " +
-                "На телефоне он появится в текущей вкладке workspace, если свободен split.",
+        LocalizedText(
+            "Filtered split показывает правила, у которых включён соответствующий переключатель. На телефоне он появится в текущей вкладке workspace, если свободен split.",
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -135,14 +132,13 @@ internal fun IgnoreRulesSettings(
     var creating by remember { mutableStateOf(false) }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text(
-            "Ignore применяется раньше highlights: полностью скрытое или свернутое сообщение не создаёт звук, " +
-                "уведомление и новую запись Mentions.",
+        LocalizedText(
+            "Ignore применяется раньше highlights: полностью скрытое или свернутое сообщение не создаёт звук, уведомление и новую запись Mentions.",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (state.ignoreRules.isEmpty()) {
-            Text("Правил пока нет", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            LocalizedText("Правил пока нет", color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
             state.ignoreRules.forEachIndexed { index, rule ->
                 RuleCard(
@@ -160,7 +156,7 @@ internal fun IgnoreRulesSettings(
         Button(onClick = { creating = true }, modifier = Modifier.fillMaxWidth()) {
             Icon(Icons.Default.Add, contentDescription = null)
             Spacer(Modifier.width(6.dp))
-            Text("Добавить ignore")
+            LocalizedText("Добавить ignore")
         }
     }
 
@@ -207,8 +203,8 @@ private fun RuleCard(
                 .weight(1f)
                 .clickable(onClick = onEdit),
         ) {
-            Text(title, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(
+            LocalizedText(title, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            LocalizedText(
                 summary,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -217,8 +213,8 @@ private fun RuleCard(
             )
         }
         Switch(checked = enabled, onCheckedChange = onEnabledChange)
-        IconButton(onClick = onEdit) { Icon(Icons.Default.Edit, contentDescription = "Изменить") }
-        IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, contentDescription = "Удалить") }
+        IconButton(onClick = onEdit) { Icon(Icons.Default.Edit, contentDescription = localizedString("Изменить")) }
+        IconButton(onClick = onDelete) { Icon(Icons.Default.Delete, contentDescription = localizedString("Удалить")) }
     }
 }
 
@@ -247,18 +243,18 @@ private fun HighlightRuleDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (initial == null) "Новый highlight" else "Изменить highlight") },
+        title = { LocalizedText(if (initial == null) "Новый highlight" else "Изменить highlight") },
         text = {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 item {
                     Box {
                         OutlinedButton(onClick = { typeMenu = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text(highlightTypeLabel(type))
+                            LocalizedText(highlightTypeLabel(type))
                         }
                         DropdownMenu(expanded = typeMenu, onDismissRequest = { typeMenu = false }) {
                             HighlightRuleType.entries.forEach { candidate ->
                                 DropdownMenuItem(
-                                    text = { Text(highlightTypeLabel(candidate)) },
+                                    text = { LocalizedText(highlightTypeLabel(candidate)) },
                                     onClick = {
                                         type = candidate
                                         typeMenu = false
@@ -274,15 +270,15 @@ private fun HighlightRuleDialog(
                             value = pattern,
                             onValueChange = { pattern = it.take(240) },
                             modifier = Modifier.fillMaxWidth(),
-                            label = { Text(highlightPatternLabel(type)) },
-                            supportingText = if (!regexValid) ({ Text("Некорректное регулярное выражение") }) else null,
+                            label = { LocalizedText(highlightPatternLabel(type)) },
+                            supportingText = if (!regexValid) ({ LocalizedText("Некорректное регулярное выражение") }) else null,
                             isError = !regexValid,
                             singleLine = type != HighlightRuleType.REGEX,
                         )
                     }
                 }
                 item {
-                    Text("Цвет строки", fontWeight = FontWeight.SemiBold)
+                    LocalizedText("Цвет строки", fontWeight = FontWeight.SemiBold)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                         HIGHLIGHT_COLORS.forEach { candidate ->
                             Surface(
@@ -307,7 +303,7 @@ private fun HighlightRuleDialog(
                             parseArgb(value)?.let { colorArgb = it }
                         },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text("ARGB, например #FFFFC857") },
+                        label = { LocalizedText("ARGB, например #FFFFC857") },
                         singleLine = true,
                     )
                 }
@@ -337,9 +333,9 @@ private fun HighlightRuleDialog(
                         ),
                     )
                 },
-            ) { Text("Сохранить") }
+            ) { LocalizedText("Сохранить") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        dismissButton = { TextButton(onClick = onDismiss) { LocalizedText("Отмена") } },
     )
 }
 
@@ -362,18 +358,18 @@ private fun IgnoreRuleDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (initial == null) "Новое ignore-правило" else "Изменить ignore") },
+        title = { LocalizedText(if (initial == null) "Новое ignore-правило" else "Изменить ignore") },
         text = {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 item {
                     Box {
                         OutlinedButton(onClick = { typeMenu = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text(ignoreTypeLabel(type))
+                            LocalizedText(ignoreTypeLabel(type))
                         }
                         DropdownMenu(expanded = typeMenu, onDismissRequest = { typeMenu = false }) {
                             IgnoreRuleType.entries.forEach { candidate ->
                                 DropdownMenuItem(
-                                    text = { Text(ignoreTypeLabel(candidate)) },
+                                    text = { LocalizedText(ignoreTypeLabel(candidate)) },
                                     onClick = {
                                         type = candidate
                                         typeMenu = false
@@ -388,20 +384,20 @@ private fun IgnoreRuleDialog(
                         value = pattern,
                         onValueChange = { pattern = it.take(240) },
                         modifier = Modifier.fillMaxWidth(),
-                        label = { Text(ignorePatternLabel(type)) },
-                        supportingText = if (!regexValid) ({ Text("Некорректное регулярное выражение") }) else null,
+                        label = { LocalizedText(ignorePatternLabel(type)) },
+                        supportingText = if (!regexValid) ({ LocalizedText("Некорректное регулярное выражение") }) else null,
                         isError = !regexValid,
                         singleLine = type != IgnoreRuleType.REGEX,
                     )
                 }
                 item {
-                    Text("Отображение", fontWeight = FontWeight.SemiBold)
+                    LocalizedText("Отображение", fontWeight = FontWeight.SemiBold)
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(7.dp)) {
                         IgnoreDisplayMode.entries.forEach { mode ->
                             FilterChip(
                                 selected = displayMode == mode,
                                 onClick = { displayMode = mode },
-                                label = { Text(ignoreModeLabel(mode)) },
+                                label = { LocalizedText(ignoreModeLabel(mode)) },
                             )
                         }
                     }
@@ -424,9 +420,9 @@ private fun IgnoreRuleDialog(
                         ),
                     )
                 },
-            ) { Text("Сохранить") }
+            ) { LocalizedText("Сохранить") }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        dismissButton = { TextButton(onClick = onDismiss) { LocalizedText("Отмена") } },
     )
 }
 
@@ -442,7 +438,7 @@ private fun RuleSwitch(
             .clickable { onCheckedChange(!checked) },
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(title, modifier = Modifier.weight(1f))
+        LocalizedText(title, modifier = Modifier.weight(1f))
         Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }

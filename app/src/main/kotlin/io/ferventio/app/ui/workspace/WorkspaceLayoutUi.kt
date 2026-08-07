@@ -70,7 +70,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -145,7 +144,7 @@ internal fun WorkspaceTabStrip(
                     hideKeyboard()
                     controller.selectWorkspaceTab(tab.id)
                 },
-                label = { Text(tab.title) },
+                label = { VerbatimText(tab.title) },
             )
         }
         item {
@@ -153,7 +152,7 @@ internal fun WorkspaceTabStrip(
                 hideKeyboard()
                 controller.addWorkspaceTab()
             }) {
-                Icon(Icons.Default.Add, contentDescription = "Новая вкладка")
+                Icon(Icons.Default.Add, contentDescription = localizedString("Новая вкладка"))
             }
         }
     }
@@ -329,7 +328,7 @@ internal fun PhoneChannelTabs(
                         )
                         Spacer(Modifier.width(4.dp))
                     }
-                    Text(
+                    VerbatimText(
                         text = tabTitles[channel.id]?.takeIf(String::isNotBlank) ?: "#${channel.displayName}",
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -337,7 +336,7 @@ internal fun PhoneChannelTabs(
                     )
                     if ((channelAttention?.mentionCount ?: 0) > 0) {
                         Spacer(Modifier.width(5.dp))
-                        Badge { Text(compactCount(channelAttention?.mentionCount ?: 0)) }
+                        Badge { VerbatimText(compactCount(channelAttention?.mentionCount ?: 0)) }
                     } else if ((channelAttention?.unreadCount ?: 0) > 0) {
                         Spacer(Modifier.width(6.dp))
                         Surface(
@@ -564,11 +563,19 @@ internal fun SplitPane(
                         hideKeyboard()
                         showChannels = true
                     }) {
-                        Text(
-                            channel?.let { "#${it.displayName}" } ?: "Выбрать канал",
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                        if (channel == null) {
+                            LocalizedText(
+                                "Выбрать канал",
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        } else {
+                            VerbatimText(
+                                "#${channel.displayName}",
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
                     DropdownMenu(
                         expanded = showChannels,
@@ -576,7 +583,7 @@ internal fun SplitPane(
                     ) {
                         state.channels.forEach { candidate ->
                             DropdownMenuItem(
-                                text = { Text("#${candidate.displayName}") },
+                                text = { VerbatimText("#${candidate.displayName}") },
                                 onClick = {
                                     hideKeyboard()
                                     controller.setChatSplitChannel(split.id, candidate.id)
@@ -588,27 +595,27 @@ internal fun SplitPane(
                 }
                 Spacer(Modifier.weight(1f))
                 if ((attention?.mentionCount ?: 0) > 0) {
-                    Badge { Text(compactCount(attention?.mentionCount ?: 0)) }
+                    Badge { VerbatimText(compactCount(attention?.mentionCount ?: 0)) }
                     Spacer(Modifier.width(4.dp))
                 }
                 IconButton(onClick = {
                     hideKeyboard()
                     showFilterEditor = true
                 }) {
-                    Icon(Icons.Default.FilterAlt, contentDescription = "Фильтр split")
+                    Icon(Icons.Default.FilterAlt, contentDescription = localizedString("Фильтр split"))
                 }
                 if (splitCount > 1) {
                     IconButton(onClick = {
                         hideKeyboard()
                         controller.removeChatSplit(split.id)
                     }) {
-                        Icon(Icons.Default.Close, contentDescription = "Закрыть split")
+                        Icon(Icons.Default.Close, contentDescription = localizedString("Закрыть split"))
                     }
                 }
             }
             if (channel == null) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Выбери канал для split")
+                    LocalizedText("Выбери канал для split")
                 }
             } else {
                 key(split.id, channel.id) {

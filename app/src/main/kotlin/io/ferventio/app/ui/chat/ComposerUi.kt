@@ -103,7 +103,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -243,9 +242,15 @@ internal fun EmoteDetailsDialog(
     onDismiss: () -> Unit,
 ) {
     val uriHandler = LocalUriHandler.current
+    val animationLabel = localizedString(if (info.animated) "Анимированный" else "Статический")
+    val layerLabel = if (info.layerCount > 1) {
+        localizedString("слоёв: ${info.layerCount}")
+    } else {
+        null
+    }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(info.code) },
+        title = { VerbatimText(info.code) },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -258,24 +263,24 @@ internal fun EmoteDetailsDialog(
                     modifier = Modifier.size(148.dp),
                 )
                 Column(Modifier.fillMaxWidth()) {
-                    Text("Провайдер: ${info.provider}")
+                    LocalizedText("Провайдер: ${info.provider}")
                     info.scope?.let { scope ->
-                        Text(
+                        LocalizedText(
                             "Каталог: ${if (scope == EmoteScope.CHANNEL) "канальный" else "глобальный"}",
                             style = MaterialTheme.typography.bodySmall,
                         )
                     }
                     info.ownerName?.takeIf(String::isNotBlank)?.let { owner ->
-                        Text("Автор: $owner", style = MaterialTheme.typography.bodySmall)
+                        LocalizedText("Автор: $owner", style = MaterialTheme.typography.bodySmall)
                     }
-                    Text("ID: ${info.id}", style = MaterialTheme.typography.bodySmall)
-                    Text(
-                        buildString {
-                            append(if (info.animated) "Анимированный" else "Статический")
-                            info.imageType?.takeIf(String::isNotBlank)?.let { append(" · $it") }
-                            if (info.zeroWidth) append(" · zero-width/composite")
-                            if (info.layerCount > 1) append(" · слоёв: ${info.layerCount}")
-                        },
+                    LocalizedText("ID: ${info.id}", style = MaterialTheme.typography.bodySmall)
+                    VerbatimText(
+                        listOfNotNull(
+                            animationLabel,
+                            info.imageType?.takeIf(String::isNotBlank),
+                            "zero-width/composite".takeIf { info.zeroWidth },
+                            layerLabel,
+                        ).joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -283,14 +288,14 @@ internal fun EmoteDetailsDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Закрыть") }
+            TextButton(onClick = onDismiss) { LocalizedText("Закрыть") }
         },
         dismissButton = {
             info.sourceUrl?.takeIf(String::isNotBlank)?.let { url ->
                 TextButton(onClick = {
                     runCatching { uriHandler.openUri(url) }
                 }) {
-                    Text("Страница эмоута")
+                    LocalizedText("Страница эмоута")
                 }
             }
         },

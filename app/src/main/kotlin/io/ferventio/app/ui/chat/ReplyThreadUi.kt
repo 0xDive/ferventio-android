@@ -103,7 +103,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -270,20 +269,20 @@ internal fun ReplyThreadSheet(
                 Icon(Icons.Default.Forum, contentDescription = null)
                 Spacer(Modifier.width(8.dp))
                 Column(Modifier.weight(1f)) {
-                    Text("Ветка ответов", fontWeight = FontWeight.Bold)
-                    Text(
+                    LocalizedText("Ветка ответов", fontWeight = FontWeight.Bold)
+                    LocalizedText(
                         "${threadMessages.size} сообщ.",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 IconButton(onClick = onDismiss) {
-                    Icon(Icons.Default.Close, contentDescription = "Закрыть")
+                    Icon(Icons.Default.Close, contentDescription = localizedString("Закрыть"))
                 }
             }
             HorizontalDivider()
             if (threadMessages.isEmpty()) {
-                Text(
+                LocalizedText(
                     "Исходное сообщение отсутствует в локальной истории.",
                     modifier = Modifier.padding(16.dp),
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -314,20 +313,20 @@ internal fun ReplyThreadSheet(
                             ) {
                                 Column(Modifier.weight(1f)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Text(
+                                        VerbatimText(
                                             message.userDisplayName,
                                             fontWeight = FontWeight.SemiBold,
                                             maxLines = 1,
                                             overflow = TextOverflow.Ellipsis,
                                         )
                                         Spacer(Modifier.width(6.dp))
-                                        Text(
+                                        VerbatimText(
                                             formatChatTimestamp(message.timestampMillis),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                         )
                                     }
-                                    Text(
+                                    VerbatimText(
                                         message.text,
                                         style = MaterialTheme.typography.bodyMedium,
                                         maxLines = 4,
@@ -335,7 +334,7 @@ internal fun ReplyThreadSheet(
                                     )
                                 }
                                 IconButton(onClick = { onReply(message) }, modifier = Modifier.size(36.dp)) {
-                                    Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = "Ответить", modifier = Modifier.size(18.dp))
+                                    Icon(Icons.AutoMirrored.Filled.Reply, contentDescription = localizedString("Ответить"), modifier = Modifier.size(18.dp))
                                 }
                             }
                         }

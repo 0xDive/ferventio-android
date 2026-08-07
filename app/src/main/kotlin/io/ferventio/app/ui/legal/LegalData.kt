@@ -39,13 +39,9 @@ internal object FerventioLegalContent {
             "контакт, указанный на странице распространения этой сборки"
         }
         val crashParagraph = if (localCrashReporting) {
-            "FOSS-сборка не отправляет crash reports автоматически. Redacted fatal и non-fatal отчёты " +
-                "хранятся только во внутреннем каталоге приложения: максимум 20 отчётов за 30 дней. " +
-                "Экспорт выполняется только по команде пользователя через системный picker."
+            "FOSS-сборка не отправляет crash reports автоматически. Redacted fatal и non-fatal отчёты хранятся только во внутреннем каталоге приложения: максимум 20 отчётов за 30 дней. Экспорт выполняется только по команде пользователя через системный picker."
         } else {
-            "Production Play-сборка может передавать в Firebase Crashlytics sanitized сведения о сбоях, " +
-                "версию приложения, тип сборки, push transport и технические данные устройства/ОС. " +
-                "Debug, benchmark и FOSS-сборки автоматическую отправку Crashlytics не включают."
+            "Production Play-сборка может передавать в Firebase Crashlytics sanitized сведения о сбоях, версию приложения, тип сборки, push transport и технические данные устройства/ОС. Debug, benchmark и FOSS-сборки автоматическую отправку Crashlytics не включают."
         }
         val pushParagraph = when (pushTransport) {
             "fcm" -> "Для push-уведомлений Play-сборка регистрирует FCM token и installation ID на настроенном Ferventio Server."
@@ -58,22 +54,16 @@ internal object FerventioLegalContent {
                 id = "scope",
                 title = "1. Кто обрабатывает данные",
                 paragraphs = listOf(
-                    "Эта политика относится к Android-приложению Ferventio. Оператор сборки: $resolvedOperator. " +
-                        "Контакт для privacy-запросов: $resolvedContact.",
-                    "Ferventio не создаёт отдельный публичный профиль. При входе установка связывается с Twitch-аккаунтом " +
-                        "через выбранный пользователем Ferventio Server.",
+                    "Эта политика относится к Android-приложению Ferventio. Оператор сборки: $resolvedOperator. Контакт для privacy-запросов: $resolvedContact.",
+                    "Ferventio не создаёт отдельный публичный профиль. При входе установка связывается с Twitch-аккаунтом через выбранный пользователем Ferventio Server.",
                 ),
             ),
             PrivacyPolicySection(
                 id = "local",
                 title = "2. Данные на устройстве",
                 paragraphs = listOf(
-                    "Локально могут храниться список каналов, настройки, drafts, упоминания, правила фильтрации, " +
-                        "позиции прокрутки, кэш изображений и история чата с авторами, badges, fragments и moderation state.",
-                    "OAuth tokens не входят в пользовательский backup. Непрозрачная серверная сессия, device secret и " +
-                        "текущий Twitch access token шифруются ключом Android Keystore; Twitch refresh token хранится только " +
-                        "на настроенном сервере. Сохранённый access token позволяет продолжить прямую работу с Twitch при " +
-                        "временной недоступности сервера до истечения или отзыва токена Twitch.",
+                    "Локально могут храниться список каналов, настройки, drafts, упоминания, правила фильтрации, позиции прокрутки, кэш изображений и история чата с авторами, badges, fragments и moderation state.",
+                    "OAuth tokens не входят в пользовательский backup. Непрозрачная серверная сессия, device secret и текущий Twitch access token шифруются ключом Android Keystore; Twitch refresh token хранится только на настроенном сервере. Сохранённый access token позволяет продолжить прямую работу с Twitch при временной недоступности сервера до истечения или отзыва токена Twitch.",
                     crashParagraph,
                 ),
             ),
@@ -81,14 +71,10 @@ internal object FerventioLegalContent {
                 id = "network",
                 title = "3. Сетевые данные и назначение",
                 paragraphs = listOf(
-                    "Для чтения чата, отправки сообщений, модерации и metadata приложение обращается к Twitch IRC, " +
-                        "EventSub и Helix. Twitch получает обычные сетевые данные запроса, включая IP-адрес.",
-                    "Для emotes, badges и дополнительной публичной metadata приложение может обращаться к BTTV, " +
-                        "FrankerFaceZ, 7TV, IVR.fi и их CDN. Эти провайдеры получают сетевые metadata запроса.",
+                    "Для чтения чата, отправки сообщений, модерации и metadata приложение обращается к Twitch IRC, EventSub и Helix. Twitch получает обычные сетевые данные запроса, включая IP-адрес.",
+                    "Для emotes, badges и дополнительной публичной metadata приложение может обращаться к BTTV, FrankerFaceZ, 7TV, IVR.fi и их CDN. Эти провайдеры получают сетевые metadata запроса.",
                     pushParagraph,
-                    "При включённой синхронизации настроек versioned backup передаётся на выбранный Ferventio Server. " +
-                        "Сервер также обрабатывает installation ID, device-bound credentials, push registration, " +
-                        "access-token leases и security/audit metadata.",
+                    "При включённой синхронизации настроек versioned backup передаётся на выбранный Ferventio Server. Сервер также обрабатывает installation ID, device-bound credentials, push registration, access-token leases и security/audit metadata.",
                 ),
             ),
             PrivacyPolicySection(
@@ -96,42 +82,33 @@ internal object FerventioLegalContent {
                 title = "4. Передача третьим сторонам",
                 paragraphs = listOf(
                     "Ferventio не продаёт персональные данные, не показывает рекламу и не использует Android Advertising ID.",
-                    "Данные передаются только сервисам, необходимым для выбранных функций: Twitch, настроенному " +
-                        "Ferventio Server, emote/metadata providers и, в Play release, Firebase Cloud Messaging/Crashlytics.",
-                    "Файл, который пользователь вручную экспортирует через системный picker, передаётся выбранному " +
-                        "пользователем приложению или storage provider; дальнейшая обработка регулируется правилами этого провайдера.",
+                    "Данные передаются только сервисам, необходимым для выбранных функций: Twitch, настроенному Ferventio Server, emote/metadata providers и, в Play release, Firebase Cloud Messaging/Crashlytics.",
+                    "Файл, который пользователь вручную экспортирует через системный picker, передаётся выбранному пользователем приложению или storage provider; дальнейшая обработка регулируется правилами этого провайдера.",
                 ),
             ),
             PrivacyPolicySection(
                 id = "retention",
                 title = "5. Хранение и защита",
                 paragraphs = listOf(
-                    "Срок хранения локальной истории задаётся пользователем. Кэш, история, настройки, локальные crash reports " +
-                        "и данные приложения могут быть удалены средствами Ferventio или Android.",
-                    "Передача к production Ferventio Server выполняется по HTTPS; release-сборка требует настроенные " +
-                        "certificate pins. Tokens и credential-shaped значения редактируются в диагностических отчётах.",
-                    "Срок хранения server-side settings snapshots, audit records и резервных копий определяется оператором " +
-                        "выбранного Ferventio Server. Пользователь должен ознакомиться с политикой конкретного сервера.",
+                    "Срок хранения локальной истории задаётся пользователем. Кэш, история, настройки, локальные crash reports и данные приложения могут быть удалены средствами Ferventio или Android.",
+                    "Передача к production Ferventio Server выполняется по HTTPS; release-сборка требует настроенные certificate pins. Tokens и credential-shaped значения редактируются в диагностических отчётах.",
+                    "Срок хранения server-side settings snapshots, audit records и резервных копий определяется оператором выбранного Ferventio Server. Пользователь должен ознакомиться с политикой конкретного сервера.",
                 ),
             ),
             PrivacyPolicySection(
                 id = "controls",
                 title = "6. Управление данными",
                 paragraphs = listOf(
-                    "В приложении доступны очистка истории и кэша, экспорт/импорт настроек, удаление локальных crash reports, " +
-                        "выход, отзыв текущего устройства и отзыв всех серверных сессий Twitch-аккаунта.",
-                    "Отзыв всех сессий удаляет серверные auth sessions, credentials, push registrations и pending deliveries. " +
-                        "Локальные каналы, история и настройки остаются на каждом устройстве, пока пользователь не удалит их отдельно.",
-                    "Для доступа, исправления или удаления данных, которые хранит конкретный Ferventio Server, следует обратиться " +
-                        "к его оператору по privacy-контакту, указанному выше.",
+                    "В приложении доступны очистка истории и кэша, экспорт/импорт настроек, удаление локальных crash reports, выход, отзыв текущего устройства и отзыв всех серверных сессий Twitch-аккаунта.",
+                    "Отзыв всех сессий удаляет серверные auth sessions, credentials, push registrations и pending deliveries. Локальные каналы, история и настройки остаются на каждом устройстве, пока пользователь не удалит их отдельно.",
+                    "Для доступа, исправления или удаления данных, которые хранит конкретный Ferventio Server, следует обратиться к его оператору по privacy-контакту, указанному выше.",
                 ),
             ),
             PrivacyPolicySection(
                 id = "changes",
                 title = "7. Изменения политики",
                 paragraphs = listOf(
-                    "Дата действующей редакции: $PRIVACY_POLICY_EFFECTIVE_DATE. Существенные изменения должны сопровождаться " +
-                        "обновлением встроенного текста и опубликованной web-версии политики.",
+                    "Дата действующей редакции: $PRIVACY_POLICY_EFFECTIVE_DATE. Существенные изменения должны сопровождаться обновлением встроенного текста и опубликованной web-версии политики.",
                 ),
             ),
         )

@@ -21,6 +21,8 @@ Run the checks relevant to your change. Before opening a pull request, run the c
 
 Visible UI changes should include sanitized before/after screenshots. Room schema changes must include exported schemas, migrations and migration tests.
 
+UI text changes must follow [the localization workflow](docs/localization.md) and pass `python3 scripts/localization/check_ui_localization.py`.
+
 ## Commit and pull request style
 
 Use short, imperative commit subjects, for example:

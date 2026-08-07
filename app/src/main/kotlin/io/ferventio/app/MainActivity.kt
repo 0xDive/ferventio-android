@@ -22,6 +22,7 @@ import io.ferventio.app.data.BackupFileIo
 import io.ferventio.app.performance.PerformanceRuntimeState
 import io.ferventio.app.push.NotificationPresenter
 import io.ferventio.app.ui.FerventioApp
+import io.ferventio.app.ui.resolveAppString
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -74,13 +75,13 @@ class MainActivity : ComponentActivity() {
         }.onSuccess {
             Toast.makeText(
                 this,
-                "Экспортировано отчётов: ${export.reportCount}",
+                localized("Экспортировано отчётов: ${export.reportCount}"),
                 Toast.LENGTH_LONG,
             ).show()
         }.onFailure { error ->
             Toast.makeText(
                 this,
-                "Ошибка экспорта: ${error.message ?: "неизвестная ошибка"}",
+                localized("Ошибка экспорта: ${error.message ?: "неизвестная ошибка"}"),
                 Toast.LENGTH_LONG,
             ).show()
         }
@@ -239,7 +240,7 @@ class MainActivity : ComponentActivity() {
     private fun exportCrashReports() {
         val export = CrashReporter.exportLocalReports()
         if (export.reportCount == 0) {
-            Toast.makeText(this, "Локальных отчётов пока нет", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, localized("Локальных отчётов пока нет"), Toast.LENGTH_SHORT).show()
             return
         }
         pendingCrashReportExport = export
@@ -251,11 +252,17 @@ class MainActivity : ComponentActivity() {
         val deleted = CrashReporter.clearLocalReports()
         Toast.makeText(
             this,
-            if (deleted == 0) "Локальных отчётов нет" else "Удалено отчётов: $deleted",
+            localized(if (deleted == 0) "Локальных отчётов нет" else "Удалено отчётов: $deleted"),
             Toast.LENGTH_SHORT,
         ).show()
     }
 
+
+    private fun localized(source: String): String = resolveAppString(
+        context = this,
+        appLanguage = container.controller.state.value.appLanguage,
+        source = source,
+    )
 
     private fun hasNotificationPermission(): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||

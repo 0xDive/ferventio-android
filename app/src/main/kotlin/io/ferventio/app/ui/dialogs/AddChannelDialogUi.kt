@@ -103,7 +103,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Tab
-import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -242,14 +241,14 @@ internal fun AddChannelDialog(onDismiss: () -> Unit, onAdd: (String) -> Unit) {
     var login by rememberSaveable { mutableStateOf("") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Добавить канал") },
+        title = { LocalizedText("Добавить канал") },
         text = {
             OutlinedTextField(
                 value = login,
                 modifier = Modifier.testTag(ADD_CHANNEL_INPUT_TEST_TAG),
                 onValueChange = { login = it.take(50) },
-                label = { Text("Twitch login") },
-                placeholder = { Text("например, twitchdev") },
+                label = { LocalizedText("Twitch login") },
+                placeholder = { LocalizedText("например, twitchdev") },
                 singleLine = true,
             )
         },
@@ -258,9 +257,9 @@ internal fun AddChannelDialog(onDismiss: () -> Unit, onAdd: (String) -> Unit) {
                 onClick = { if (login.isNotBlank()) onAdd(login) },
                 modifier = Modifier.testTag(ADD_CHANNEL_CONFIRM_TEST_TAG),
             ) {
-                Text("Добавить")
+                LocalizedText("Добавить")
             }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Отмена") } },
+        dismissButton = { TextButton(onClick = onDismiss) { LocalizedText("Отмена") } },
     )
 }
