@@ -1,5 +1,6 @@
 package io.ferventio.app.application
 
+import android.util.Log
 import io.ferventio.app.domain.FerventioUiState
 import io.ferventio.app.domain.ModerationUser
 import io.ferventio.app.domain.ModerationUserGroup
@@ -22,6 +23,7 @@ suspend fun FerventioController.loadCategorizedCommunityChatters(
     val snapshot = state.value
     val channel = snapshot.channels.firstOrNull { it.id == channelId } ?: return emptyList()
     val inferred = inferCategorizedChatters(snapshot, channelId)
+    Log.d(COMMUNITY_CHATTERS_LOG_TAG, "CommunityTab request channel=${channel.login} id=$channelId")
     val community = try {
         TwitchUnofficialChattersClient().use { client ->
             client.getChatters(channel.login).map { chatter ->
@@ -32,10 +34,25 @@ suspend fun FerventioController.loadCategorizedCommunityChatters(
                     group = chatter.group.toModerationUserGroup(),
                 )
             }
+        }.also { chatters ->
+            if (chatters.isEmpty()) {
+                Log.w(COMMUNITY_CHATTERS_LOG_TAG, "CommunityTab returned an empty chatter list for channel=${channel.login}")
+            } else {
+                val groups = chatters.groupingBy(ModerationUser::group).eachCount()
+                Log.d(
+                    COMMUNITY_CHATTERS_LOG_TAG,
+                    "CommunityTab success channel=${channel.login} count=${chatters.size} groups=$groups",
+                )
+            }
         }
     } catch (cancelled: CancellationException) {
         throw cancelled
-    } catch (_: Throwable) {
+    } catch (error: Throwable) {
+        Log.w(
+            COMMUNITY_CHATTERS_LOG_TAG,
+            "CommunityTab failed channel=${channel.login}: ${error::class.java.simpleName}: ${error.message.orEmpty()}",
+            error,
+        )
         emptyList()
     }
     return mergeRoleHints(inferred, community)
@@ -97,8 +114,8 @@ internal fun inferCategorizedChatters(
             message.userId == channel.id || message.badges.any { it.setId == "broadcaster" } ->
                 ModerationUserGroup.BROADCASTER
             message.badges.any { it.setId == "staff" } -> ModerationUserGroup.STAFF
-            message.badges.any { it.setId == "vip" } -> ModerationUserGroup.VIP
             message.badges.any { it.setId == "moderator" } -> ModerationUserGroup.MODERATOR
+            message.badges.any { it.setId == "vip" } -> ModerationUserGroup.VIP
             else -> return@forEach
         }
         add(
@@ -164,8 +181,8 @@ private fun ModerationUser.withViewerFallback(): ModerationUser =
 private fun rolePriority(group: ModerationUserGroup): Int = when (group) {
     ModerationUserGroup.BROADCASTER -> 6
     ModerationUserGroup.STAFF -> 5
-    ModerationUserGroup.VIP -> 4
-    ModerationUserGroup.MODERATOR -> 3
+    ModerationUserGroup.MODERATOR -> 4
+    ModerationUserGroup.VIP -> 3
     ModerationUserGroup.CHATBOT -> 2
     ModerationUserGroup.VIEWER -> 1
     ModerationUserGroup.UNKNOWN -> 0
@@ -179,3 +196,5 @@ private fun TwitchUnofficialChatterGroup.toModerationUserGroup(): ModerationUser
     TwitchUnofficialChatterGroup.CHATBOT -> ModerationUserGroup.CHATBOT
     TwitchUnofficialChatterGroup.VIEWER -> ModerationUserGroup.VIEWER
 }
+
+private const val COMMUNITY_CHATTERS_LOG_TAG = "FerventioChatters"

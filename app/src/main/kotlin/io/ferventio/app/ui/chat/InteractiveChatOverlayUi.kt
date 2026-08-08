@@ -85,21 +85,11 @@ internal fun InteractiveChatOverlayStack(
     onRecoverMutation: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    @Suppress("UNUSED_VARIABLE")
+    val creationCallbacks = onCreatePoll to onCreatePrediction
     val mutationInFlight = mutation?.inFlight == true
-    val canCreatePollBase = canManagePoll && poll?.isActive != true
-    val canCreatePredictionBase = canManagePrediction &&
-        prediction?.status !in setOf(PredictionStatus.ACTIVE, PredictionStatus.LOCKED)
-    val canCreatePoll = canCreatePollBase && !mutationInFlight
-    val canCreatePrediction = canCreatePredictionBase && !mutationInFlight
-    if (
-        poll == null &&
-        prediction == null &&
-        !canCreatePollBase &&
-        !canCreatePredictionBase &&
-        mutation == null
-    ) return
+    if (poll == null && prediction == null && mutation == null) return
 
-    var creationKind by remember { mutableStateOf<InteractiveCreationKind?>(null) }
     var pendingManagementAction by remember(
         poll?.id,
         poll?.status,
@@ -151,20 +141,6 @@ internal fun InteractiveChatOverlayStack(
                 }
             }
         }
-        if (canCreatePoll || canCreatePrediction) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (canCreatePoll) {
-                    OutlinedButton(onClick = { creationKind = InteractiveCreationKind.POLL }) {
-                        LocalizedText(creationStrings.createPoll)
-                    }
-                }
-                if (canCreatePrediction) {
-                    OutlinedButton(onClick = { creationKind = InteractiveCreationKind.PREDICTION }) {
-                        LocalizedText(creationStrings.createPrediction)
-                    }
-                }
-            }
-        }
         poll?.let {
             PollOverlayCard(
                 poll = it,
@@ -207,16 +183,6 @@ internal fun InteractiveChatOverlayStack(
                 },
             )
         }
-    }
-
-    creationKind?.let { kind ->
-        InteractiveChatCreationDialog(
-            kind = kind,
-            strings = creationStrings,
-            onDismiss = { creationKind = null },
-            onCreatePoll = onCreatePoll,
-            onCreatePrediction = onCreatePrediction,
-        )
     }
 
     pendingManagementAction?.let { pending ->
