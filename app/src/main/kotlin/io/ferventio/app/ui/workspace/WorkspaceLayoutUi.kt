@@ -237,12 +237,19 @@ internal fun PhoneChannelPager(
                     interactiveChatState = interactiveChatState,
                     onSend = { text, reply -> controller.sendMessageToChannel(channel.id, text, reply) },
                     onExecuteNuke = { plan -> controller.executeNuke(channel.id, plan) },
+
                     onExecuteModerationCommand = { command -> controller.executeConfirmedModerationCommand(channel.id, command) },
+
                     onCreatePoll = { draft -> controller.createInteractivePoll(channel.id, draft) },
+
                     onCreatePrediction = { draft -> controller.createInteractivePrediction(channel.id, draft) },
+
                     onEndPoll = { pollId, archive -> controller.endInteractivePoll(channel.id, pollId, archive) },
+
                     onLockPrediction = { predictionId -> controller.lockInteractivePrediction(channel.id, predictionId) },
+
                     onCancelPrediction = { predictionId -> controller.cancelInteractivePrediction(channel.id, predictionId) },
+
                     onResolvePrediction = { predictionId, outcomeId -> controller.resolveInteractivePrediction(channel.id, predictionId, outcomeId) },
                     onRecoverInteractiveMutation = { controller.recoverInteractiveMutation(channel.id) },
                     onDraftChange = { controller.updateDraft(channel.id, it) },
@@ -276,13 +283,6 @@ internal fun PhoneChannelPager(
                         channel.id in state.visibleChannelIds,
                     onHorizontalGestureLockChanged = { locked ->
                         if (channel.id == state.selectedChannelId) horizontalPagerLocked = locked
-                    },
-                    composerLeadingContent = {
-                        ChannelPointsComposerEntry(
-                            state = state,
-                            channelId = channel.id,
-                            controller = controller,
-                        )
                     },
                     instanceKey = "phone-${channel.id}",
                 )
@@ -658,12 +658,19 @@ internal fun SplitPane(
                         interactiveChatState = interactiveChatState,
                         onSend = { text, reply -> controller.sendMessageToChannel(channel.id, text, reply) },
                         onExecuteNuke = { plan -> controller.executeNuke(channel.id, plan) },
+
                         onExecuteModerationCommand = { command -> controller.executeConfirmedModerationCommand(channel.id, command) },
+
                         onCreatePoll = { draft -> controller.createInteractivePoll(channel.id, draft) },
+
                         onCreatePrediction = { draft -> controller.createInteractivePrediction(channel.id, draft) },
+
                         onEndPoll = { pollId, archive -> controller.endInteractivePoll(channel.id, pollId, archive) },
+
                         onLockPrediction = { predictionId -> controller.lockInteractivePrediction(channel.id, predictionId) },
+
                         onCancelPrediction = { predictionId -> controller.cancelInteractivePrediction(channel.id, predictionId) },
+
                         onResolvePrediction = { predictionId, outcomeId -> controller.resolveInteractivePrediction(channel.id, predictionId, outcomeId) },
                         onRecoverInteractiveMutation = { controller.recoverInteractiveMutation(channel.id) },
                         onDraftChange = { controller.updateDraft(channel.id, it) },
@@ -701,13 +708,6 @@ internal fun SplitPane(
                             controller.consumeReplyComposerTarget(channel.id, messageId)
                         },
                         onMarkRead = { controller.markChannelRead(channel.id) },
-                        composerLeadingContent = {
-                            ChannelPointsComposerEntry(
-                                state = state,
-                                channelId = channel.id,
-                                controller = controller,
-                            )
-                        },
                         instanceKey = split.id,
                     )
                 }

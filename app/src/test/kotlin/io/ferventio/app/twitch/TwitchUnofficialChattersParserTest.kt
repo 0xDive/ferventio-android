@@ -31,18 +31,44 @@ class TwitchUnofficialChattersParserTest {
 
         val users = TwitchUnofficialChattersParser.parse(body)
 
-        assertEquals(listOf("owner", "vip", "mod", "bot", "viewer"), users.map { it.login })
-        assertEquals(listOf("1", "2", "3", "5", "4"), users.map { it.id })
+        assertEquals(listOf("owner", "mod", "vip", "bot", "viewer"), users.map { it.login })
+        assertEquals(listOf("1", "3", "2", "5", "4"), users.map { it.id })
         assertEquals(
             listOf(
                 TwitchUnofficialChatterGroup.BROADCASTER,
-                TwitchUnofficialChatterGroup.VIP,
                 TwitchUnofficialChatterGroup.MODERATOR,
+                TwitchUnofficialChatterGroup.VIP,
                 TwitchUnofficialChatterGroup.CHATBOT,
                 TwitchUnofficialChatterGroup.VIEWER,
             ),
             users.map { it.group },
         )
+    }
+
+    @Test
+    fun `moderator bucket wins over vip for duplicate login`() {
+        val body = """
+            {
+              "data": {
+                "user": {
+                  "channel": {
+                    "chatters": {
+                      "broadcasters": [],
+                      "staff": [],
+                      "vips": [{"id":"2","login":"both"}],
+                      "moderators": [{"id":"2","login":"both"}],
+                      "chatbots": [],
+                      "viewers": []
+                    }
+                  }
+                }
+              }
+            }
+        """.trimIndent()
+
+        val user = TwitchUnofficialChattersParser.parse(body).single()
+
+        assertEquals(TwitchUnofficialChatterGroup.MODERATOR, user.group)
     }
 
     @Test
@@ -98,7 +124,7 @@ class TwitchUnofficialChattersParserTest {
 
         val users = TwitchUnofficialChattersParser.parse(body)
 
-        assertEquals(listOf("owner", "vip", "mod", "bot", "viewer"), users.map { it.login })
+        assertEquals(listOf("owner", "mod", "vip", "bot", "viewer"), users.map { it.login })
         assertTrue(users.all { it.id.isEmpty() })
         assertEquals(TwitchUnofficialChatterGroup.MODERATOR, users.first { it.login == "mod" }.group)
     }
