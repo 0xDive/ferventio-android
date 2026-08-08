@@ -107,8 +107,18 @@ class TwitchChannelPointsGqlClient : Closeable {
         }
         val responseBody = response.bodyAsText()
         if (response.status.value !in 200..299) {
+            val message = TwitchChannelPointsGqlParser.httpErrorMessage(responseBody)
+            if (response.status.value == 401) {
+                // Surface the same typed unauthorized error used by Helix so the controller can
+                // force-refresh the backend Twitch lease and safely retry the rejected request.
+                throw TwitchApiException(
+                    statusCode = 401,
+                    apiMessage = "Channel Points: $message",
+                )
+            }
             throw TwitchChannelPointsGqlException(
-                "Twitch GQL ${response.status.value}: ${responseBody.take(300).ifBlank { "empty response" }}",
+                message = "Twitch GQL ${response.status.value}: $message",
+                statusCode = response.status.value,
             )
         }
         return responseBody
@@ -176,6 +186,13 @@ internal object TwitchChannelPointsGqlParser {
         if (id.isBlank()) throw TwitchChannelPointsGqlException("Twitch returned a redemption without an id")
         return TwitchChannelPointsRedemption(id)
     }
+
+    internal fun httpErrorMessage(body: String): String = runCatching {
+        val root = json.parseToJsonElement(body) as? JsonObject
+        root?.string("message")
+            ?: root?.string("error")
+            ?: "request failed"
+    }.getOrDefault("request failed").take(200)
 
     private fun parseReward(element: JsonElement): TwitchChannelPointsReward? {
         val item = element as? JsonObject ?: return null
@@ -251,6 +268,10 @@ internal object TwitchChannelPointsGqlParser {
         runCatching { this[key]?.jsonPrimitive?.booleanOrNull }.getOrNull()
 }
 
-open class TwitchChannelPointsGqlException(message: String) : IllegalStateException(message)
+open class TwitchChannelPointsGqlException(
+    message: String,
+    val statusCode: Int? = null,
+) : IllegalStateException(message)
+
 class TwitchChannelPointsRedeemException(val code: String) :
     TwitchChannelPointsGqlException("Channel Points redemption failed: $code")

@@ -35,10 +35,50 @@ class CommunityChattersLoaderTest {
             listOf(
                 ModerationUserGroup.BROADCASTER,
                 ModerationUserGroup.MODERATOR,
-                ModerationUserGroup.UNKNOWN,
+                ModerationUserGroup.VIEWER,
             ),
             merged.map { it.group },
         )
         assertEquals(listOf("Owner Display", "Mod Display", "Extra Display"), merged.map { it.displayName })
+    }
+
+    @Test
+    fun `uncategorized canonical chatters are ordinary viewers`() {
+        val canonical = listOf(
+            ModerationUser(id = "1", login = "one", displayName = "One"),
+            ModerationUser(id = "2", login = "two", displayName = "Two"),
+        )
+
+        val merged = mergeCategorizedChatters(canonical, emptyList())
+
+        assertEquals(
+            listOf(ModerationUserGroup.VIEWER, ModerationUserGroup.VIEWER),
+            merged.map { it.group },
+        )
+    }
+
+    @Test
+    fun `existing canonical role is preserved when category hint is unknown`() {
+        val canonical = listOf(
+            ModerationUser(
+                id = "1",
+                login = "vip",
+                displayName = "VIP",
+                group = ModerationUserGroup.VIP,
+            ),
+        )
+        val categorized = listOf(
+            ModerationUser(
+                id = "gql:vip",
+                login = "vip",
+                displayName = "vip",
+                group = ModerationUserGroup.UNKNOWN,
+            ),
+        )
+
+        val merged = mergeCategorizedChatters(canonical, categorized)
+
+        assertEquals(ModerationUserGroup.VIP, merged.single().group)
+        assertEquals("1", merged.single().id)
     }
 }

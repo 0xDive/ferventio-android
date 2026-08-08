@@ -149,6 +149,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.testTagsAsResourceId
@@ -246,8 +247,6 @@ internal fun SettingsHomePage(
     onLogout: () -> Unit,
 ) {
     val profile = state.session?.userId?.let(state.userProfilesById::get)
-    val quickModerationPreference = rememberQuickModerationPreferenceState()
-    val resourceStrings = rememberAppResourceStrings(state.appLanguage)
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
@@ -343,13 +342,6 @@ internal fun SettingsHomePage(
                     title = strings.userCard,
                     summary = strings.userCardSummary,
                     onClick = { onOpen(SettingsPage.USER_CARD) },
-                )
-                SettingsGroupDivider()
-                SettingsSwitchRow(
-                    title = resourceStrings.string(R.string.ferventio_moderation_confirm_actions_setting),
-                    description = resourceStrings.string(R.string.ferventio_moderation_confirm_actions_setting_summary),
-                    checked = quickModerationPreference.confirmActions,
-                    onCheckedChange = quickModerationPreference::setConfirmActions,
                 )
             }
         }
@@ -782,6 +774,15 @@ internal fun SettingsSection(
                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
             )
             content()
+            if (title == "Поле ввода") {
+                val quickModerationPreference = rememberQuickModerationPreferenceState()
+                SettingsSwitchRow(
+                    title = stringResource(R.string.ferventio_moderation_confirm_actions_setting),
+                    description = stringResource(R.string.ferventio_moderation_confirm_actions_setting_summary),
+                    checked = quickModerationPreference.confirmActions,
+                    onCheckedChange = quickModerationPreference::setConfirmActions,
+                )
+            }
         }
     }
 }

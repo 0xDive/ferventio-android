@@ -1,5 +1,6 @@
 package io.ferventio.app.application
 
+import io.ferventio.app.twitch.TwitchApiException
 import io.ferventio.app.twitch.TwitchChannelPointsContext
 import io.ferventio.app.twitch.TwitchChannelPointsRedemption
 import io.ferventio.app.twitch.TwitchChannelPointsRedeemException
@@ -173,6 +174,25 @@ class ChannelPointsCoordinatorTest {
         val state = coordinator.state.value.channel("1")
         assertTrue(state?.redemptionOutcomeUncertain == true)
         assertNull(state?.errorMessage)
+    }
+
+    @Test
+    fun `unauthorized redemption stays retryable for refreshed authentication`() = runBlocking {
+        val coordinator = ChannelPointsCoordinator(
+            FakeGateway(
+                redeemCall = { throw TwitchApiException(401, "Channel Points: invalid token") },
+            ),
+        )
+
+        val error = runCatching {
+            coordinator.redeem(auth, "1", "one", reward, textInput = null)
+        }.exceptionOrNull()
+
+        assertTrue(error is TwitchApiException)
+        val state = coordinator.state.value.channel("1")
+        assertFalse(state?.redemptionOutcomeUncertain ?: true)
+        assertNull(state?.redeemingRewardId)
+        assertEquals("Twitch API 401: Channel Points: invalid token", state?.errorMessage)
     }
 
     @Test

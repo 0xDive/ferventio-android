@@ -1,5 +1,6 @@
 package io.ferventio.app.application
 
+import io.ferventio.app.twitch.TwitchApiException
 import io.ferventio.app.twitch.TwitchChannelPointsContext
 import io.ferventio.app.twitch.TwitchChannelPointsGqlClient
 import io.ferventio.app.twitch.TwitchChannelPointsRedemption
@@ -160,6 +161,22 @@ class ChannelPointsCoordinator internal constructor(
             } catch (cancelled: CancellationException) {
                 markRedemptionOutcomeUncertain(channelId, channelLogin, epoch)
                 throw cancelled
+            } catch (error: TwitchApiException) {
+                if (error.statusCode == 401) {
+                    // An authorization rejection is definitive: Twitch rejected the request before
+                    // executing the mutation. Leave it retryable so the controller can refresh the
+                    // OAuth lease and invoke the same user action once with the fresh token.
+                    updateChannel(channelId, channelLogin, epoch) {
+                        it.copy(
+                            redeemingRewardId = null,
+                            redemptionOutcomeUncertain = false,
+                            errorMessage = error.message,
+                        )
+                    }
+                } else {
+                    markRedemptionOutcomeUncertain(channelId, channelLogin, epoch)
+                }
+                throw error
             } catch (error: Throwable) {
                 if (error is TwitchChannelPointsRedeemException) {
                     updateChannel(channelId, channelLogin, epoch) {

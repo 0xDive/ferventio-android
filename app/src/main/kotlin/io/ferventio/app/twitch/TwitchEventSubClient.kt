@@ -391,6 +391,7 @@ data class EventSubEnvelope(
 
 object EventSubParser {
     private val json = Json { ignoreUnknownKeys = true }
+    private val autoModOrderingGuard = AutoModEventOrderingGuard()
 
     fun parseEnvelope(raw: String): EventSubEnvelope {
         JsonInputGuard.requireWithinLimits(
@@ -515,21 +516,31 @@ object EventSubParser {
             createdAt = timestamp.takeIf(String::isNotBlank),
         )
 
-        "automod.message.hold" -> ChatEvent.AutoModHeld(
-            parseAutoModMessage(event, timestamp, AutoModMessageStatus.HELD),
-        )
+        "automod.message.hold" -> {
+            val message = parseAutoModMessage(event, timestamp, AutoModMessageStatus.HELD)
+            if (autoModOrderingGuard.shouldAcceptHold(message.messageId)) {
+                ChatEvent.AutoModHeld(message)
+            } else {
+                null
+            }
+        }
 
-        "automod.message.update" -> ChatEvent.AutoModUpdated(
-            parseAutoModMessage(
+        "automod.message.update" -> {
+            val status = when (event.string("status")?.lowercase()) {
+                "approved" -> AutoModMessageStatus.APPROVED
+                "denied", "expired" -> AutoModMessageStatus.DENIED
+                else -> AutoModMessageStatus.HELD
+            }
+            val message = parseAutoModMessage(
                 event = event,
                 timestamp = timestamp,
-                status = when (event.string("status")?.lowercase()) {
-                    "approved" -> AutoModMessageStatus.APPROVED
-                    "denied" -> AutoModMessageStatus.DENIED
-                    else -> AutoModMessageStatus.HELD
-                },
-            ),
-        )
+                status = status,
+            )
+            if (status != AutoModMessageStatus.HELD) {
+                autoModOrderingGuard.markTerminal(message.messageId)
+            }
+            ChatEvent.AutoModUpdated(message)
+        }
 
         "channel.moderate" -> ChatEvent.ModerationPerformed(
             parseModerationAction(event, timestamp, eventSubMessageId),
@@ -741,7 +752,6 @@ object EventSubParser {
             ),
         )
     }
-
 
     private fun parseChatNotification(event: JsonObject, timestamp: String): ChatMessage {
         val messageId = event.string("message_id").orEmpty()
