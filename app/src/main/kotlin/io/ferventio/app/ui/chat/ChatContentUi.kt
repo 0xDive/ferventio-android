@@ -303,6 +303,7 @@ internal fun ChannelChatContent(
     isReadActive: Boolean = true,
     onHorizontalGestureLockChanged: (Boolean) -> Unit = {},
     repeatCollapseEnabled: Boolean? = null,
+    composerLeadingContent: @Composable () -> Unit = {},
     instanceKey: String = channelId,
 ) {
     val resourceStrings = rememberAppResourceStrings(state.appLanguage)
@@ -370,8 +371,6 @@ internal fun ChannelChatContent(
     ) {
         val needsSystemFiltering = !state.showSystemMessages
         if (filterExpression.isEmpty() && !needsDecorationFiltering && !needsSystemFiltering) {
-            // Normal chat is the hottest path. Return the existing immutable list rather than
-            // allocating and scanning a second list after every incoming message.
             rawMessages
         } else {
             rawMessages.filter { message ->
@@ -455,8 +454,6 @@ internal fun ChannelChatContent(
                 (listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1) >= currentLastContentIndex
         }
     }
-    // Keep the canonical newest id in the live key so every repeated incoming
-    // message updates the repeat count even while the visible anchor is stable.
     val latestMessageId = messages.lastOrNull()?.id
     val latestAutoModMessageId = heldAutoModMessages.lastOrNull()?.messageId
     val liveContentKey = "${latestMessageId.orEmpty()}|${latestAutoModMessageId.orEmpty()}"
@@ -464,9 +461,6 @@ internal fun ChannelChatContent(
     val latestVisibleMessages by rememberUpdatedState(visibleMessages)
     val latestAutoScrollEnabled = rememberUpdatedState(state.autoScrollEnabled)
     var initialPositionApplied by remember(instanceKey) {
-        // When messages are already in memory, rememberLazyListState has received the correct
-        // initial anchor and the page can be shown immediately. Empty precomposed neighbours keep
-        // the anchor pending until their first non-empty snapshot arrives.
         mutableStateOf(hasChatContent)
     }
     var followLiveChat by remember(instanceKey) { mutableStateOf(state.autoScrollEnabled && !restoreOldPosition) }
@@ -477,8 +471,6 @@ internal fun ChannelChatContent(
     val liveFollowPauseThresholdPx = with(LocalDensity.current) { 24.dp.toPx() }
     var accumulatedUpwardDragPx by remember(instanceKey) { mutableStateOf(0f) }
     val pauseLiveFollowingForUserScroll: () -> Unit = {
-        // Keep the pause sticky even when the latest row is still partly visible. Once the
-        // gesture has actually moved into older content, returning to the bottom may resume.
         resumeEligibleAfterUserScroll = LiveChatFollowPolicy.updateResumeEligibility(
             current = resumeEligibleAfterUserScroll,
             viewportAtBottom = isViewportAtBottom,
@@ -597,7 +589,6 @@ internal fun ChannelChatContent(
             onRefreshPinnedMessage(channelId)
         }
     }
-
     LaunchedEffect(suggestions.map(ComposerSuggestion::key)) {
         autocompleteIndex = autocompleteIndex.coerceIn(0, suggestions.lastIndex.coerceAtLeast(0))
     }
@@ -662,8 +653,6 @@ internal fun ChannelChatContent(
     val submitMessage: () -> Unit = submit@{
         val message = input
         if (message.isBlank()) return@submit
-        // /nuke is a reserved local moderation command. Intercept it before custom
-        // command resolution; every other Twitch/bot slash command keeps pass-through.
         if (openNukePreview(message)) return@submit
         val channel = state.channels.firstOrNull { it.id == channelId }
         val session = state.session
@@ -811,22 +800,16 @@ internal fun ChannelChatContent(
         listState.scrollToItem(targetIndex, targetOffset)
         liveFollowPausedByUser = restore
         followLiveChat = state.autoScrollEnabled && !restore
-        // Wait until LazyColumn has measured the requested anchor before revealing it. This
-        // removes the old-message flash when switching between active channels.
         withFrameNanos { }
         initialPositionApplied = true
     }
 
     LaunchedEffect(channelId, listState, initialPositionApplied) {
         if (!initialPositionApplied) return@LaunchedEffect
-        // Observe only scroll start/stop. The previous snapshot included the pixel offset and
-        // allocated/processed a new object on nearly every frame of a fling.
         snapshotFlow { listState.isScrollInProgress }
             .distinctUntilChanged()
             .collectLatest { scrolling ->
                 if (scrolling) {
-                    // Pause live following for the whole drag/fling. Otherwise a viewport update
-                    // can pull the list back to the bottom while the user is still scrolling.
                     followLiveChat = false
                     return@collectLatest
                 }
@@ -855,8 +838,6 @@ internal fun ChannelChatContent(
             }
     }
 
-    // IME/system-bar changes alter only the viewport. Do not react to every LazyColumn layout
-    // change while the user is dragging or flinging.
     LaunchedEffect(channelId, listState, initialPositionApplied) {
         if (!initialPositionApplied) return@LaunchedEffect
         snapshotFlow { listState.layoutInfo.viewportEndOffset }
@@ -905,7 +886,6 @@ internal fun ChannelChatContent(
 
     replyTargetMessageId?.takeIf(String::isNotBlank)?.let { targetId ->
         LaunchedEffect(targetId, messages) {
-            // Replies keep using canonical messages even when their row is folded into an anchor.
             val target = messages.firstOrNull { it.id == targetId || it.serverMessageId == targetId }
             if (target != null) replyTarget = target
             onReplyTargetConsumed(targetId)
@@ -926,7 +906,6 @@ internal fun ChannelChatContent(
             return@LaunchedEffect
         }
         if (!followLiveChat) return@LaunchedEffect
-        // Coalesce bursts of incoming messages into one layout jump instead of one scroll job per event.
         delay(LIVE_FOLLOW_COALESCE_MILLIS)
         if (latestFollowLiveChat && latestLastContentIndex.value >= 0) {
             listState.scrollToItem(latestLastContentIndex.value)
@@ -1232,6 +1211,7 @@ internal fun ChannelChatContent(
                 .padding(horizontal = 8.dp, vertical = 5.dp),
             verticalAlignment = Alignment.Bottom,
         ) {
+            composerLeadingContent()
             Surface(
                 modifier = Modifier
                     .weight(1f)

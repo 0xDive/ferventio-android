@@ -715,7 +715,7 @@ class EventSubParserTest {
                   "user_id": "200",
                   "user_login": "viewer",
                   "user_name": "Viewer",
-                  "message_id": "held-1",
+                  "message_id": "held-update-1",
                   "message": {"text": "hello", "fragments": []},
                   "status": "approved",
                   "moderator_user_id": "300",

@@ -231,70 +231,61 @@ internal fun PhoneChannelPager(
             val channel = channels[page]
             val channelAttention = state.channelAttention[channel.id]
             key(channel.id) {
-                Column(Modifier.fillMaxSize()) {
-                    Box(Modifier.weight(1f)) {
-                        ChannelChatContent(
+                ChannelChatContent(
+                    state = state,
+                    channelId = channel.id,
+                    interactiveChatState = interactiveChatState,
+                    onSend = { text, reply -> controller.sendMessageToChannel(channel.id, text, reply) },
+                    onExecuteNuke = { plan -> controller.executeNuke(channel.id, plan) },
+                    onExecuteModerationCommand = { command -> controller.executeConfirmedModerationCommand(channel.id, command) },
+                    onCreatePoll = { draft -> controller.createInteractivePoll(channel.id, draft) },
+                    onCreatePrediction = { draft -> controller.createInteractivePrediction(channel.id, draft) },
+                    onEndPoll = { pollId, archive -> controller.endInteractivePoll(channel.id, pollId, archive) },
+                    onLockPrediction = { predictionId -> controller.lockInteractivePrediction(channel.id, predictionId) },
+                    onCancelPrediction = { predictionId -> controller.cancelInteractivePrediction(channel.id, predictionId) },
+                    onResolvePrediction = { predictionId, outcomeId -> controller.resolveInteractivePrediction(channel.id, predictionId, outcomeId) },
+                    onRecoverInteractiveMutation = { controller.recoverInteractiveMutation(channel.id) },
+                    onDraftChange = { controller.updateDraft(channel.id, it) },
+                    onRetryMessage = controller::retryOutgoingMessage,
+                    onDeleteMessage = controller::deleteMessage,
+                    onQuickBan = controller::banUser,
+                    onPinMessage = controller::pinMessage,
+                    onUnpinMessage = controller::unpinMessage,
+                    onRefreshPinnedMessage = controller::refreshPinnedMessage,
+                    onAutoModDecision = controller::decideAutoModMessage,
+                    onEmoteUsed = controller::recordEmoteUsage,
+                    onToggleFavoriteEmote = controller::toggleFavoriteEmote,
+                    onOpenUser = { message ->
+                        hideKeyboard()
+                        controller.openUserCard(message)
+                    },
+                    onScrollPositionChanged = controller::saveScrollPosition,
+                    onLoadOlderHistory = { controller.loadOlderHistory(channel.id) },
+                    onUserInteraction = hideKeyboard,
+                    unreadCount = channelAttention?.unreadCount ?: 0,
+                    navigationTargetMessageId = state.messageNavigationTargets[channel.id],
+                    onNavigationConsumed = { messageId ->
+                        controller.consumeMessageNavigation(channel.id, messageId)
+                    },
+                    replyTargetMessageId = state.replyComposerTargets[channel.id],
+                    onReplyTargetConsumed = { messageId ->
+                        controller.consumeReplyComposerTarget(channel.id, messageId)
+                    },
+                    onMarkRead = { controller.markChannelRead(channel.id) },
+                    isReadActive = channel.id == channelIds.getOrNull(pagerState.settledPage) &&
+                        channel.id in state.visibleChannelIds,
+                    onHorizontalGestureLockChanged = { locked ->
+                        if (channel.id == state.selectedChannelId) horizontalPagerLocked = locked
+                    },
+                    composerLeadingContent = {
+                        ChannelPointsComposerEntry(
                             state = state,
                             channelId = channel.id,
-                            interactiveChatState = interactiveChatState,
-                            onSend = { text, reply -> controller.sendMessageToChannel(channel.id, text, reply) },
-                            onExecuteNuke = { plan -> controller.executeNuke(channel.id, plan) },
-
-                            onExecuteModerationCommand = { command -> controller.executeConfirmedModerationCommand(channel.id, command) },
-
-                            onCreatePoll = { draft -> controller.createInteractivePoll(channel.id, draft) },
-
-                            onCreatePrediction = { draft -> controller.createInteractivePrediction(channel.id, draft) },
-
-                            onEndPoll = { pollId, archive -> controller.endInteractivePoll(channel.id, pollId, archive) },
-
-                            onLockPrediction = { predictionId -> controller.lockInteractivePrediction(channel.id, predictionId) },
-
-                            onCancelPrediction = { predictionId -> controller.cancelInteractivePrediction(channel.id, predictionId) },
-
-                            onResolvePrediction = { predictionId, outcomeId -> controller.resolveInteractivePrediction(channel.id, predictionId, outcomeId) },
-                            onRecoverInteractiveMutation = { controller.recoverInteractiveMutation(channel.id) },
-                            onDraftChange = { controller.updateDraft(channel.id, it) },
-                            onRetryMessage = controller::retryOutgoingMessage,
-                            onDeleteMessage = controller::deleteMessage,
-                            onQuickBan = controller::banUser,
-                            onPinMessage = controller::pinMessage,
-                            onUnpinMessage = controller::unpinMessage,
-                            onRefreshPinnedMessage = controller::refreshPinnedMessage,
-                            onAutoModDecision = controller::decideAutoModMessage,
-                            onEmoteUsed = controller::recordEmoteUsage,
-                            onToggleFavoriteEmote = controller::toggleFavoriteEmote,
-                            onOpenUser = { message ->
-                                hideKeyboard()
-                                controller.openUserCard(message)
-                            },
-                            onScrollPositionChanged = controller::saveScrollPosition,
-                            onLoadOlderHistory = { controller.loadOlderHistory(channel.id) },
-                            onUserInteraction = hideKeyboard,
-                            unreadCount = channelAttention?.unreadCount ?: 0,
-                            navigationTargetMessageId = state.messageNavigationTargets[channel.id],
-                            onNavigationConsumed = { messageId ->
-                                controller.consumeMessageNavigation(channel.id, messageId)
-                            },
-                            replyTargetMessageId = state.replyComposerTargets[channel.id],
-                            onReplyTargetConsumed = { messageId ->
-                                controller.consumeReplyComposerTarget(channel.id, messageId)
-                            },
-                            onMarkRead = { controller.markChannelRead(channel.id) },
-                            isReadActive = channel.id == channelIds.getOrNull(pagerState.settledPage) &&
-                                channel.id in state.visibleChannelIds,
-                            onHorizontalGestureLockChanged = { locked ->
-                                if (channel.id == state.selectedChannelId) horizontalPagerLocked = locked
-                            },
-                            instanceKey = "phone-${channel.id}",
+                            controller = controller,
                         )
-                    }
-                    ChannelPointsComposerFooter(
-                        state = state,
-                        channelId = channel.id,
-                        controller = controller,
-                    )
-                }
+                    },
+                    instanceKey = "phone-${channel.id}",
+                )
             }
         }
     }
@@ -661,73 +652,64 @@ internal fun SplitPane(
                 }
             } else {
                 key(split.id, channel.id) {
-                    Column(Modifier.fillMaxSize()) {
-                        Box(Modifier.weight(1f)) {
-                            ChannelChatContent(
+                    ChannelChatContent(
+                        state = state,
+                        channelId = channel.id,
+                        interactiveChatState = interactiveChatState,
+                        onSend = { text, reply -> controller.sendMessageToChannel(channel.id, text, reply) },
+                        onExecuteNuke = { plan -> controller.executeNuke(channel.id, plan) },
+                        onExecuteModerationCommand = { command -> controller.executeConfirmedModerationCommand(channel.id, command) },
+                        onCreatePoll = { draft -> controller.createInteractivePoll(channel.id, draft) },
+                        onCreatePrediction = { draft -> controller.createInteractivePrediction(channel.id, draft) },
+                        onEndPoll = { pollId, archive -> controller.endInteractivePoll(channel.id, pollId, archive) },
+                        onLockPrediction = { predictionId -> controller.lockInteractivePrediction(channel.id, predictionId) },
+                        onCancelPrediction = { predictionId -> controller.cancelInteractivePrediction(channel.id, predictionId) },
+                        onResolvePrediction = { predictionId, outcomeId -> controller.resolveInteractivePrediction(channel.id, predictionId, outcomeId) },
+                        onRecoverInteractiveMutation = { controller.recoverInteractiveMutation(channel.id) },
+                        onDraftChange = { controller.updateDraft(channel.id, it) },
+                        onRetryMessage = controller::retryOutgoingMessage,
+                        onDeleteMessage = controller::deleteMessage,
+                        onQuickBan = controller::banUser,
+                        onPinMessage = controller::pinMessage,
+                        onUnpinMessage = controller::unpinMessage,
+                        onRefreshPinnedMessage = controller::refreshPinnedMessage,
+                        onAutoModDecision = controller::decideAutoModMessage,
+                        onEmoteUsed = controller::recordEmoteUsage,
+                        onToggleFavoriteEmote = controller::toggleFavoriteEmote,
+                        onOpenUser = { message ->
+                            hideKeyboard()
+                            controller.openUserCard(message)
+                        },
+                        onScrollPositionChanged = { channelId, anchor, index, offset, atBottom ->
+                            if (split.id == activeSplitId && split.filterQuery.isBlank()) {
+                                controller.saveScrollPosition(channelId, anchor, index, offset, atBottom)
+                            }
+                        },
+                        onLoadOlderHistory = { controller.loadOlderHistory(channel.id) },
+                        onUserInteraction = {
+                            hideKeyboard()
+                            controller.focusChatSplit(split.id)
+                        },
+                        filterQuery = split.filterQuery,
+                        unreadCount = attention?.unreadCount ?: 0,
+                        navigationTargetMessageId = state.messageNavigationTargets[channel.id],
+                        onNavigationConsumed = { messageId ->
+                            controller.consumeMessageNavigation(channel.id, messageId)
+                        },
+                        replyTargetMessageId = state.replyComposerTargets[channel.id],
+                        onReplyTargetConsumed = { messageId ->
+                            controller.consumeReplyComposerTarget(channel.id, messageId)
+                        },
+                        onMarkRead = { controller.markChannelRead(channel.id) },
+                        composerLeadingContent = {
+                            ChannelPointsComposerEntry(
                                 state = state,
                                 channelId = channel.id,
-                                interactiveChatState = interactiveChatState,
-                                onSend = { text, reply -> controller.sendMessageToChannel(channel.id, text, reply) },
-                                onExecuteNuke = { plan -> controller.executeNuke(channel.id, plan) },
-
-                                onExecuteModerationCommand = { command -> controller.executeConfirmedModerationCommand(channel.id, command) },
-
-                                onCreatePoll = { draft -> controller.createInteractivePoll(channel.id, draft) },
-
-                                onCreatePrediction = { draft -> controller.createInteractivePrediction(channel.id, draft) },
-
-                                onEndPoll = { pollId, archive -> controller.endInteractivePoll(channel.id, pollId, archive) },
-
-                                onLockPrediction = { predictionId -> controller.lockInteractivePrediction(channel.id, predictionId) },
-
-                                onCancelPrediction = { predictionId -> controller.cancelInteractivePrediction(channel.id, predictionId) },
-
-                                onResolvePrediction = { predictionId, outcomeId -> controller.resolveInteractivePrediction(channel.id, predictionId, outcomeId) },
-                                onRecoverInteractiveMutation = { controller.recoverInteractiveMutation(channel.id) },
-                                onDraftChange = { controller.updateDraft(channel.id, it) },
-                                onRetryMessage = controller::retryOutgoingMessage,
-                                onDeleteMessage = controller::deleteMessage,
-                                onQuickBan = controller::banUser,
-                                onPinMessage = controller::pinMessage,
-                                onUnpinMessage = controller::unpinMessage,
-                                onRefreshPinnedMessage = controller::refreshPinnedMessage,
-                                onAutoModDecision = controller::decideAutoModMessage,
-                                onEmoteUsed = controller::recordEmoteUsage,
-                                onToggleFavoriteEmote = controller::toggleFavoriteEmote,
-                                onOpenUser = { message ->
-                                    hideKeyboard()
-                                    controller.openUserCard(message)
-                                },
-                                onScrollPositionChanged = { channelId, anchor, index, offset, atBottom ->
-                                    if (split.id == activeSplitId && split.filterQuery.isBlank()) {
-                                        controller.saveScrollPosition(channelId, anchor, index, offset, atBottom)
-                                    }
-                                },
-                                onLoadOlderHistory = { controller.loadOlderHistory(channel.id) },
-                                onUserInteraction = {
-                                    hideKeyboard()
-                                    controller.focusChatSplit(split.id)
-                                },
-                                filterQuery = split.filterQuery,
-                                unreadCount = attention?.unreadCount ?: 0,
-                                navigationTargetMessageId = state.messageNavigationTargets[channel.id],
-                                onNavigationConsumed = { messageId ->
-                                    controller.consumeMessageNavigation(channel.id, messageId)
-                                },
-                                replyTargetMessageId = state.replyComposerTargets[channel.id],
-                                onReplyTargetConsumed = { messageId ->
-                                    controller.consumeReplyComposerTarget(channel.id, messageId)
-                                },
-                                onMarkRead = { controller.markChannelRead(channel.id) },
-                                instanceKey = split.id,
+                                controller = controller,
                             )
-                        }
-                        ChannelPointsComposerFooter(
-                            state = state,
-                            channelId = channel.id,
-                            controller = controller,
-                        )
-                    }
+                        },
+                        instanceKey = split.id,
+                    )
                 }
             }
         }

@@ -3,7 +3,6 @@ package io.ferventio.app.ui
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -28,12 +27,12 @@ import java.text.NumberFormat
 import java.util.Locale
 
 /**
- * Compact Channel Points entry point placed directly under the message composer.
+ * Compact Channel Points entry point rendered to the left of the message field.
  * It reuses the existing rewards sheet and redemption coordinator rather than
  * introducing another redemption path.
  */
 @Composable
-internal fun ChannelPointsComposerFooter(
+internal fun ChannelPointsComposerEntry(
     state: FerventioUiState,
     channelId: String,
     controller: FerventioController,
@@ -53,44 +52,40 @@ internal fun ChannelPointsComposerFooter(
         }
     }
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 14.dp, end = 14.dp, bottom = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    Surface(
+        modifier = Modifier.clickable {
+            showSheet = true
+            controller.refreshChannelPoints(channelId)
+        },
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
     ) {
-        Surface(
-            modifier = Modifier.clickable {
-                showSheet = true
-                controller.refreshChannelPoints(channelId)
-            },
-            shape = MaterialTheme.shapes.extraLarge,
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                VerbatimText(
-                    "◇",
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.Bold,
+            VerbatimText(
+                "◇",
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.width(4.dp))
+            VerbatimText(
+                formatChannelPointsBalance(channelPoints?.balance),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+            )
+            if (channelPoints?.loading == true) {
+                Spacer(Modifier.width(5.dp))
+                CircularProgressIndicator(
+                    modifier = Modifier.size(12.dp),
+                    strokeWidth = 2.dp,
                 )
-                Spacer(Modifier.width(6.dp))
-                VerbatimText(
-                    formatChannelPointsBalance(channelPoints?.balance),
-                    fontWeight = FontWeight.SemiBold,
-                )
-                if (channelPoints?.loading == true) {
-                    Spacer(Modifier.width(8.dp))
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(14.dp),
-                        strokeWidth = 2.dp,
-                    )
-                }
             }
         }
     }
+    Spacer(Modifier.width(6.dp))
 
     if (showSheet) {
         ChannelPointsSheet(
