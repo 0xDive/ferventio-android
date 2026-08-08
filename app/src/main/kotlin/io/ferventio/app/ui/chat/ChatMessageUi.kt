@@ -356,6 +356,7 @@ internal fun MessageRow(
     onReply: (ChatMessage) -> Unit,
 ) {
     val uriHandler = LocalUriHandler.current
+    val moderationPreferences = rememberQuickModerationPreferenceState()
     val badgeAssets = renderAssets.badgeAssets
     val cheermoteAssets = renderAssets.cheermoteAssets
     val emoteCatalogByProviderAndId = renderAssets.emoteCatalogByProviderAndId
@@ -709,7 +710,13 @@ internal fun MessageRow(
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier
                             .size(17.dp)
-                            .clickable { pendingQuickAction = "ban" },
+                            .clickable {
+                                if (moderationPreferences.confirmActions) {
+                                    pendingQuickAction = "ban"
+                                } else {
+                                    onQuickBan(message)
+                                }
+                            },
                     )
                     Spacer(Modifier.width(3.dp))
                 }
@@ -720,7 +727,13 @@ internal fun MessageRow(
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier
                             .size(17.dp)
-                            .clickable { pendingQuickAction = "delete" },
+                            .clickable {
+                                if (moderationPreferences.confirmActions) {
+                                    pendingQuickAction = "delete"
+                                } else {
+                                    onQuickDelete(message)
+                                }
+                            },
                     )
                     Spacer(Modifier.width(5.dp))
                 }

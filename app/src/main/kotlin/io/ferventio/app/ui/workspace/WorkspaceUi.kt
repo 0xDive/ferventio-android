@@ -98,7 +98,6 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.ferventio.app.R
 import io.ferventio.app.domain.ChannelAttention
 import io.ferventio.app.domain.AttentionEntry
@@ -242,9 +241,7 @@ private fun ChatsWorkspaceScreen(
     var showChatModes by rememberSaveable { mutableStateOf(false) }
     var showChatUsers by rememberSaveable { mutableStateOf(false) }
     var showActionSearch by rememberSaveable { mutableStateOf(false) }
-    var showChannelPoints by rememberSaveable { mutableStateOf(false) }
     var showMainMenu by rememberSaveable { mutableStateOf(false) }
-    val channelPointsState by controller.channelPointsState.collectAsStateWithLifecycle()
     val workspaceStrings = rememberAppResourceStrings(state.appLanguage)
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val drawerScope = rememberCoroutineScope()
@@ -278,8 +275,6 @@ private fun ChatsWorkspaceScreen(
 
     ModalNavigationDrawer(
         drawerState = drawerState,
-        // Keep edge-opening disabled so it cannot conflict with channel paging, but once
-        // the drawer is open allow Material's native drag gesture to close it.
         gesturesEnabled = drawerState.isOpen,
         drawerContent = {
             ChannelDrawerContent(
@@ -464,16 +459,6 @@ private fun ChatsWorkspaceScreen(
                                         showActionSearch = true
                                     },
                                 )
-                                if (state.isAuthenticated && activeChannel != null) {
-                                    DropdownMenuItem(
-                                        text = { LocalizedText(workspaceStrings.string(R.string.ferventio_channel_points_title)) },
-                                        onClick = {
-                                            showMainMenu = false
-                                            showChannelPoints = true
-                                            controller.refreshChannelPoints(activeChannel.id)
-                                        },
-                                    )
-                                }
                                 DropdownMenuItem(
                                     text = { LocalizedText("Настройки") },
                                     onClick = {
@@ -570,21 +555,6 @@ private fun ChatsWorkspaceScreen(
                         }
                     }
                 }
-            },
-        )
-    }
-
-    if (showChannelPoints && activeChannel != null) {
-        ChannelPointsSheet(
-            state = channelPointsState.channel(activeChannel.id),
-            appLanguage = state.appLanguage,
-            onRefresh = { controller.refreshChannelPoints(activeChannel.id) },
-            onRedeem = { reward, input ->
-                controller.redeemChannelPointsReward(activeChannel.id, reward, input)
-            },
-            onDismiss = {
-                showChannelPoints = false
-                controller.clearChannelPointsError(activeChannel.id)
             },
         )
     }

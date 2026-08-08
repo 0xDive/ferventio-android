@@ -3,6 +3,7 @@ package io.ferventio.app.moderation
 import io.ferventio.app.domain.NukeExecutionPlan
 import io.ferventio.app.domain.NukeMatchMode
 import io.ferventio.app.domain.NukeTargetUser
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -62,6 +63,34 @@ class NukeExecutionCoordinatorTest {
             assertEquals(1, result.failedUsers)
             assertEquals("beta", result.failures.single().user.userLogin)
             assertFalse(result.completed)
+        }
+    }
+
+    @Test
+    fun `cancellation stops batch before later targets`() {
+        runBlocking {
+            val calls = mutableListOf<String>()
+            val coordinator = NukeExecutionCoordinator(
+                moderationAction = NukeModerationAction { user, _, _ ->
+                    calls += user.userLogin
+                    if (user.userLogin == "beta") {
+                        throw CancellationException("nuke cancelled")
+                    }
+                },
+                delayAction = {},
+            )
+
+            try {
+                coordinator.execute(
+                    plan = plan("alpha", "beta", "gamma"),
+                    policy = NukeExecutionPolicy(delayBetweenActionsMillis = 0L),
+                )
+                throw AssertionError("Expected Nuke cancellation to propagate")
+            } catch (cancelled: CancellationException) {
+                assertEquals("nuke cancelled", cancelled.message)
+            }
+
+            assertEquals(listOf("alpha", "beta"), calls)
         }
     }
 

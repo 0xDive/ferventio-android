@@ -1,0 +1,4 @@
+<resources>
+    <string name="ferventio_moderation_confirm_actions_setting">Confirm moderation actions</string>
+    <string name="ferventio_moderation_confirm_actions_setting_summary">Ask before Ban, Delete, Block, and Unban. Turn this off for immediate moderation actions.</string>
+</resources>

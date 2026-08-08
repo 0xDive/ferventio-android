@@ -14,6 +14,7 @@ import io.ferventio.app.data.FERVENTIO_SETTINGS_FILE_NAME
 
 internal const val QUICK_BAN_BUTTON_KEY = "quick_ban_button_enabled"
 internal const val QUICK_DELETE_BUTTON_KEY = "quick_delete_button_enabled"
+internal const val CONFIRM_MODERATION_ACTIONS_KEY = "confirm_moderation_actions_enabled"
 
 @Stable
 internal class QuickModerationPreferenceState internal constructor(
@@ -21,9 +22,13 @@ internal class QuickModerationPreferenceState internal constructor(
 ) {
     private var mutableShowBan by mutableStateOf(preferences.getBoolean(QUICK_BAN_BUTTON_KEY, false))
     private var mutableShowDelete by mutableStateOf(preferences.getBoolean(QUICK_DELETE_BUTTON_KEY, false))
+    private var mutableConfirmActions by mutableStateOf(
+        preferences.getBoolean(CONFIRM_MODERATION_ACTIONS_KEY, true),
+    )
 
     val showBan: Boolean get() = mutableShowBan
     val showDelete: Boolean get() = mutableShowDelete
+    val confirmActions: Boolean get() = mutableConfirmActions
 
     fun setShowBan(value: Boolean) {
         preferences.edit().putBoolean(QUICK_BAN_BUTTON_KEY, value).apply()
@@ -35,9 +40,15 @@ internal class QuickModerationPreferenceState internal constructor(
         mutableShowDelete = value
     }
 
+    fun setConfirmActions(value: Boolean) {
+        preferences.edit().putBoolean(CONFIRM_MODERATION_ACTIONS_KEY, value).apply()
+        mutableConfirmActions = value
+    }
+
     internal fun refresh() {
         mutableShowBan = preferences.getBoolean(QUICK_BAN_BUTTON_KEY, false)
         mutableShowDelete = preferences.getBoolean(QUICK_DELETE_BUTTON_KEY, false)
+        mutableConfirmActions = preferences.getBoolean(CONFIRM_MODERATION_ACTIONS_KEY, true)
     }
 }
 
@@ -50,7 +61,13 @@ internal fun rememberQuickModerationPreferenceState(): QuickModerationPreference
     val state = remember(preferences) { QuickModerationPreferenceState(preferences) }
     DisposableEffect(preferences, state) {
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-            if (key == QUICK_BAN_BUTTON_KEY || key == QUICK_DELETE_BUTTON_KEY) state.refresh()
+            if (
+                key == QUICK_BAN_BUTTON_KEY ||
+                key == QUICK_DELETE_BUTTON_KEY ||
+                key == CONFIRM_MODERATION_ACTIONS_KEY
+            ) {
+                state.refresh()
+            }
         }
         preferences.registerOnSharedPreferenceChangeListener(listener)
         state.refresh()

@@ -266,19 +266,24 @@ class FerventioBackendClient {
             ?: (now - LEGACY_TWITCH_VALIDATION_AGE_MILLIS).coerceAtLeast(1L)
         val backendSessionExpiresAtMillis = serverRelativeDeadline(serverTime, requiredString("sessionExpiresAt"), now)
         val remainingSeconds = ((twitchExpiresAtMillis - now) / 1_000L).coerceAtLeast(0L)
-        return TwitchAccessLease(
-            accessToken = requiredString("accessToken"),
-            leaseExpiresAtEpochMillis = leaseExpiresAtMillis,
-            twitchExpiresAtEpochMillis = twitchExpiresAtMillis,
-            twitchValidatedAtEpochMillis = twitchValidatedAtMillis,
-            backendSessionExpiresAtEpochMillis = backendSessionExpiresAtMillis,
-            session = TwitchSession(
+        val accessToken = requiredString("accessToken")
+        val stableSession = BackendLeaseSessionStabilizer.stabilize(
+            accessToken = accessToken,
+            candidate = TwitchSession(
                 clientId = requiredString("clientId"),
                 userId = requiredString("userId"),
                 login = requiredString("login"),
                 scopes = requiredStringList("scopes").toSet(),
                 expiresInSeconds = remainingSeconds,
             ),
+        )
+        return TwitchAccessLease(
+            accessToken = accessToken,
+            leaseExpiresAtEpochMillis = leaseExpiresAtMillis,
+            twitchExpiresAtEpochMillis = twitchExpiresAtMillis,
+            twitchValidatedAtEpochMillis = twitchValidatedAtMillis,
+            backendSessionExpiresAtEpochMillis = backendSessionExpiresAtMillis,
+            session = stableSession,
         )
     }
 

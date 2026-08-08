@@ -23,10 +23,21 @@ object TwitchAccessLeaseValidation {
         }
         val remainingMillis = Math.multiplyExact(validatedSession.expiresInSeconds, 1_000L)
         val twitchExpiresAt = Math.addExact(nowEpochMillis, remainingMillis)
+        val stableSession = if (cachedLease.session.sameTransportIdentity(validatedSession)) {
+            cachedLease.session
+        } else {
+            validatedSession
+        }
         return cachedLease.copy(
             twitchExpiresAtEpochMillis = twitchExpiresAt,
             twitchValidatedAtEpochMillis = nowEpochMillis,
-            session = validatedSession,
+            session = stableSession,
         )
     }
+
+    private fun TwitchSession.sameTransportIdentity(other: TwitchSession): Boolean =
+        clientId == other.clientId &&
+            userId == other.userId &&
+            login == other.login &&
+            scopes == other.scopes
 }

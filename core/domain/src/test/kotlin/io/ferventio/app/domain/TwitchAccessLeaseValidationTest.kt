@@ -1,13 +1,16 @@
 package io.ferventio.app.domain
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotSame
+import org.junit.Assert.assertSame
 import org.junit.Test
 
 class TwitchAccessLeaseValidationTest {
     @Test
-    fun `direct validation updates actual expiry and timestamp`() {
+    fun `direct validation updates actual expiry without replacing stable transport session`() {
+        val cached = lease()
         val updated = TwitchAccessLeaseValidation.updateAfterDirectValidation(
-            cachedLease = lease(),
+            cachedLease = cached,
             validatedSession = session(expiresInSeconds = 7_200L),
             requiredScopes = REQUIRED_SCOPES,
             nowEpochMillis = 1_000_000L,
@@ -15,6 +18,26 @@ class TwitchAccessLeaseValidationTest {
 
         assertEquals(8_200_000L, updated.twitchExpiresAtEpochMillis)
         assertEquals(1_000_000L, updated.twitchValidatedAtEpochMillis)
+        assertSame(cached.session, updated.session)
+        assertEquals(3_600L, updated.session.expiresInSeconds)
+    }
+
+    @Test
+    fun `transport identity change adopts validated session`() {
+        val cached = lease().copy(
+            session = session(scopes = REQUIRED_SCOPES + "channel:read:redemptions"),
+        )
+        val validated = session(expiresInSeconds = 7_200L)
+
+        val updated = TwitchAccessLeaseValidation.updateAfterDirectValidation(
+            cachedLease = cached,
+            validatedSession = validated,
+            requiredScopes = REQUIRED_SCOPES,
+            nowEpochMillis = 1_000_000L,
+        )
+
+        assertNotSame(cached.session, updated.session)
+        assertSame(validated, updated.session)
         assertEquals(7_200L, updated.session.expiresInSeconds)
     }
 
@@ -31,7 +54,7 @@ class TwitchAccessLeaseValidationTest {
     fun `missing required scope is rejected`() {
         TwitchAccessLeaseValidation.updateAfterDirectValidation(
             cachedLease = lease(),
-            validatedSession = session().copy(scopes = setOf("user:read:chat")),
+            validatedSession = session(scopes = setOf("user:read:chat")),
             requiredScopes = REQUIRED_SCOPES,
         )
     }
@@ -54,11 +77,14 @@ class TwitchAccessLeaseValidationTest {
         session = session(),
     )
 
-    private fun session(expiresInSeconds: Long = 3_600L) = TwitchSession(
+    private fun session(
+        expiresInSeconds: Long = 3_600L,
+        scopes: Set<String> = REQUIRED_SCOPES,
+    ) = TwitchSession(
         clientId = "client",
         userId = "user",
         login = "viewer",
-        scopes = REQUIRED_SCOPES,
+        scopes = scopes,
         expiresInSeconds = expiresInSeconds,
     )
 

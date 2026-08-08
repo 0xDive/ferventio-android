@@ -175,6 +175,7 @@ import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.ferventio.app.BuildConfig
+import io.ferventio.app.R
 import io.ferventio.app.domain.AutoModHeldMessage
 import io.ferventio.app.domain.AutoModMessageStatus
 import io.ferventio.app.domain.ChatAssetResolver
@@ -245,6 +246,8 @@ internal fun SettingsHomePage(
     onLogout: () -> Unit,
 ) {
     val profile = state.session?.userId?.let(state.userProfilesById::get)
+    val quickModerationPreference = rememberQuickModerationPreferenceState()
+    val resourceStrings = rememberAppResourceStrings(state.appLanguage)
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
@@ -340,6 +343,13 @@ internal fun SettingsHomePage(
                     title = strings.userCard,
                     summary = strings.userCardSummary,
                     onClick = { onOpen(SettingsPage.USER_CARD) },
+                )
+                SettingsGroupDivider()
+                SettingsSwitchRow(
+                    title = resourceStrings.string(R.string.ferventio_moderation_confirm_actions_setting),
+                    description = resourceStrings.string(R.string.ferventio_moderation_confirm_actions_setting_summary),
+                    checked = quickModerationPreference.confirmActions,
+                    onCheckedChange = quickModerationPreference::setConfirmActions,
                 )
             }
         }

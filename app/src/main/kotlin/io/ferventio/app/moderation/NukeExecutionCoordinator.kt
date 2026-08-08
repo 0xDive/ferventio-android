@@ -2,6 +2,7 @@ package io.ferventio.app.moderation
 
 import io.ferventio.app.domain.NukeExecutionPlan
 import io.ferventio.app.domain.NukeTargetUser
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 
 data class NukeExecutionPolicy(
@@ -57,15 +58,16 @@ class NukeExecutionCoordinator(
         val failures = mutableListOf<NukeTargetFailure>()
         var succeeded = 0
         plan.targetUsers.forEachIndexed { index, user ->
-            runCatching {
+            try {
                 moderationAction.timeout(
                     user = user,
                     durationSeconds = policy.timeoutSeconds,
                     reason = policy.reason,
                 )
-            }.onSuccess {
                 succeeded += 1
-            }.onFailure { throwable ->
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (throwable: Throwable) {
                 failures += NukeTargetFailure(
                     user = user,
                     message = throwable.message ?: throwable::class.java.simpleName,
