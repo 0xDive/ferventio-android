@@ -323,6 +323,7 @@ internal fun UserCardSheet(
     val clipboardManager = LocalClipboardManager.current
     val uriHandler = LocalUriHandler.current
     val userCardStrings = rememberAppStrings(appLanguage)
+    val moderationPreferences = rememberQuickModerationPreferenceState()
     val recentListState = rememberLazyListState()
     val recentListDragged by recentListState.interactionSource.collectIsDraggedAsState()
     val hideKeyboard = {
@@ -575,7 +576,11 @@ internal fun UserCardSheet(
                         item {
                             OutlinedButton(
                                 onClick = {
-                                    pendingDangerAction = "block"
+                                    if (moderationPreferences.confirmActions) {
+                                        pendingDangerAction = "block"
+                                    } else {
+                                        onBlock(data.channelId, data.user.id, data.user.login)
+                                    }
                                 },
                             ) {
                                 Icon(Icons.Default.Block, contentDescription = null)
@@ -640,7 +645,13 @@ internal fun UserCardSheet(
                                         }
 
                                         actionId == "ban" -> Button(
-                                            onClick = { pendingDangerAction = "ban" },
+                                            onClick = {
+                                                if (moderationPreferences.confirmActions) {
+                                                    pendingDangerAction = "ban"
+                                                } else {
+                                                    onBan(data.channelId, data.user.id, data.user.login)
+                                                }
+                                            },
                                         ) {
                                             Icon(Icons.Default.Block, contentDescription = null)
                                             Spacer(Modifier.width(5.dp))
@@ -648,7 +659,13 @@ internal fun UserCardSheet(
                                         }
 
                                         actionId == "unban" -> OutlinedButton(
-                                            onClick = { pendingDangerAction = "unban" },
+                                            onClick = {
+                                                if (moderationPreferences.confirmActions) {
+                                                    pendingDangerAction = "unban"
+                                                } else {
+                                                    onUnban(data.channelId, data.user.id, data.user.login)
+                                                }
+                                            },
                                         ) {
                                             Icon(Icons.Default.Restore, contentDescription = null)
                                             Spacer(Modifier.width(5.dp))

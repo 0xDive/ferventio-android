@@ -1,9 +1,15 @@
 package io.ferventio.app.application
 
+import io.ferventio.app.twitch.TwitchChannelPointsContext
 import io.ferventio.app.twitch.TwitchChannelPointsGqlClient
+import io.ferventio.app.twitch.TwitchChannelPointsRedemption
+import io.ferventio.app.twitch.TwitchChannelPointsRedeemException
 import io.ferventio.app.twitch.TwitchChannelPointsReward
 import java.io.Closeable
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicLong
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,6 +29,7 @@ data class ChannelPointsChannelState(
     val rewards: List<TwitchChannelPointsReward> = emptyList(),
     val loading: Boolean = false,
     val redeemingRewardId: String? = null,
+    val redemptionOutcomeUncertain: Boolean = false,
     val errorMessage: String? = null,
     val lastRedemptionId: String? = null,
 )
@@ -33,36 +40,90 @@ data class ChannelPointsUiState(
     fun channel(channelId: String): ChannelPointsChannelState? = byChannel[channelId]
 }
 
+internal interface ChannelPointsGateway : Closeable {
+    suspend fun getContext(
+        clientId: String,
+        accessToken: String,
+        channelLogin: String,
+    ): TwitchChannelPointsContext
+
+    suspend fun redeem(
+        clientId: String,
+        accessToken: String,
+        channelId: String,
+        reward: TwitchChannelPointsReward,
+        transactionId: String,
+        textInput: String?,
+    ): TwitchChannelPointsRedemption
+}
+
+private class TwitchChannelPointsGateway(
+    private val client: TwitchChannelPointsGqlClient = TwitchChannelPointsGqlClient(),
+) : ChannelPointsGateway {
+    override suspend fun getContext(
+        clientId: String,
+        accessToken: String,
+        channelLogin: String,
+    ): TwitchChannelPointsContext = client.getContext(clientId, accessToken, channelLogin)
+
+    override suspend fun redeem(
+        clientId: String,
+        accessToken: String,
+        channelId: String,
+        reward: TwitchChannelPointsReward,
+        transactionId: String,
+        textInput: String?,
+    ): TwitchChannelPointsRedemption = client.redeem(
+        clientId = clientId,
+        accessToken = accessToken,
+        channelId = channelId,
+        reward = reward,
+        transactionId = transactionId,
+        textInput = textInput,
+    )
+
+    override fun close() = client.close()
+}
+
 /** Separate state holder for private-GQL viewer Channel Points functionality. */
 class ChannelPointsCoordinator internal constructor(
-    private val api: TwitchChannelPointsGqlClient = TwitchChannelPointsGqlClient(),
+    private val gateway: ChannelPointsGateway = TwitchChannelPointsGateway(),
 ) : Closeable {
     private val mutableState = MutableStateFlow(ChannelPointsUiState())
     val state: StateFlow<ChannelPointsUiState> = mutableState.asStateFlow()
-    private val mutex = Mutex()
+    private val channelMutexes = ConcurrentHashMap<String, Mutex>()
+    private val sessionEpoch = AtomicLong(0L)
 
     suspend fun refresh(
         auth: ChannelPointsAuth,
         channelId: String,
         channelLogin: String,
-    ) = mutex.withLock {
-        updateChannel(channelId, channelLogin) { it.copy(loading = true, errorMessage = null) }
-        runCatching {
-            api.getContext(auth.clientId, auth.accessToken, channelLogin)
-        }.onSuccess { context ->
-            updateChannel(channelId, channelLogin) {
-                it.copy(
-                    balance = context.balance,
-                    rewards = context.rewards.sortedWith(compareBy<TwitchChannelPointsReward> { reward -> !reward.enabled }.thenBy { reward -> reward.cost }),
-                    loading = false,
-                    errorMessage = null,
-                )
+    ) {
+        val epoch = sessionEpoch.get()
+        channelMutex(channelId).withLock {
+            if (!isCurrentEpoch(epoch)) return@withLock
+            updateChannel(channelId, channelLogin, epoch) { it.copy(loading = true, errorMessage = null) }
+            try {
+                val context = gateway.getContext(auth.clientId, auth.accessToken, channelLogin)
+                updateChannel(channelId, channelLogin, epoch) {
+                    it.copy(
+                        balance = context.balance,
+                        rewards = sortedRewards(context.rewards),
+                        loading = false,
+                        redemptionOutcomeUncertain = false,
+                        errorMessage = null,
+                    )
+                }
+            } catch (cancelled: CancellationException) {
+                updateChannel(channelId, channelLogin, epoch) { it.copy(loading = false) }
+                throw cancelled
+            } catch (error: Throwable) {
+                updateChannel(channelId, channelLogin, epoch) {
+                    it.copy(loading = false, errorMessage = error.message ?: error::class.simpleName)
+                }
+                throw error
             }
-        }.onFailure { error ->
-            updateChannel(channelId, channelLogin) {
-                it.copy(loading = false, errorMessage = error.message ?: error::class.simpleName)
-            }
-        }.getOrThrow()
+        }
     }
 
     suspend fun redeem(
@@ -71,37 +132,77 @@ class ChannelPointsCoordinator internal constructor(
         channelLogin: String,
         reward: TwitchChannelPointsReward,
         textInput: String?,
-    ) = mutex.withLock {
-        updateChannel(channelId, channelLogin) {
-            it.copy(redeemingRewardId = reward.id, errorMessage = null, lastRedemptionId = null)
-        }
-        runCatching {
-            api.redeem(
-                clientId = auth.clientId,
-                accessToken = auth.accessToken,
-                channelId = channelId,
-                reward = reward,
-                transactionId = UUID.randomUUID().toString(),
-                textInput = textInput,
-            )
-        }.onSuccess { redemption ->
-            val refreshed = runCatching {
-                api.getContext(auth.clientId, auth.accessToken, channelLogin)
-            }.getOrNull()
-            updateChannel(channelId, channelLogin) { current ->
+    ): TwitchChannelPointsRedemption {
+        val epoch = sessionEpoch.get()
+        return channelMutex(channelId).withLock {
+            check(isCurrentEpoch(epoch)) { "Channel Points session changed; refresh before redeeming" }
+            check(mutableState.value.channel(channelId)?.redemptionOutcomeUncertain != true) {
+                "Refresh Channel Points before another redemption"
+            }
+            updateChannel(channelId, channelLogin, epoch) {
+                it.copy(
+                    redeemingRewardId = reward.id,
+                    redemptionOutcomeUncertain = false,
+                    errorMessage = null,
+                    lastRedemptionId = null,
+                )
+            }
+
+            val redemption = try {
+                gateway.redeem(
+                    clientId = auth.clientId,
+                    accessToken = auth.accessToken,
+                    channelId = channelId,
+                    reward = reward,
+                    transactionId = UUID.randomUUID().toString(),
+                    textInput = textInput,
+                )
+            } catch (cancelled: CancellationException) {
+                markRedemptionOutcomeUncertain(channelId, channelLogin, epoch)
+                throw cancelled
+            } catch (error: Throwable) {
+                if (error is TwitchChannelPointsRedeemException) {
+                    updateChannel(channelId, channelLogin, epoch) {
+                        it.copy(
+                            redeemingRewardId = null,
+                            redemptionOutcomeUncertain = false,
+                            errorMessage = error.message ?: error.code,
+                        )
+                    }
+                } else {
+                    markRedemptionOutcomeUncertain(channelId, channelLogin, epoch)
+                }
+                throw error
+            }
+
+            updateChannel(channelId, channelLogin, epoch) { current ->
                 current.copy(
-                    balance = refreshed?.balance ?: current.balance?.let { balance -> (balance - reward.cost).coerceAtLeast(0) },
-                    rewards = refreshed?.rewards ?: current.rewards,
+                    balance = current.balance?.let { balance -> (balance - reward.cost).coerceAtLeast(0) },
                     redeemingRewardId = null,
+                    redemptionOutcomeUncertain = false,
                     errorMessage = null,
                     lastRedemptionId = redemption.id,
                 )
             }
-        }.onFailure { error ->
-            updateChannel(channelId, channelLogin) {
-                it.copy(redeemingRewardId = null, errorMessage = error.message ?: error::class.simpleName)
+
+            if (!isCurrentEpoch(epoch)) return@withLock redemption
+            try {
+                val refreshed = gateway.getContext(auth.clientId, auth.accessToken, channelLogin)
+                updateChannel(channelId, channelLogin, epoch) { current ->
+                    current.copy(
+                        balance = refreshed.balance,
+                        rewards = sortedRewards(refreshed.rewards),
+                    )
+                }
+            } catch (cancelled: CancellationException) {
+                // Twitch already returned a redemption id, so the write is confirmed even if the
+                // best-effort follow-up balance refresh is cancelled.
+                throw cancelled
+            } catch (_: Throwable) {
+                // Keep the confirmed redemption and optimistic balance. A later refresh will reconcile.
             }
-        }.getOrThrow()
+            redemption
+        }
     }
 
     fun clearError(channelId: String) {
@@ -111,17 +212,57 @@ class ChannelPointsCoordinator internal constructor(
         }
     }
 
+    internal fun resetSession() {
+        sessionEpoch.incrementAndGet()
+        mutableState.value = ChannelPointsUiState()
+    }
+
+    private fun markRedemptionOutcomeUncertain(
+        channelId: String,
+        channelLogin: String,
+        expectedEpoch: Long,
+    ) {
+        updateChannel(channelId, channelLogin, expectedEpoch) {
+            it.copy(
+                redeemingRewardId = null,
+                redemptionOutcomeUncertain = true,
+                errorMessage = null,
+                lastRedemptionId = null,
+            )
+        }
+    }
+
+    private fun channelMutex(channelId: String): Mutex =
+        channelMutexes.computeIfAbsent(channelId) { Mutex() }
+
+    private fun isCurrentEpoch(expectedEpoch: Long): Boolean = sessionEpoch.get() == expectedEpoch
+
     private fun updateChannel(
         channelId: String,
         channelLogin: String,
+        expectedEpoch: Long,
         transform: (ChannelPointsChannelState) -> ChannelPointsChannelState,
     ) {
         mutableState.update { state ->
+            if (!isCurrentEpoch(expectedEpoch)) return@update state
             val current = state.byChannel[channelId]
                 ?: ChannelPointsChannelState(channelId = channelId, channelLogin = channelLogin)
             state.copy(byChannel = state.byChannel + (channelId to transform(current)))
         }
     }
 
-    override fun close() = api.close()
+    override fun close() {
+        sessionEpoch.incrementAndGet()
+        mutableState.value = ChannelPointsUiState()
+        channelMutexes.clear()
+        gateway.close()
+    }
+
+    private companion object {
+        fun sortedRewards(rewards: List<TwitchChannelPointsReward>): List<TwitchChannelPointsReward> =
+            rewards.sortedWith(
+                compareBy<TwitchChannelPointsReward> { reward -> !reward.enabled }
+                    .thenBy { reward -> reward.cost },
+            )
+    }
 }

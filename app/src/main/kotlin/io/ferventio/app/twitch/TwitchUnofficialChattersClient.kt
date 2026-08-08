@@ -86,14 +86,31 @@ class TwitchUnofficialChattersClient : Closeable {
     }
 }
 
+enum class TwitchUnofficialChatterGroup {
+    BROADCASTER,
+    STAFF,
+    VIP,
+    MODERATOR,
+    CHATBOT,
+    VIEWER,
+}
+
 data class TwitchUnofficialChatter(
     val id: String,
     val login: String,
+    val group: TwitchUnofficialChatterGroup = TwitchUnofficialChatterGroup.VIEWER,
 )
 
 internal object TwitchUnofficialChattersParser {
+    private val groups = linkedMapOf(
+        "broadcasters" to TwitchUnofficialChatterGroup.BROADCASTER,
+        "staff" to TwitchUnofficialChatterGroup.STAFF,
+        "vips" to TwitchUnofficialChatterGroup.VIP,
+        "moderators" to TwitchUnofficialChatterGroup.MODERATOR,
+        "chatbots" to TwitchUnofficialChatterGroup.CHATBOT,
+        "viewers" to TwitchUnofficialChatterGroup.VIEWER,
+    )
     private val json = Json { ignoreUnknownKeys = true }
-    private val groups = listOf("broadcasters", "staff", "vips", "moderators", "chatbots", "viewers")
 
     fun parse(body: String): List<TwitchUnofficialChatter> {
         val parsed = json.parseToJsonElement(body)
@@ -117,18 +134,29 @@ internal object TwitchUnofficialChattersParser {
             ?.objectOrNull("chatters")
             ?: return emptyList()
 
-        val byKey = LinkedHashMap<String, TwitchUnofficialChatter>()
-        groups.forEach { group ->
-            chatters.array(group).orEmpty().forEach { element ->
+        val byLogin = LinkedHashMap<String, TwitchUnofficialChatter>()
+        groups.forEach { (groupKey, group) ->
+            chatters.array(groupKey).orEmpty().forEach { element ->
                 val item = element as? JsonObject ?: return@forEach
                 val login = item.string("login").orEmpty().trim()
                 if (login.isBlank()) return@forEach
                 val id = item.string("id").orEmpty().trim()
-                val key = id.takeIf(String::isNotBlank) ?: login.lowercase()
-                byKey.putIfAbsent(key, TwitchUnofficialChatter(id = id, login = login))
+                val key = login.lowercase()
+                val existing = byLogin[key]
+                if (existing == null) {
+                    byLogin[key] = TwitchUnofficialChatter(
+                        id = id,
+                        login = login,
+                        group = group,
+                    )
+                } else if (existing.id.isBlank() && id.isNotBlank()) {
+                    // Role buckets are visited from highest to lowest priority. Keep the first role
+                    // while still accepting a canonical id from a duplicate entry in a later bucket.
+                    byLogin[key] = existing.copy(id = id)
+                }
             }
         }
-        return byKey.values.toList()
+        return byLogin.values.toList()
     }
 
     private fun JsonObject.objectOrNull(key: String): JsonObject? = this[key] as? JsonObject

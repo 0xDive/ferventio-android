@@ -48,10 +48,21 @@ data class ModerationChatSettings(
     val uniqueChatMode: Boolean = false,
 )
 
+enum class ModerationUserGroup {
+    BROADCASTER,
+    STAFF,
+    VIP,
+    MODERATOR,
+    CHATBOT,
+    VIEWER,
+    UNKNOWN,
+}
+
 data class ModerationUser(
     val id: String,
     val login: String,
     val displayName: String,
+    val group: ModerationUserGroup = ModerationUserGroup.UNKNOWN,
 )
 
 data class BannedChatUser(

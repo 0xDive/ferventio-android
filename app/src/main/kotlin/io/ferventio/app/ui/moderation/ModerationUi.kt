@@ -68,15 +68,18 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import io.ferventio.app.application.FerventioController
+import io.ferventio.app.application.loadCategorizedCommunityChatters
+import io.ferventio.app.application.mergeCategorizedChatters
 import io.ferventio.app.domain.AutoModHeldMessage
 import io.ferventio.app.domain.AutoModMessageStatus
 import io.ferventio.app.domain.BannedChatUser
 import io.ferventio.app.domain.ChatChannel
-import io.ferventio.app.application.FerventioController
 import io.ferventio.app.domain.FerventioUiState
 import io.ferventio.app.domain.ModerationChatSettings
 import io.ferventio.app.domain.ModerationPeopleTab
 import io.ferventio.app.domain.ModerationUser
+import io.ferventio.app.domain.ModerationUserGroup
 import io.ferventio.app.domain.ModerationUiState
 import java.time.Instant
 import java.time.ZoneId
@@ -183,6 +186,7 @@ internal fun ModerationScreen(
                     banned = state.moderation.bannedUsers,
                     loading = state.moderation.isRefreshingPeople,
                     notice = state.moderation.peopleNotice,
+                    controller = controller,
                     onTabSelected = controller::refreshModerationPeople,
                     onOpenUser = { login -> controller.openUserCardByLogin(selectedChannelId, login) },
                     onUnban = { user ->
@@ -190,7 +194,6 @@ internal fun ModerationScreen(
                     },
                     modifier = Modifier.weight(1f),
                 )
-
             }
 
             state.moderation.errorMessage?.takeIf(String::isNotBlank)?.let { error ->
@@ -204,7 +207,6 @@ internal fun ModerationScreen(
         }
     }
 }
-
 
 @Composable
 internal fun AutoModInlineReviewCard(
@@ -384,6 +386,7 @@ internal fun ChatUsersBottomSheet(
                 banned = state.bannedUsers,
                 loading = state.isRefreshingPeople,
                 notice = state.peopleNotice,
+                controller = controller,
                 onTabSelected = controller::refreshModerationPeople,
                 onOpenUser = { login -> controller.openUserCardByLogin(channelId, login) },
                 onUnban = { user -> controller.unbanFromModeration(channelId, user) },
@@ -713,12 +716,25 @@ private fun PeoplePanel(
     banned: List<BannedChatUser>,
     loading: Boolean,
     notice: String?,
+    controller: FerventioController,
     onTabSelected: (ModerationPeopleTab) -> Unit,
     onOpenUser: (String) -> Unit,
     onUnban: (BannedChatUser) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var pendingUnban by remember { mutableStateOf<BannedChatUser?>(null) }
+    var categorizedChatters by remember(channelId) { mutableStateOf<List<ModerationUser>>(emptyList()) }
+    val moderationPreferences = rememberQuickModerationPreferenceState()
+    LaunchedEffect(channelId, selectedTab) {
+        if (channelId != null && selectedTab == ModerationPeopleTab.CHATTERS) {
+            categorizedChatters = runCatching {
+                controller.loadCategorizedCommunityChatters(channelId)
+            }.getOrDefault(emptyList())
+        }
+    }
+    val effectiveChatters = remember(chatters, categorizedChatters) {
+        mergeCategorizedChatters(chatters, categorizedChatters)
+    }
     Column(modifier) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -740,7 +756,7 @@ private fun PeoplePanel(
                 modifier = Modifier.padding(vertical = 6.dp),
             )
         }
-        if (loading) {
+        if (loading && selectedTab != ModerationPeopleTab.CHATTERS) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             return@Column
         }
@@ -751,33 +767,72 @@ private fun PeoplePanel(
                     BannedUserRow(
                         user = user,
                         onOpen = { onOpenUser(user.login) },
-                        onUnban = { pendingUnban = user },
+                        onUnban = {
+                            if (moderationPreferences.confirmActions) pendingUnban = user else onUnban(user)
+                        },
                     )
+                }
+            }
+            ModerationPeopleTab.CHATTERS -> {
+                val grouped = remember(effectiveChatters) {
+                    CHATTER_GROUP_ORDER.mapNotNull { group ->
+                        effectiveChatters
+                            .filter { user -> user.group == group }
+                            .takeIf(List<ModerationUser>::isNotEmpty)
+                            ?.let { users -> group to users }
+                    }
+                }
+                LazyColumn(Modifier.fillMaxSize()) {
+                    if (loading) {
+                        item(key = "chatters-loading") {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                                Spacer(Modifier.width(8.dp))
+                                LocalizedText(
+                                    "Обновляем категории Twitch…",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
+                    }
+                    if (effectiveChatters.isEmpty()) {
+                        item { EmptyListText("Список пуст или недоступен для этого канала") }
+                    }
+                    grouped.forEach { (group, users) ->
+                        item(key = "chatter-group:$group") {
+                            LocalizedText(
+                                "${chatterGroupTitle(group)} · ${users.size}",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(top = 12.dp, bottom = 4.dp),
+                            )
+                        }
+                        items(
+                            items = users,
+                            key = { user -> "chatter:$group:${user.id}" },
+                        ) { user ->
+                            ModerationUserRow(user = user, onOpenUser = onOpenUser)
+                        }
+                    }
                 }
             }
             else -> {
                 val users = when (selectedTab) {
-                    ModerationPeopleTab.CHATTERS -> chatters
                     ModerationPeopleTab.MODERATORS -> moderators
                     ModerationPeopleTab.VIPS -> vips
-                    ModerationPeopleTab.BANNED -> emptyList()
+                    else -> emptyList()
                 }
                 LazyColumn(Modifier.fillMaxSize()) {
                     if (users.isEmpty()) item { EmptyListText("Список пуст или недоступен для этого канала") }
                     items(users, key = ModerationUser::id) { user ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onOpenUser(user.login) }
-                                .padding(vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                VerbatimText(user.displayName, fontWeight = FontWeight.SemiBold)
-                                VerbatimText("@${user.login}", style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
-                        HorizontalDivider()
+                        ModerationUserRow(user = user, onOpenUser = onOpenUser)
                     }
                 }
             }
@@ -798,6 +853,26 @@ private fun PeoplePanel(
             dismissButton = { TextButton(onClick = { pendingUnban = null }) { LocalizedText("Отмена") } },
         )
     }
+}
+
+@Composable
+private fun ModerationUserRow(
+    user: ModerationUser,
+    onOpenUser: (String) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onOpenUser(user.login) }
+            .padding(vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            VerbatimText(user.displayName, fontWeight = FontWeight.SemiBold)
+            VerbatimText("@${user.login}", style = MaterialTheme.typography.bodySmall)
+        }
+    }
+    HorizontalDivider()
 }
 
 @Composable
@@ -834,7 +909,6 @@ private fun BannedUserRow(
     }
     HorizontalDivider()
 }
-
 
 @Composable
 private fun SettingSwitchRow(
@@ -974,6 +1048,26 @@ private fun peopleTabTitle(tab: ModerationPeopleTab): String = when (tab) {
     ModerationPeopleTab.MODERATORS -> "Моды"
     ModerationPeopleTab.VIPS -> "VIP"
     ModerationPeopleTab.BANNED -> "Баны"
+}
+
+private val CHATTER_GROUP_ORDER = listOf(
+    ModerationUserGroup.BROADCASTER,
+    ModerationUserGroup.STAFF,
+    ModerationUserGroup.VIP,
+    ModerationUserGroup.MODERATOR,
+    ModerationUserGroup.CHATBOT,
+    ModerationUserGroup.VIEWER,
+    ModerationUserGroup.UNKNOWN,
+)
+
+private fun chatterGroupTitle(group: ModerationUserGroup): String = when (group) {
+    ModerationUserGroup.BROADCASTER -> "Владелец канала"
+    ModerationUserGroup.STAFF -> "Staff Twitch"
+    ModerationUserGroup.VIP -> "VIP"
+    ModerationUserGroup.MODERATOR -> "Модераторы"
+    ModerationUserGroup.CHATBOT -> "Боты"
+    ModerationUserGroup.VIEWER -> "Зрители"
+    ModerationUserGroup.UNKNOWN -> "Остальные"
 }
 
 private val moderationTimeFormatter = DateTimeFormatter.ofPattern("dd.MM HH:mm")

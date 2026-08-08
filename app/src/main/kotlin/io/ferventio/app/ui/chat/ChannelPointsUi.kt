@@ -55,6 +55,7 @@ private data class ChannelPointsUiStrings(
     val inputRequired: String,
     val success: String,
     val retry: String,
+    val redemptionUncertain: String,
     val errorNotEnough: String,
     val errorDisabled: String,
     val errorStreamOffline: String,
@@ -91,6 +92,7 @@ internal fun ChannelPointsSheet(
         inputRequired = resources.string(R.string.ferventio_channel_points_input_required),
         success = resources.string(R.string.ferventio_channel_points_success),
         retry = resources.string(R.string.ferventio_channel_points_retry),
+        redemptionUncertain = resources.string(R.string.ferventio_channel_points_redemption_uncertain),
         errorNotEnough = resources.string(R.string.ferventio_channel_points_error_not_enough),
         errorDisabled = resources.string(R.string.ferventio_channel_points_error_disabled),
         errorStreamOffline = resources.string(R.string.ferventio_channel_points_error_stream_offline),
@@ -151,8 +153,8 @@ internal fun ChannelPointsSheet(
                 }
             }
 
-            state?.errorMessage?.takeIf(String::isNotBlank)?.let { error ->
-                item(key = "error") {
+            if (state?.redemptionOutcomeUncertain == true) {
+                item(key = "redemption-uncertain") {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = MaterialTheme.shapes.large,
@@ -163,18 +165,45 @@ internal fun ChannelPointsSheet(
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             LocalizedText(
-                                channelPointsErrorText(error, strings),
+                                strings.redemptionUncertain,
                                 color = MaterialTheme.colorScheme.onErrorContainer,
                             )
-                            OutlinedButton(onClick = onRefresh) {
-                                LocalizedText(strings.retry)
+                            OutlinedButton(onClick = onRefresh, enabled = state.loading != true) {
+                                LocalizedText(strings.refresh)
+                            }
+                        }
+                    }
+                }
+            } else {
+                state?.errorMessage?.takeIf(String::isNotBlank)?.let { error ->
+                    item(key = "error") {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.large,
+                            color = MaterialTheme.colorScheme.errorContainer,
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                LocalizedText(
+                                    channelPointsErrorText(error, strings),
+                                    color = MaterialTheme.colorScheme.onErrorContainer,
+                                )
+                                OutlinedButton(onClick = onRefresh) {
+                                    LocalizedText(strings.retry)
+                                }
                             }
                         }
                     }
                 }
             }
 
-            if (state?.lastRedemptionId != null && state.errorMessage == null) {
+            if (
+                state?.lastRedemptionId != null &&
+                state.errorMessage == null &&
+                !state.redemptionOutcomeUncertain
+            ) {
                 item(key = "success") {
                     LocalizedText(
                         strings.success,
@@ -185,7 +214,12 @@ internal fun ChannelPointsSheet(
             }
 
             val rewards = state?.rewards.orEmpty()
-            if (state?.loading != true && rewards.isEmpty() && state?.errorMessage == null) {
+            if (
+                state?.loading != true &&
+                rewards.isEmpty() &&
+                state?.errorMessage == null &&
+                state?.redemptionOutcomeUncertain != true
+            ) {
                 item(key = "empty") {
                     LocalizedText(
                         strings.empty,
@@ -200,7 +234,10 @@ internal fun ChannelPointsSheet(
                 key = TwitchChannelPointsReward::id,
             ) { reward ->
                 val affordable = state?.balance?.let { balance -> balance >= reward.cost } ?: true
-                val enabled = reward.enabled && affordable && state?.redeemingRewardId == null
+                val enabled = reward.enabled &&
+                    affordable &&
+                    state?.redeemingRewardId == null &&
+                    state?.redemptionOutcomeUncertain != true
                 ChannelPointsRewardRow(
                     reward = reward,
                     enabled = enabled,
@@ -217,7 +254,10 @@ internal fun ChannelPointsSheet(
     }
 
     pendingReward?.let { reward ->
-        val canSubmit = !reward.userInputRequired || rewardInput.isNotBlank()
+        val canSubmit =
+            (!reward.userInputRequired || rewardInput.isNotBlank()) &&
+                state?.redeemingRewardId == null &&
+                state?.redemptionOutcomeUncertain != true
         AlertDialog(
             onDismissRequest = { pendingReward = null },
             title = { LocalizedText(strings.confirmTitle) },

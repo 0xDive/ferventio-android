@@ -3,6 +3,7 @@ package io.ferventio.app.application
 import io.ferventio.app.domain.InteractiveChatOverlayEvent
 import io.ferventio.app.domain.InteractiveChatOverlayReducer
 import io.ferventio.app.domain.InteractiveChatOverlayState
+import io.ferventio.app.domain.InteractiveMutationFailureKind
 import io.ferventio.app.domain.InteractiveMutationKind
 import io.ferventio.app.domain.InteractiveMutationRecovery
 import io.ferventio.app.domain.PollDraft
@@ -165,7 +166,7 @@ class InteractiveChatCoordinator internal constructor(
         mutation: io.ferventio.app.domain.InteractiveMutationStatus,
     ): Boolean {
         val channelId = auth.broadcasterId
-        val failureKind = mutation.failureKind ?: io.ferventio.app.domain.InteractiveMutationFailureKind.UNKNOWN
+        val failureKind = mutation.failureKind ?: InteractiveMutationFailureKind.UNKNOWN
         ingest(InteractiveChatOverlayEvent.MutationStarted(channelId, mutation.kind))
         return try {
             refresh(auth)
@@ -214,7 +215,14 @@ class InteractiveChatCoordinator internal constructor(
             }
         } catch (cancelled: CancellationException) {
             pendingRetries.remove(channelId)
-            ingest(InteractiveChatOverlayEvent.MutationSucceeded(channelId, command.kind))
+            ingest(
+                InteractiveChatOverlayEvent.MutationFailed(
+                    channelId = channelId,
+                    kind = command.kind,
+                    failureKind = InteractiveMutationFailureKind.UNKNOWN,
+                    recovery = InteractiveMutationRecovery.REFRESH,
+                ),
+            )
             throw cancelled
         } catch (error: Throwable) {
             val failure = InteractiveMutationFailureClassifier.classify(error)

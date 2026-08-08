@@ -1,0 +1,4 @@
+<resources>
+    <string name="ferventio_moderation_confirm_actions_setting">Подтверждать действия модерации</string>
+    <string name="ferventio_moderation_confirm_actions_setting_summary">Спрашивать перед баном, удалением, блокировкой и разбаном. Выключи для мгновенных действий модерации.</string>
+</resources>

@@ -150,6 +150,35 @@ class InteractiveChatCoordinatorTest {
     }
 
     @Test
+    fun `cancelled mutation requires refresh instead of replay`() {
+        runBlocking {
+            val gateway = FakeGateway(pollCreateGate = CompletableDeferred())
+            val coordinator = InteractiveChatCoordinator(gateway)
+            val draft = PollDraft(
+                title = "Question",
+                choices = listOf("A", "B"),
+                durationSeconds = 60,
+            )
+
+            val mutation = launch { coordinator.createPoll(auth, draft) }
+            while (gateway.createPollCalls == 0) yield()
+            mutation.cancel()
+            mutation.join()
+
+            val failure = coordinator.state.value.mutationsByChannel.getValue("channel")
+            assertFalse(failure.inFlight)
+            assertEquals(InteractiveMutationFailureKind.UNKNOWN, failure.failureKind)
+            assertEquals(InteractiveMutationRecovery.REFRESH, failure.recovery)
+
+            gateway.pollCreateGate = null
+            assertTrue(coordinator.recover(auth))
+            assertEquals(1, gateway.createPollCalls)
+            assertEquals(1, gateway.getPollsCalls)
+            assertFalse("channel" in coordinator.state.value.mutationsByChannel)
+        }
+    }
+
+    @Test
     fun `refresh recovery restores failure if refresh also fails`() {
         runBlocking {
             val gateway = FakeGateway(pollCreateFailure = IOException("offline"))
@@ -282,6 +311,7 @@ class InteractiveChatCoordinatorTest {
         ),
         var pollCreateFailure: Throwable? = null,
         var pollsFailure: Throwable? = null,
+        var pollCreateGate: CompletableDeferred<Unit>? = null,
         var pollsGate: CompletableDeferred<Unit>? = null,
     ) : InteractiveChatGateway {
         var closed: Boolean = false
@@ -299,6 +329,7 @@ class InteractiveChatCoordinatorTest {
         override suspend fun createPoll(auth: InteractiveChatAuth, draft: PollDraft): PollOverlay {
             createPollCalls += 1
             lastCreatePollToken = auth.accessToken
+            pollCreateGate?.await()
             pollCreateFailure?.let { throw it }
             return createdPoll
         }
