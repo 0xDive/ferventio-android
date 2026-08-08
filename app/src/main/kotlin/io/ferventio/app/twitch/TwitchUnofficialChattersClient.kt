@@ -1,5 +1,6 @@
 package io.ferventio.app.twitch
 
+import android.util.Log
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
@@ -11,6 +12,10 @@ import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import java.io.Closeable
+import java.util.concurrent.ConcurrentHashMap
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -44,19 +49,68 @@ class TwitchUnofficialChattersClient : Closeable {
         val login = channelLogin.trim().lowercase()
         require(login.isNotBlank()) { "Channel login is required" }
 
-        val response = client.post(TWITCH_GQL_URL) {
-            header("Client-ID", TWITCH_WEB_CLIENT_ID)
-            header(HttpHeaders.Accept, ContentType.Application.Json.toString())
-            contentType(ContentType.Application.Json)
-            setBody(requestBody(login))
+        if (integrityRejected) {
+            Log.d(LOG_TAG, "CommunityTab skipped channel=$login reason=integrity-rejected")
+            return emptyList()
         }
-        val body = response.bodyAsText()
-        if (response.status.value !in 200..299) {
-            throw TwitchUnofficialChattersException(
-                "Twitch GQL ${response.status.value}: ${body.take(300).ifBlank { "empty response" }}",
-            )
+
+        return requestMutexes.computeIfAbsent(login) { Mutex() }.withLock {
+            cachedChatters(login)?.let { cached ->
+                Log.d(LOG_TAG, "CommunityTab cache hit channel=$login count=${cached.size}")
+                return@withLock cached
+            }
+            if (integrityRejected) {
+                Log.d(LOG_TAG, "CommunityTab skipped channel=$login reason=integrity-rejected")
+                return@withLock emptyList()
+            }
+
+            Log.d(LOG_TAG, "CommunityTab request channel=$login")
+            try {
+                val response = client.post(TWITCH_GQL_URL) {
+                    header("Client-ID", TWITCH_WEB_CLIENT_ID)
+                    header(HttpHeaders.Accept, ContentType.Application.Json.toString())
+                    contentType(ContentType.Application.Json)
+                    setBody(requestBody(login))
+                }
+                val body = response.bodyAsText()
+                if (response.status.value !in 200..299) {
+                    Log.w(
+                        LOG_TAG,
+                        "CommunityTab HTTP ${response.status.value} channel=$login body=${body.safeLogPrefix()}",
+                    )
+                    throw TwitchUnofficialChattersException(
+                        "Twitch GQL ${response.status.value}: ${body.take(300).ifBlank { "empty response" }}",
+                    )
+                }
+                val chatters = TwitchUnofficialChattersParser.parse(body)
+                if (chatters.isEmpty()) {
+                    Log.w(LOG_TAG, "CommunityTab empty channel=$login body=${body.safeLogPrefix()}")
+                } else {
+                    val groups = chatters
+                        .groupingBy(TwitchUnofficialChatter::group)
+                        .eachCount()
+                        .entries
+                        .sortedBy { it.key.ordinal }
+                        .joinToString(prefix = "{", postfix = "}") { (group, count) -> "$group=$count" }
+                    Log.d(LOG_TAG, "CommunityTab success channel=$login count=${chatters.size} groups=$groups")
+                }
+                chatterCache[login] = CachedChatters(
+                    chatters = chatters,
+                    expiresAtMillis = System.currentTimeMillis() + CACHE_TTL_MILLIS,
+                )
+                chatters
+            } catch (cancelled: CancellationException) {
+                Log.d(LOG_TAG, "CommunityTab cancelled channel=$login")
+                throw cancelled
+            } catch (error: Throwable) {
+                if (error is TwitchUnofficialChattersException && error.message.orEmpty().contains("integrity", ignoreCase = true)) {
+                    integrityRejected = true
+                    Log.w(LOG_TAG, "CommunityTab disabled for this process after Twitch integrity rejection")
+                }
+                Log.w(LOG_TAG, "CommunityTab failed channel=$login: ${error.message}", error)
+                throw error
+            }
         }
-        return TwitchUnofficialChattersParser.parse(body)
     }
 
     override fun close() {
@@ -79,12 +133,37 @@ class TwitchUnofficialChattersClient : Closeable {
     }.toString()
 
     private companion object {
+        const val LOG_TAG = "FerventioChatters"
         const val TWITCH_GQL_URL = "https://gql.twitch.tv/gql"
         const val TWITCH_WEB_CLIENT_ID = "kimne78kx3ncx6brgo4mv6wki5h1ko"
         const val COMMUNITY_TAB_HASH =
             "92168b4434c8f4d32df14510052131c3544b929723d5f8b69bb96c96207e483e"
+        const val CACHE_TTL_MILLIS = 30_000L
+
+        @Volatile
+        var integrityRejected = false
+
+        val chatterCache = ConcurrentHashMap<String, CachedChatters>()
+        val requestMutexes = ConcurrentHashMap<String, Mutex>()
+
+        fun cachedChatters(login: String): List<TwitchUnofficialChatter>? {
+            val cached = chatterCache[login] ?: return null
+            if (cached.expiresAtMillis <= System.currentTimeMillis()) {
+                chatterCache.remove(login, cached)
+                return null
+            }
+            return cached.chatters
+        }
     }
 }
+
+private fun String.safeLogPrefix(): String =
+    replace(Regex("[\\r\\n]+"), " ").take(300).ifBlank { "<empty>" }
+
+private data class CachedChatters(
+    val chatters: List<TwitchUnofficialChatter>,
+    val expiresAtMillis: Long,
+)
 
 enum class TwitchUnofficialChatterGroup {
     BROADCASTER,
@@ -105,8 +184,8 @@ internal object TwitchUnofficialChattersParser {
     private val groups = linkedMapOf(
         "broadcasters" to TwitchUnofficialChatterGroup.BROADCASTER,
         "staff" to TwitchUnofficialChatterGroup.STAFF,
-        "vips" to TwitchUnofficialChatterGroup.VIP,
         "moderators" to TwitchUnofficialChatterGroup.MODERATOR,
+        "vips" to TwitchUnofficialChatterGroup.VIP,
         "chatbots" to TwitchUnofficialChatterGroup.CHATBOT,
         "viewers" to TwitchUnofficialChatterGroup.VIEWER,
     )

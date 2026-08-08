@@ -724,6 +724,7 @@ private fun PeoplePanel(
 ) {
     var pendingUnban by remember { mutableStateOf<BannedChatUser?>(null) }
     var categorizedChatters by remember(channelId) { mutableStateOf<List<ModerationUser>>(emptyList()) }
+    val chattersListState = rememberLazyListState()
     val moderationPreferences = rememberQuickModerationPreferenceState()
     LaunchedEffect(channelId, selectedTab) {
         if (channelId != null && selectedTab == ModerationPeopleTab.CHATTERS) {
@@ -782,7 +783,14 @@ private fun PeoplePanel(
                             ?.let { users -> group to users }
                     }
                 }
-                LazyColumn(Modifier.fillMaxSize()) {
+                val groupTopology = remember(grouped) { grouped.map { (group, _) -> group } }
+                LaunchedEffect(channelId, selectedTab, groupTopology) {
+                    chattersListState.scrollToItem(0)
+                }
+                LazyColumn(
+                    state = chattersListState,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
                     if (loading) {
                         item(key = "chatters-loading") {
                             Row(
@@ -1052,9 +1060,9 @@ private fun peopleTabTitle(tab: ModerationPeopleTab): String = when (tab) {
 
 private val CHATTER_GROUP_ORDER = listOf(
     ModerationUserGroup.BROADCASTER,
-    ModerationUserGroup.STAFF,
-    ModerationUserGroup.VIP,
     ModerationUserGroup.MODERATOR,
+    ModerationUserGroup.VIP,
+    ModerationUserGroup.STAFF,
     ModerationUserGroup.CHATBOT,
     ModerationUserGroup.VIEWER,
     ModerationUserGroup.UNKNOWN,
