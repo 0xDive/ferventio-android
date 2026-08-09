@@ -43,6 +43,53 @@ class CommunityChattersLoaderTest {
     }
 
     @Test
+    fun `community roles group non moderator channel chatters`() {
+        val canonical = listOf(
+            ModerationUser(id = "10", login = "streamer", displayName = "Streamer"),
+            ModerationUser(id = "11", login = "vip_user", displayName = "VIP User"),
+            ModerationUser(id = "12", login = "mod_user", displayName = "Mod User"),
+            ModerationUser(id = "13", login = "viewer", displayName = "Viewer"),
+        )
+        val categorized = listOf(
+            ModerationUser(
+                id = "gql:streamer",
+                login = "streamer",
+                displayName = "streamer",
+                group = ModerationUserGroup.BROADCASTER,
+            ),
+            ModerationUser(
+                id = "gql:vip_user",
+                login = "vip_user",
+                displayName = "vip_user",
+                group = ModerationUserGroup.VIP,
+            ),
+            ModerationUser(
+                id = "gql:mod_user",
+                login = "mod_user",
+                displayName = "mod_user",
+                group = ModerationUserGroup.MODERATOR,
+            ),
+            ModerationUser(
+                id = "gql:viewer",
+                login = "viewer",
+                displayName = "viewer",
+                group = ModerationUserGroup.VIEWER,
+            ),
+        )
+
+        val mergedByLogin = mergeCategorizedChatters(canonical, categorized).associateBy { it.login.lowercase() }
+
+        assertEquals(ModerationUserGroup.BROADCASTER, mergedByLogin.getValue("streamer").group)
+        assertEquals(ModerationUserGroup.VIP, mergedByLogin.getValue("vip_user").group)
+        assertEquals(ModerationUserGroup.MODERATOR, mergedByLogin.getValue("mod_user").group)
+        assertEquals(ModerationUserGroup.VIEWER, mergedByLogin.getValue("viewer").group)
+        assertEquals("10", mergedByLogin.getValue("streamer").id)
+        assertEquals("11", mergedByLogin.getValue("vip_user").id)
+        assertEquals("12", mergedByLogin.getValue("mod_user").id)
+        assertEquals("13", mergedByLogin.getValue("viewer").id)
+    }
+
+    @Test
     fun `uncategorized canonical chatters are ordinary viewers`() {
         val canonical = listOf(
             ModerationUser(id = "1", login = "one", displayName = "One"),

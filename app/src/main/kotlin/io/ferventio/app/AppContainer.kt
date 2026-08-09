@@ -9,8 +9,6 @@ import io.ferventio.app.data.local.ChatHistoryRepository
 import io.ferventio.app.data.local.FerventioDatabase
 import io.ferventio.app.application.AuthenticatedChatFastStartAttemptTracker
 import io.ferventio.app.application.AuthenticatedChatFastStartPolicy
-import io.ferventio.app.application.ChannelPointsCoordinator
-import io.ferventio.app.application.ChannelPointsSessionResetTracker
 import io.ferventio.app.application.FerventioController
 import io.ferventio.app.application.InteractiveChatCoordinator
 import io.ferventio.app.domain.HighlightRuleType
@@ -41,7 +39,6 @@ class AppContainer(context: Context) {
     private val emoteRepository = EmoteRepository(twitchApiClient)
     private val imageCacheManager = ImageCacheManager(context)
     private val historyRepository = ChatHistoryRepository(FerventioDatabase.getInstance(context))
-    private val channelPointsCoordinator = ChannelPointsCoordinator()
 
     val interactiveChatCoordinator = InteractiveChatCoordinator()
 
@@ -56,7 +53,6 @@ class AppContainer(context: Context) {
         settingsStore = settingsStore,
         tokenStore = tokenStore,
         api = twitchApiClient,
-        channelPointsCoordinator = channelPointsCoordinator,
         pinnedChatClient = twitchPinnedChatGqlClient,
         backend = backendClient,
         emoteRepository = emoteRepository,
@@ -123,19 +119,6 @@ class AppContainer(context: Context) {
                 .collect {
                     delay(750)
                     pushCoordinator.syncRegistration()
-                }
-        }
-        applicationScope.launch {
-            val resetTracker = ChannelPointsSessionResetTracker(
-                initialUserId = controller.state.value.session?.userId,
-            )
-            controller.state
-                .map { state -> state.session?.userId }
-                .distinctUntilChanged()
-                .collect { userId ->
-                    if (resetTracker.shouldReset(userId)) {
-                        channelPointsCoordinator.resetSession()
-                    }
                 }
         }
         applicationScope.launch {
