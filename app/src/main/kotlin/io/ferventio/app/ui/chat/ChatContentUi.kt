@@ -187,6 +187,7 @@ import io.ferventio.app.domain.ChatAssetResolver
 import io.ferventio.app.domain.ChatBadge
 import io.ferventio.app.domain.ChatBadgeAsset
 import io.ferventio.app.domain.ChatChannel
+import io.ferventio.app.domain.ChatCommandParser
 import io.ferventio.app.domain.ChatRepeatCollapseConfig
 import io.ferventio.app.domain.ChatRepeatPresentationProjector
 import io.ferventio.app.domain.ConfirmedModerationCommand
@@ -201,6 +202,7 @@ import io.ferventio.app.domain.CustomCommandRuntimeContext
 import io.ferventio.app.domain.CustomCommandUser
 import io.ferventio.app.domain.InteractiveChatCapabilities
 import io.ferventio.app.domain.InteractiveChatOverlayState
+import io.ferventio.app.domain.ParsedChatInput
 import io.ferventio.app.domain.PollDraft
 import io.ferventio.app.domain.PredictionDraft
 import io.ferventio.app.domain.interactiveChatCapabilities
@@ -307,6 +309,7 @@ internal fun ChannelChatContent(
     instanceKey: String = channelId,
 ) {
     val resourceStrings = rememberAppResourceStrings(state.appLanguage)
+    val openUserProfileByLogin = LocalOpenUserProfileByLogin.current
     val repeatCollapsePreference = rememberRepeatCollapsePreferenceState()
     val quickModerationPreference = rememberQuickModerationPreferenceState()
     val effectiveRepeatCollapseEnabled = repeatCollapseEnabled ?: repeatCollapsePreference.enabled
@@ -653,6 +656,19 @@ internal fun ChannelChatContent(
     val submitMessage: () -> Unit = submit@{
         val message = input
         if (message.isBlank()) return@submit
+        when (val parsed = ChatCommandParser.parse(message)) {
+            is ParsedChatInput.UserCard -> {
+                openUserProfileByLogin(channelId, parsed.login)
+                onDraftChange("")
+                replyTarget = null
+                historyIndex = -1
+                historyScratch = ""
+                autocompleteIndex = 0
+                hideKeyboard()
+                return@submit
+            }
+            else -> Unit
+        }
         if (openNukePreview(message)) return@submit
         val channel = state.channels.firstOrNull { it.id == channelId }
         val session = state.session

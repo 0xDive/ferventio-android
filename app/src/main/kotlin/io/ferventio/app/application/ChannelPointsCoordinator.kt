@@ -35,8 +35,8 @@ data class ChannelPointsUiState(
  *
  * There is intentionally no network implementation. Twitch does not expose viewer balance or
  * viewer redemption through supported Helix APIs, so Ferventio must not attempt those operations.
+ * This remains a no-op compatibility type until the legacy controller surface can be removed.
  */
-@Deprecated("Channel Points viewer operations are not supported by Twitch Helix")
 class ChannelPointsCoordinator : Closeable {
     private val mutableState = MutableStateFlow(ChannelPointsUiState())
     val state: StateFlow<ChannelPointsUiState> = mutableState.asStateFlow()

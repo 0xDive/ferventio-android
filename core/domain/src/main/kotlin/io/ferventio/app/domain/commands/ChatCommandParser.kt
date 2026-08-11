@@ -1,6 +1,20 @@
 package io.ferventio.app.domain
 
-sealed interface ParsedChatInput {
+sealed interface ChatInputParseResult {
+    sealed interface Success : ChatInputParseResult {
+        val input: ParsedChatInput
+
+        companion object {
+            operator fun invoke(input: ParsedChatInput): Success = input
+        }
+    }
+
+    data class Error(val message: String) : ChatInputParseResult
+}
+
+sealed interface ParsedChatInput : ChatInputParseResult.Success {
+    override val input: ParsedChatInput get() = this
+
     data class Message(val text: String) : ParsedChatInput
     data class Action(val text: String) : ParsedChatInput
     data class Ban(val userLogin: String, val reason: String?) : ParsedChatInput
@@ -20,7 +34,9 @@ sealed interface ParsedChatInput {
     data object SubscribersOff : ParsedChatInput
     data object EmoteOnly : ParsedChatInput
     data object EmoteOnlyOff : ParsedChatInput
-    data class UserCard(val userLogin: String) : ParsedChatInput
+    data class UserCard(val userLogin: String) : ParsedChatInput {
+        val login: String get() = userLogin
+    }
     data class Clip(val title: String?) : ParsedChatInput
     data class Marker(val description: String?) : ParsedChatInput
     data class SetTitle(val title: String) : ParsedChatInput
@@ -31,11 +47,6 @@ sealed interface ParsedChatInput {
     data object Reconnect : ParsedChatInput
     data object Help : ParsedChatInput
     data class Custom(val name: String, val arguments: List<String>) : ParsedChatInput
-}
-
-sealed interface ChatInputParseResult {
-    data class Success(val input: ParsedChatInput) : ChatInputParseResult
-    data class Error(val message: String) : ChatInputParseResult
 }
 
 object ChatCommandParser {

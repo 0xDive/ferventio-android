@@ -108,6 +108,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.DisposableEffect
@@ -253,6 +254,13 @@ fun FerventioApp(
     val pushState by pushCoordinator.state.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val uriHandler = LocalUriHandler.current
+    val knownPermanentlyBannedUserIds = remember(state.moderation.bannedUsers) {
+        state.moderation.bannedUsers
+            .asSequence()
+            .filter { user -> user.isPermanent }
+            .map { user -> user.id }
+            .toSet()
+    }
 
     LaunchedEffect(state.pendingExternalUri) {
         val uri = state.pendingExternalUri ?: return@LaunchedEffect
@@ -274,31 +282,38 @@ fun FerventioApp(
         }
     }
 
-    ProvideAppResourceStrings(state.appLanguage) {
-        FerventioTheme(
-            themeMode = state.themeMode,
-            fontScalePercent = state.fontScalePercent,
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .semantics { testTagsAsResourceId = true },
+    CompositionLocalProvider(
+        LocalOpenUserProfileByLogin provides { channelId, login ->
+            controller.openUserCardByLogin(channelId, login)
+        },
+        LocalKnownPermanentlyBannedUserIds provides knownPermanentlyBannedUserIds,
+    ) {
+        ProvideAppResourceStrings(state.appLanguage) {
+            FerventioTheme(
+                themeMode = state.themeMode,
+                fontScalePercent = state.fontScalePercent,
             ) {
-                when {
-                    state.isBootstrapping -> LoadingScreen(state.isChannelsLoading)
-                    else -> AuthenticatedShell(
-                        state = state,
-                        interactiveChatState = interactiveChatState,
-                        controller = controller,
-                        snackbarHostState = snackbarHostState,
-                        pushState = pushState,
-                        onTestPush = pushCoordinator::sendTest,
-                        onReconnectPush = pushCoordinator::reconnect,
-                        onExportSettings = onExportSettings,
-                        onImportSettings = onImportSettings,
-                        onExportCrashReports = onExportCrashReports,
-                        onClearCrashReports = onClearCrashReports,
-                    )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .semantics { testTagsAsResourceId = true },
+                ) {
+                    when {
+                        state.isBootstrapping -> LoadingScreen(state.isChannelsLoading)
+                        else -> AuthenticatedShell(
+                            state = state,
+                            interactiveChatState = interactiveChatState,
+                            controller = controller,
+                            snackbarHostState = snackbarHostState,
+                            pushState = pushState,
+                            onTestPush = pushCoordinator::sendTest,
+                            onReconnectPush = pushCoordinator::reconnect,
+                            onExportSettings = onExportSettings,
+                            onImportSettings = onImportSettings,
+                            onExportCrashReports = onExportCrashReports,
+                            onClearCrashReports = onClearCrashReports,
+                        )
+                    }
                 }
             }
         }

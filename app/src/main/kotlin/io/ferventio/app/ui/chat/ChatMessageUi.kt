@@ -191,6 +191,7 @@ import io.ferventio.app.domain.ChatFragment
 import io.ferventio.app.domain.ChatMessage
 import io.ferventio.app.domain.ChatMessageTextPreparation
 import io.ferventio.app.domain.ChatLinkParser
+import io.ferventio.app.domain.ChatMentionParser
 import io.ferventio.app.domain.ChatMessageType
 import io.ferventio.app.domain.HIGHLIGHTS_FILTER_QUERY
 import io.ferventio.app.domain.IgnoreDisplayMode
@@ -356,6 +357,7 @@ internal fun MessageRow(
     onReply: (ChatMessage) -> Unit,
 ) {
     val uriHandler = LocalUriHandler.current
+    val openUserProfileByLogin = LocalOpenUserProfileByLogin.current
     val moderationPreferences = rememberQuickModerationPreferenceState()
     val badgeAssets = renderAssets.badgeAssets
     val cheermoteAssets = renderAssets.cheermoteAssets
@@ -706,7 +708,7 @@ internal fun MessageRow(
                 if (canQuickBan) {
                     Icon(
                         Icons.Default.Block,
-                        contentDescription = quickModerationStrings?.banButton,
+                        contentDescription = quickModerationStrings.banButton,
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier
                             .size(17.dp)
@@ -723,7 +725,7 @@ internal fun MessageRow(
                 if (canQuickDelete) {
                     Icon(
                         Icons.Default.Delete,
-                        contentDescription = quickModerationStrings?.deleteButton,
+                        contentDescription = quickModerationStrings.deleteButton,
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier
                             .size(17.dp)
@@ -742,13 +744,22 @@ internal fun MessageRow(
                 text = line.text,
                 modifier = Modifier
                     .weight(1f)
-                    .pointerInput(message.id, canReply, line.identityRanges, line.emoteRanges, line.linkRanges) {
+                    .pointerInput(
+                        message.id,
+                        canReply,
+                        line.text.text,
+                        line.identityRanges,
+                        line.emoteRanges,
+                        line.linkRanges,
+                    ) {
                         detectTapGestures(
                             onTap = { position ->
                                 val offset = textLayoutResult.value?.getOffsetForPosition(position) ?: -1
                                 val link = line.linkRanges.firstOrNull { offset in it.range }
+                                val mention = ChatMentionParser.findAt(line.text.text, offset)
                                 when {
                                     link != null -> runCatching { uriHandler.openUri(link.url) }
+                                    mention != null -> openUserProfileByLogin(message.channelId, mention.login)
                                     line.identityRanges.any { offset in it } -> onOpenUser(message)
                                     canReply -> onReply(message)
                                 }
