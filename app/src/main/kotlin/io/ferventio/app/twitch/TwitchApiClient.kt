@@ -1513,7 +1513,7 @@ class TwitchApiClient : Closeable {
         broadcasterId: String,
         moderatorId: String,
         targetUserId: String,
-        reason: String = "Ferventio moderation",
+        reason: String = "",
     ) {
         banOrTimeout(
             clientId = clientId,
@@ -1603,13 +1603,11 @@ class TwitchApiClient : Closeable {
         durationSeconds: Int?,
         reason: String,
     ) {
-        val payload = buildJsonObject {
-            put("data", buildJsonObject {
-                put("user_id", JsonPrimitive(targetUserId))
-                durationSeconds?.let { put("duration", JsonPrimitive(it)) }
-                put("reason", JsonPrimitive(reason.take(500)))
-            })
-        }
+        val payload = buildBanOrTimeoutPayload(
+            targetUserId = targetUserId,
+            durationSeconds = durationSeconds,
+            reason = reason,
+        )
         val response = client.post("https://api.twitch.tv/helix/moderation/bans") {
             twitchHeaders(clientId, token)
             parameter("broadcaster_id", broadcasterId)

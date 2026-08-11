@@ -835,7 +835,6 @@ private fun PeoplePanel(
                 val users = when (selectedTab) {
                     ModerationPeopleTab.MODERATORS -> moderators
                     ModerationPeopleTab.VIPS -> vips
-                    else -> emptyList()
                 }
                 LazyColumn(Modifier.fillMaxSize()) {
                     if (users.isEmpty()) item { EmptyListText("Список пуст или недоступен для этого канала") }

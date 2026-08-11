@@ -42,6 +42,15 @@ class ChatCommandParserTest {
     }
 
     @Test
+    fun parsesUserCardAsDirectSuccessfulInput() {
+        val result = ChatCommandParser.parse("/user @Viewer")
+
+        assertEquals(ParsedChatInput.UserCard("viewer"), result)
+        assertTrue(result is ChatInputParseResult.Success)
+        assertEquals(ParsedChatInput.UserCard("viewer"), (result as ChatInputParseResult.Success).input)
+    }
+
+    @Test
     fun parsesDurationUnits() {
         assertEquals(10, ChatCommandParser.parseDurationSeconds("10s"))
         assertEquals(300, ChatCommandParser.parseDurationSeconds("5m"))

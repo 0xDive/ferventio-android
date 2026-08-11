@@ -415,7 +415,7 @@ private fun ChatsWorkspaceScreen(
                             IconButton(
                                 onClick = {
                                     hideKeyboard()
-                                    activeChannelId?.let(controller::selectModerationChannel)
+                                    controller.selectModerationChannel(activeChannelId)
                                     showChatModes = true
                                 },
                                 modifier = Modifier.size(38.dp),

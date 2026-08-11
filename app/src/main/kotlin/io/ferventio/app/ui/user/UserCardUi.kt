@@ -219,6 +219,7 @@ import io.ferventio.app.domain.ThirdPartyEmoteAsset
 import io.ferventio.app.domain.resolve
 import io.ferventio.app.domain.usageKey
 import io.ferventio.app.domain.ThirdPartyEmoteCatalogResolver
+import io.ferventio.app.domain.UserCardBanState
 import io.ferventio.app.domain.UserCardUiState
 import io.ferventio.app.push.PushCoordinator
 import io.ferventio.app.push.PushStatus
@@ -322,6 +323,7 @@ internal fun UserCardSheet(
     @Suppress("DEPRECATION") // LocalClipboard migration requires suspend clipboard writes.
     val clipboardManager = LocalClipboardManager.current
     val uriHandler = LocalUriHandler.current
+    val knownPermanentlyBannedUserIds = LocalKnownPermanentlyBannedUserIds.current
     val userCardStrings = rememberAppStrings(appLanguage)
     val moderationPreferences = rememberQuickModerationPreferenceState()
     val recentListState = rememberLazyListState()
@@ -330,6 +332,27 @@ internal fun UserCardSheet(
         keyboardController?.hide()
         focusManager.clearFocus(force = true)
     }
+    val cardData = cardState.data
+    val resolvedPermanentBan = remember(
+        cardData?.user?.id,
+        cardData?.localActions,
+        knownPermanentlyBannedUserIds,
+    ) {
+        cardData?.let { data ->
+            UserCardBanState.resolve(
+                knownPermanentlyBanned = data.user.id in knownPermanentlyBannedUserIds,
+                localActions = data.localActions,
+            )
+        } ?: false
+    }
+    var permanentBanOverride by remember(
+        cardData?.channelId,
+        cardData?.user?.id,
+        resolvedPermanentBan,
+    ) {
+        mutableStateOf<Boolean?>(null)
+    }
+    val isPermanentlyBanned = permanentBanOverride ?: resolvedPermanentBan
 
     LaunchedEffect(recentListDragged) {
         if (recentListDragged) hideKeyboard()
@@ -338,22 +361,16 @@ internal fun UserCardSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        // Content gestures must never move or dismiss the sheet. Only the dedicated
-        // handle below can switch between partial and expanded states.
         sheetGesturesEnabled = false,
         dragHandle = {
             UserCardDragHandle(
                 expanded = sheetState.currentValue == SheetValue.Expanded,
-                onExpand = {
-                    sheetScope.launch { sheetState.expand() }
-                },
-                onPartialExpand = {
-                    sheetScope.launch { sheetState.partialExpand() }
-                },
+                onExpand = { sheetScope.launch { sheetState.expand() } },
+                onPartialExpand = { sheetScope.launch { sheetState.partialExpand() } },
             )
         },
     ) {
-        val data = cardState.data
+        val data = cardData
         val userCardEmoteCatalogByProviderAndId = remember(data?.channelId, emoteCatalogByChannel) {
             data?.channelId
                 ?.let(emoteCatalogByChannel::get)
@@ -399,10 +416,7 @@ internal fun UserCardSheet(
             }
         }
 
-        val color = twitchUserColor(
-            data.recentMessages.firstOrNull()?.color,
-            data.user.id,
-        )
+        val color = twitchUserColor(data.recentMessages.firstOrNull()?.color, data.user.id)
         val roleLabel = when (data.role) {
             io.ferventio.app.domain.ChannelUserRole.BROADCASTER -> "Владелец канала"
             io.ferventio.app.domain.ChannelUserRole.MODERATOR -> "Модератор"
@@ -508,17 +522,11 @@ internal fun UserCardSheet(
                                 val subscriptionText = when {
                                     data.isCurrentlySubscribed == false && tier != null ->
                                         "Ранее подписывался: $months мес., tier $tier"
-                                    data.isCurrentlySubscribed == false ->
-                                        "Ранее подписывался: $months мес."
-                                    tier != null ->
-                                        "Подписка: $months мес., tier $tier"
-                                    else ->
-                                        "Подписка: $months мес."
+                                    data.isCurrentlySubscribed == false -> "Ранее подписывался: $months мес."
+                                    tier != null -> "Подписка: $months мес., tier $tier"
+                                    else -> "Подписка: $months мес."
                                 }
-                                LocalizedText(
-                                    subscriptionText,
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
+                                LocalizedText(subscriptionText, style = MaterialTheme.typography.bodySmall)
                             }
                             data.isCurrentlySubscribed == true -> LocalizedText(
                                 "Активная подписка",
@@ -555,18 +563,14 @@ internal fun UserCardSheet(
                         }
                     }
                     item {
-                        OutlinedButton(
-                            onClick = { clipboardManager.setText(AnnotatedString(data.user.login)) },
-                        ) {
+                        OutlinedButton(onClick = { clipboardManager.setText(AnnotatedString(data.user.login)) }) {
                             Icon(Icons.Default.ContentCopy, contentDescription = null)
                             Spacer(Modifier.width(5.dp))
                             LocalizedText("Копировать")
                         }
                     }
                     item {
-                        OutlinedButton(
-                            onClick = { uriHandler.openUri("https://www.twitch.tv/${data.user.login}") },
-                        ) {
+                        OutlinedButton(onClick = { uriHandler.openUri("https://www.twitch.tv/${data.user.login}") }) {
                             Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null)
                             Spacer(Modifier.width(5.dp))
                             LocalizedText("Twitch")
@@ -576,18 +580,13 @@ internal fun UserCardSheet(
                         item {
                             OutlinedButton(
                                 onClick = {
-                                    if (moderationPreferences.confirmActions) {
-                                        pendingDangerAction = "block"
-                                    } else {
-                                        onBlock(data.channelId, data.user.id, data.user.login)
-                                    }
+                                    if (moderationPreferences.confirmActions) pendingDangerAction = "block"
+                                    else onBlock(data.channelId, data.user.id, data.user.login)
                                 },
                             ) {
                                 Icon(Icons.Default.Block, contentDescription = null)
                                 Spacer(Modifier.width(5.dp))
-                                LocalizedText(
-                                    userCardStrings.moderationBlock,
-                                )
+                                LocalizedText(userCardStrings.moderationBlock)
                             }
                         }
                     }
@@ -596,12 +595,12 @@ internal fun UserCardSheet(
 
             if (ChatPresentationPolicy.shouldShowModeratorActions(isAuthenticated, data.canModerate)) {
                 item(key = "moderation-actions") {
-                    val allowedIds = remember(timeoutPresetsSeconds, showBanAction) {
+                    val allowedIds = remember(timeoutPresetsSeconds, showBanAction, isPermanentlyBanned) {
                         buildList {
                             timeoutPresetsSeconds.distinct().forEach { add("timeout:$it") }
                             add("warn")
-                            if (showBanAction) add("ban")
-                            add("unban")
+                            if (isPermanentlyBanned) add("unban")
+                            else if (showBanAction) add("ban")
                         }
                     }
                     val orderedIds = remember(moderationActionOrder, allowedIds) {
@@ -627,9 +626,7 @@ internal fun UserCardSheet(
                                             val seconds = actionId.substringAfter(':').toIntOrNull()
                                             if (seconds != null) {
                                                 FilledTonalButton(
-                                                    onClick = {
-                                                        onTimeout(data.channelId, data.user.id, data.user.login, seconds)
-                                                    },
+                                                    onClick = { onTimeout(data.channelId, data.user.id, data.user.login, seconds) },
                                                 ) {
                                                     Icon(Icons.Default.Timer, contentDescription = null)
                                                     Spacer(Modifier.width(5.dp))
@@ -637,19 +634,17 @@ internal fun UserCardSheet(
                                                 }
                                             }
                                         }
-
                                         actionId == "warn" -> OutlinedButton(onClick = { showWarnDialog = true }) {
                                             Icon(Icons.Default.ErrorOutline, contentDescription = null)
                                             Spacer(Modifier.width(5.dp))
                                             LocalizedText(userCardStrings.moderationWarn)
                                         }
-
                                         actionId == "ban" -> Button(
                                             onClick = {
-                                                if (moderationPreferences.confirmActions) {
-                                                    pendingDangerAction = "ban"
-                                                } else {
+                                                if (moderationPreferences.confirmActions) pendingDangerAction = "ban"
+                                                else {
                                                     onBan(data.channelId, data.user.id, data.user.login)
+                                                    permanentBanOverride = true
                                                 }
                                             },
                                         ) {
@@ -657,13 +652,12 @@ internal fun UserCardSheet(
                                             Spacer(Modifier.width(5.dp))
                                             LocalizedText(userCardStrings.moderationBan)
                                         }
-
                                         actionId == "unban" -> OutlinedButton(
                                             onClick = {
-                                                if (moderationPreferences.confirmActions) {
-                                                    pendingDangerAction = "unban"
-                                                } else {
+                                                if (moderationPreferences.confirmActions) pendingDangerAction = "unban"
+                                                else {
                                                     onUnban(data.channelId, data.user.id, data.user.login)
+                                                    permanentBanOverride = false
                                                 }
                                             },
                                         ) {
@@ -693,9 +687,7 @@ internal fun UserCardSheet(
                         data.recentMessages.asReversed()
                     }
                     Surface(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(300.dp),
+                        modifier = Modifier.fillMaxWidth().height(300.dp),
                         shape = MaterialTheme.shapes.large,
                         color = MaterialTheme.colorScheme.surfaceContainerLow,
                     ) {
@@ -770,8 +762,14 @@ internal fun UserCardSheet(
                 confirmButton = {
                     TextButton(onClick = {
                         when (action) {
-                            "ban" -> onBan(data.channelId, data.user.id, data.user.login)
-                            "unban" -> onUnban(data.channelId, data.user.id, data.user.login)
+                            "ban" -> {
+                                onBan(data.channelId, data.user.id, data.user.login)
+                                permanentBanOverride = true
+                            }
+                            "unban" -> {
+                                onUnban(data.channelId, data.user.id, data.user.login)
+                                permanentBanOverride = false
+                            }
                             else -> onBlock(data.channelId, data.user.id, data.user.login)
                         }
                         pendingDangerAction = null
@@ -809,9 +807,7 @@ internal fun UserCardSheet(
                     onValueChange = { warnReason = it.take(500) },
                     modifier = Modifier.fillMaxWidth(),
                     label = { LocalizedText(userCardStrings.moderationReason) },
-                    supportingText = {
-                        LocalizedText(userCardStrings.moderationWarnSupportingText)
-                    },
+                    supportingText = { LocalizedText(userCardStrings.moderationWarnSupportingText) },
                     minLines = 2,
                     maxLines = 4,
                 )
