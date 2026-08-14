@@ -1,7 +1,7 @@
 [versions]
 agp = "9.3.1"
 kotlin = "2.4.10"
-ksp = "2.3.10"
+ksp = "2.3.11"
 baselineprofile = "1.5.0-beta01"
 room = "2.8.4"
 core = "1.17.0"
