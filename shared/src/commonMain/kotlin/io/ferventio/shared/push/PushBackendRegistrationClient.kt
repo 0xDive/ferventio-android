@@ -88,6 +88,12 @@ class ApnsPushRegistrationCoordinator(
     private val backend: PushBackendRegistrationClient = PushBackendRegistrationClient(),
     private val requestFactory: PushRegistrationRequestFactory = PushRegistrationRequestFactory(),
 ) {
+    /** Explicit constructor for Kotlin/Native export; default primary arguments are not a Swift init(). */
+    constructor() : this(
+        backend = PushBackendRegistrationClient(),
+        requestFactory = PushRegistrationRequestFactory(),
+    )
+
     @Throws(Exception::class)
     suspend fun register(
         serverUrl: String,

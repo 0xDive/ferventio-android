@@ -42,6 +42,12 @@ class MobileAuthenticationCoordinator(
     private val backend: MobileBackendAuthenticationClient = MobileBackendAuthenticationClient(),
     private val nowEpochMillis: () -> Long = { Clock.System.now().toEpochMilliseconds() },
 ) {
+    /** Explicit constructor for Kotlin/Native export; default primary arguments are not a Swift init(). */
+    constructor() : this(
+        backend = MobileBackendAuthenticationClient(),
+        nowEpochMillis = { Clock.System.now().toEpochMilliseconds() },
+    )
+
     @Throws(Exception::class)
     suspend fun startAuthorization(
         serverUrl: String,
