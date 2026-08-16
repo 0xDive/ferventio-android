@@ -1,6 +1,6 @@
 package io.ferventio.app.domain
 
-import java.util.UUID
+import kotlin.uuid.Uuid
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -181,7 +181,7 @@ data class FilteredSplit(
     }
 }
 
-fun newLayoutId(prefix: String): String = "$prefix-${UUID.randomUUID()}"
+fun newLayoutId(prefix: String): String = "$prefix-${Uuid.random()}"
 
 object WorkspaceLayoutCodec {
     private val json = Json { ignoreUnknownKeys = true }
