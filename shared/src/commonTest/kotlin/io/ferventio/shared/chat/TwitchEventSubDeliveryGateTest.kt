@@ -49,6 +49,6 @@ class TwitchEventSubDeliveryGateTest {
     private fun envelope(type: String, messageId: String) = TwitchEventSubProtocolEnvelope(
         type = type,
         messageId = messageId,
-        event = JsonObject(emptyMap()),
+        eventPayload = JsonObject(emptyMap()),
     )
 }
