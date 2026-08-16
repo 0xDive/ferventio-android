@@ -31,6 +31,7 @@ class WorkspaceRuntimeStateHolderTest {
                 selectedChannelId = "2",
                 pinnedChannelIds = listOf("2", "missing", "2", "1"),
                 moderatorChannelIds = setOf("3", "2"),
+                pushContextRevision = 7L,
             ),
         )
 
@@ -38,6 +39,7 @@ class WorkspaceRuntimeStateHolderTest {
         assertEquals("2", holder.selectedChannelId)
         assertEquals(listOf("2", "1"), holder.pinnedChannelIds)
         assertEquals(setOf("2"), holder.moderatorChannelIds)
+        assertEquals(7L, holder.pushContextRevision)
     }
 
     @Test
@@ -72,6 +74,7 @@ class WorkspaceRuntimeStateHolderTest {
     fun replacingExistingChannelDoesNotChangeItsPosition() {
         val holder = WorkspaceRuntimeStateHolder()
         holder.replaceChannels(listOf(alpha, beta))
+        val revision = holder.pushContextRevision
 
         holder.addOrReplaceChannel(
             alpha.copy(displayName = "Alpha Live"),
@@ -79,6 +82,7 @@ class WorkspaceRuntimeStateHolderTest {
 
         assertEquals(listOf("1", "2"), holder.channelIds)
         assertEquals("Alpha Live", holder.channels.first().displayName)
+        assertEquals(revision, holder.pushContextRevision)
     }
 
     @Test
@@ -97,7 +101,48 @@ class WorkspaceRuntimeStateHolderTest {
     }
 
     @Test
-    fun clearResetsWorkspaceIdentityState() {
+    fun pushContextRevisionChangesOnlyForBackendRelevantWorkspaceChanges() {
+        val holder = WorkspaceRuntimeStateHolder()
+        assertEquals(0L, holder.pushContextRevision)
+
+        holder.replaceChannels(listOf(alpha, beta))
+        val membershipRevision = holder.pushContextRevision
+        assertEquals(1L, membershipRevision)
+
+        holder.selectChannel("2")
+        holder.moveChannel("2", 0)
+        holder.updatePinnedChannelIds(listOf("2"))
+        holder.addOrReplaceChannel(beta.copy(displayName = "Beta Live"))
+        assertEquals(membershipRevision, holder.pushContextRevision)
+
+        holder.updateModeratorChannelIds(listOf("2"))
+        val moderatorRevision = holder.pushContextRevision
+        assertEquals(membershipRevision + 1L, moderatorRevision)
+
+        holder.updateModeratorChannelIds(listOf(" 2 ", "2"))
+        assertEquals(moderatorRevision, holder.pushContextRevision)
+
+        holder.addOrReplaceChannel(gamma)
+        assertEquals(moderatorRevision + 1L, holder.pushContextRevision)
+
+        holder.removeChannel("1")
+        assertEquals(moderatorRevision + 2L, holder.pushContextRevision)
+    }
+
+    @Test
+    fun replacingSameMembershipInDifferentOrderDoesNotBumpPushRevision() {
+        val holder = WorkspaceRuntimeStateHolder()
+        holder.replaceChannels(listOf(alpha, beta, gamma))
+        val revision = holder.pushContextRevision
+
+        holder.replaceChannels(listOf(gamma, beta, alpha))
+
+        assertEquals(listOf("3", "2", "1"), holder.channelIds)
+        assertEquals(revision, holder.pushContextRevision)
+    }
+
+    @Test
+    fun clearResetsWorkspaceIdentityStateAndInvalidatesPushContext() {
         val holder = WorkspaceRuntimeStateHolder(
             WorkspaceRuntimeSnapshot(
                 channels = listOf(alpha),
@@ -106,6 +151,7 @@ class WorkspaceRuntimeStateHolderTest {
                 moderatorChannelIds = setOf("1"),
             ),
         )
+        val revision = holder.pushContextRevision
 
         holder.clear()
 
@@ -113,6 +159,7 @@ class WorkspaceRuntimeStateHolderTest {
         assertNull(holder.selectedChannelId)
         assertEquals(emptyList(), holder.pinnedChannelIds)
         assertEquals(emptySet(), holder.moderatorChannelIds)
+        assertEquals(revision + 1L, holder.pushContextRevision)
     }
 
     @Test

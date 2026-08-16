@@ -3,6 +3,8 @@ package io.ferventio.shared.push
 import io.ferventio.app.domain.AuthenticationPersistenceValidation
 import io.ferventio.app.domain.MobileDeviceIdentity
 import io.ferventio.app.domain.StoredAuthentication
+import io.ferventio.app.domain.TwitchSession
+import io.ferventio.shared.workspace.WorkspaceRuntimeSnapshot
 import io.ktor.client.HttpClient
 import io.ktor.client.request.header
 import io.ktor.client.request.put
@@ -108,15 +110,7 @@ class ApnsPushRegistrationCoordinator(
         appVersion: String,
         authentication: StoredAuthentication,
     ): PushRegistrationRequest {
-        AuthenticationPersistenceValidation.requireValid(
-            authentication.backendCredential,
-            authentication.accessLease,
-        )
-        val session = authentication.accessLease?.session
-            ?: error("Authenticated push registration requires a Twitch access lease")
-        require(session.userId.isNotBlank() && session.login.isNotBlank()) {
-            "Authenticated push registration requires Twitch user identity"
-        }
+        val session = requireAuthenticatedSession(authentication)
         return register(
             serverUrl = serverUrl,
             identity = identity,
@@ -125,6 +119,30 @@ class ApnsPushRegistrationCoordinator(
             context = PushRegistrationContext(
                 userId = session.userId,
                 userLogin = session.login,
+            ),
+        )
+    }
+
+    @Throws(Exception::class)
+    suspend fun registerAuthenticatedWorkspace(
+        serverUrl: String,
+        identity: MobileDeviceIdentity,
+        apnsDeviceToken: String,
+        appVersion: String,
+        authentication: StoredAuthentication,
+        workspace: WorkspaceRuntimeSnapshot,
+    ): PushRegistrationRequest {
+        val session = requireAuthenticatedSession(authentication)
+        return register(
+            serverUrl = serverUrl,
+            identity = identity,
+            apnsDeviceToken = apnsDeviceToken,
+            appVersion = appVersion,
+            context = PushRegistrationContext(
+                userId = session.userId,
+                userLogin = session.login,
+                channelIds = workspace.channelIds,
+                moderatorChannelIds = workspace.channelIds.filter(workspace.moderatorChannelIds::contains),
             ),
         )
     }
@@ -145,6 +163,19 @@ class ApnsPushRegistrationCoordinator(
         )
         backend.register(serverUrl, request)
         return request
+    }
+
+    private fun requireAuthenticatedSession(authentication: StoredAuthentication): TwitchSession {
+        AuthenticationPersistenceValidation.requireValid(
+            authentication.backendCredential,
+            authentication.accessLease,
+        )
+        val session = authentication.accessLease?.session
+            ?: error("Authenticated push registration requires a Twitch access lease")
+        require(session.userId.isNotBlank() && session.login.isNotBlank()) {
+            "Authenticated push registration requires Twitch user identity"
+        }
+        return session
     }
 }
 

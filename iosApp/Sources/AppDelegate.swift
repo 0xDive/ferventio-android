@@ -32,7 +32,8 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
 
         do {
             pushBackendRegistrationRuntimeBridge = try PushBackendRegistrationRuntimeBridge.live(
-                stateHolder: runtimeState.pushRegistration
+                stateHolder: runtimeState.pushRegistration,
+                workspaceState: runtimeState.workspace
             )
         } catch {
             runtimeState.pushRegistration.markBackendRegistrationFailed(

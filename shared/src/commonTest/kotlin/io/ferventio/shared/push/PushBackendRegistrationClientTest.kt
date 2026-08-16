@@ -1,10 +1,12 @@
 package io.ferventio.shared.push
 
 import io.ferventio.app.domain.BackendSessionCredential
+import io.ferventio.app.domain.ChatChannel
 import io.ferventio.app.domain.MobileDeviceIdentity
 import io.ferventio.app.domain.StoredAuthentication
 import io.ferventio.app.domain.TwitchAccessLease
 import io.ferventio.app.domain.TwitchSession
+import io.ferventio.shared.workspace.WorkspaceRuntimeSnapshot
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -76,6 +78,44 @@ class PushBackendRegistrationClientTest {
 
         assertEquals("viewer-id", request.userId)
         assertEquals("viewer", request.userLogin)
+    }
+
+    @Test
+    fun authenticatedWorkspaceRegistrationIncludesChannelRoutingContext() = runTest {
+        val engine = MockEngine {
+            respond(
+                content = ByteReadChannel("{}"),
+                status = HttpStatusCode.OK,
+            )
+        }
+        val coordinator = ApnsPushRegistrationCoordinator(
+            backend = PushBackendRegistrationClient(
+                client = HttpClient(engine) { expectSuccess = false },
+            ),
+        )
+        val workspace = WorkspaceRuntimeSnapshot(
+            channels = listOf(
+                ChatChannel("1", "alpha", "Alpha"),
+                ChatChannel("2", "beta", "Beta"),
+                ChatChannel("3", "gamma", "Gamma"),
+            ),
+            moderatorChannelIds = linkedSetOf("3", "missing", "1"),
+            pushContextRevision = 4L,
+        )
+
+        val request = coordinator.registerAuthenticatedWorkspace(
+            serverUrl = "https://example.test",
+            identity = identity,
+            apnsDeviceToken = "token",
+            appVersion = "1.0",
+            authentication = authenticatedSession(),
+            workspace = workspace,
+        )
+
+        assertEquals("viewer-id", request.userId)
+        assertEquals("viewer", request.userLogin)
+        assertEquals(listOf("1", "2", "3"), request.channelIds)
+        assertEquals(listOf("1", "3"), request.moderatorChannelIds)
     }
 
     @Test

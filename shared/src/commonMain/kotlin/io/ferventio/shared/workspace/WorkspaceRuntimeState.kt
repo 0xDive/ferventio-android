@@ -11,9 +11,10 @@ data class WorkspaceRuntimeSnapshot(
     val selectedChannelId: String? = null,
     val pinnedChannelIds: List<String> = emptyList(),
     val moderatorChannelIds: Set<String> = emptySet(),
+    val pushContextRevision: Long = 0L,
 ) {
     val channelIds: List<String>
-        get() = channels.map(ChatChannel::id)
+        get() = channels.map { it.id }
 }
 
 /**
@@ -38,8 +39,11 @@ class WorkspaceRuntimeStateHolder(
     var moderatorChannelIds by mutableStateOf(emptySet<String>())
         private set
 
+    var pushContextRevision by mutableStateOf(0L)
+        private set
+
     val channelIds: List<String>
-        get() = channels.map(ChatChannel::id)
+        get() = channels.map { it.id }
 
     val snapshot: WorkspaceRuntimeSnapshot
         get() = WorkspaceRuntimeSnapshot(
@@ -47,6 +51,7 @@ class WorkspaceRuntimeStateHolder(
             selectedChannelId = selectedChannelId,
             pinnedChannelIds = pinnedChannelIds,
             moderatorChannelIds = moderatorChannelIds,
+            pushContextRevision = pushContextRevision,
         )
 
     init {
@@ -54,12 +59,19 @@ class WorkspaceRuntimeStateHolder(
         selectInitialChannel(initialSnapshot.selectedChannelId)
         updatePinnedChannelIds(initialSnapshot.pinnedChannelIds)
         updateModeratorChannelIds(initialSnapshot.moderatorChannelIds)
+        pushContextRevision = maxOf(pushContextRevision, initialSnapshot.pushContextRevision)
     }
 
     fun replaceChannels(value: List<ChatChannel>) {
+        val previousIds = channels.mapTo(linkedSetOf()) { it.id }
+        val previousModerators = moderatorChannelIds
         val normalized = normalizeChannels(value)
         channels = normalized
         reconcileMembership()
+        val currentIds = channels.mapTo(linkedSetOf()) { it.id }
+        if (previousIds != currentIds || previousModerators != moderatorChannelIds) {
+            bumpPushContextRevision()
+        }
     }
 
     fun addOrReplaceChannel(channel: ChatChannel) {
@@ -73,6 +85,9 @@ class WorkspaceRuntimeStateHolder(
         if (selectedChannelId == null) {
             selectedChannelId = channel.id
         }
+        if (index < 0) {
+            bumpPushContextRevision()
+        }
     }
 
     fun removeChannel(channelId: String) {
@@ -80,6 +95,7 @@ class WorkspaceRuntimeStateHolder(
         if (normalizedId.isEmpty() || channels.none { it.id == normalizedId }) return
         channels = channels.filterNot { it.id == normalizedId }
         reconcileMembership()
+        bumpPushContextRevision()
     }
 
     fun selectChannel(channelId: String) {
@@ -106,15 +122,23 @@ class WorkspaceRuntimeStateHolder(
 
     fun updateModeratorChannelIds(channelIds: Iterable<String>) {
         val available = channels.mapTo(hashSetOf()) { it.id }
-        moderatorChannelIds = normalizeIds(channelIds)
+        val normalized = normalizeIds(channelIds)
             .filterTo(linkedSetOf(), available::contains)
+        if (moderatorChannelIds != normalized) {
+            moderatorChannelIds = normalized
+            bumpPushContextRevision()
+        }
     }
 
     fun clear() {
+        val affectedPushContext = channels.isNotEmpty() || moderatorChannelIds.isNotEmpty()
         channels = emptyList()
         selectedChannelId = null
         pinnedChannelIds = emptyList()
         moderatorChannelIds = emptySet()
+        if (affectedPushContext) {
+            bumpPushContextRevision()
+        }
     }
 
     private fun selectInitialChannel(requestedChannelId: String?) {
@@ -156,5 +180,9 @@ class WorkspaceRuntimeStateHolder(
                 if (normalized.isNotEmpty() && seen.add(normalized)) add(normalized)
             }
         }
+    }
+
+    private fun bumpPushContextRevision() {
+        pushContextRevision += 1L
     }
 }
