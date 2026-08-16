@@ -20,6 +20,23 @@ final class PushNotificationRuntimeBridge {
         apply(status)
     }
 
+    func refreshAuthorizationAndRestoreRemoteRegistration() async {
+        let status = await authorizationService.authorizationStatus()
+        apply(status)
+
+        switch status {
+        case .authorized, .provisional, .ephemeral:
+            // Re-registering with APNs is intentionally safe and does not present the notification
+            // permission prompt. iOS may rotate the device token, so established permission should
+            // always restore remote registration when the app launches or returns to foreground.
+            requestRemoteRegistration()
+        case .notDetermined, .denied:
+            break
+        @unknown default:
+            break
+        }
+    }
+
     func requestAuthorizationAndRegister() async throws -> Bool {
         let granted = try await authorizationService.requestAuthorization()
         await refreshAuthorizationStatus()

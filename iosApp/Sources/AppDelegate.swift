@@ -27,7 +27,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         UNUserNotificationCenter.current().delegate = self
         lifecycleObserver.start(applicationState: application.applicationState)
         Task {
-            await pushRuntimeBridge.refreshAuthorizationStatus()
+            await pushRuntimeBridge.refreshAuthorizationAndRestoreRemoteRegistration()
         }
 
         do {
@@ -74,7 +74,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
             guard let self else {
                 return
             }
-            await pushRuntimeBridge.refreshAuthorizationStatus()
+            await pushRuntimeBridge.refreshAuthorizationAndRestoreRemoteRegistration()
             await synchronizePushBackendRegistration()
         }
     }
