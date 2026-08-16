@@ -40,6 +40,26 @@ internal class TwitchChatSessionRuntime(
     }
 
     fun onEnvelope(envelope: TwitchEventSubProtocolEnvelope): Boolean {
+        val mutation = runCatching {
+            TwitchChatMutationEventParser.parse(envelope)
+        }.getOrNull()
+        if (mutation != null) {
+            when (mutation) {
+                is TwitchChatMutationEvent.MessageDeleted -> state.markMessageDeleted(
+                    channelId = mutation.channelId,
+                    messageId = mutation.messageId,
+                )
+
+                is TwitchChatMutationEvent.UserMessagesCleared -> state.markUserMessagesDeleted(
+                    channelId = mutation.channelId,
+                    userId = mutation.userId,
+                )
+
+                is TwitchChatMutationEvent.ChatCleared -> state.clearChannelMessages(mutation.channelId)
+            }
+            return true
+        }
+
         val message = runCatching {
             TwitchChatMessageEventParser.parse(envelope)
         }.getOrNull() ?: return false

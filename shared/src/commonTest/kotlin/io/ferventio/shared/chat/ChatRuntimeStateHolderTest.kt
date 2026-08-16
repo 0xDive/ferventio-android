@@ -3,10 +3,13 @@ package io.ferventio.shared.chat
 import io.ferventio.app.domain.ChatAuthor
 import io.ferventio.app.domain.ChatMessage
 import io.ferventio.app.domain.ConnectionStatus
+import io.ferventio.app.domain.ModerationAction
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class ChatRuntimeStateHolderTest {
     @Test
@@ -58,6 +61,36 @@ class ChatRuntimeStateHolderTest {
 
         assertEquals(listOf("m0", "m1", "m2"), holder.messages(CHANNEL_ID).map { it.id })
         assertEquals("new", holder.messages(CHANNEL_ID)[1].text)
+    }
+
+    @Test
+    fun deletionMutationsMatchAndroidCanonicalState() {
+        val holder = ChatRuntimeStateHolder()
+        holder.append(message("target", 1L, authorId = "user-a"))
+        holder.append(message("same-user", 2L, authorId = "user-a"))
+        holder.append(message("other-user", 3L, authorId = "user-b"))
+        holder.append(message("other-channel", 4L, channelId = "other", authorId = "user-a"))
+
+        assertTrue(holder.markMessageDeleted(CHANNEL_ID, "target", atMillis = 10L))
+        val target = holder.messages(CHANNEL_ID).first { it.id == "target" }
+        assertTrue(target.isDeleted)
+        assertEquals(ModerationAction.DELETE, target.moderation.action)
+        assertEquals(10L, target.moderation.atMillis)
+
+        assertEquals(2, holder.markUserMessagesDeleted(CHANNEL_ID, "user-a", atMillis = 20L))
+        val channelMessages = holder.messages(CHANNEL_ID)
+        assertTrue(channelMessages.first { it.id == "target" }.isDeleted)
+        assertTrue(channelMessages.first { it.id == "same-user" }.isDeleted)
+        assertFalse(channelMessages.first { it.id == "other-user" }.isDeleted)
+        assertEquals(
+            ModerationAction.TIMEOUT,
+            channelMessages.first { it.id == "same-user" }.moderation.action,
+        )
+        assertFalse(holder.messages("other").single().isDeleted)
+
+        assertTrue(holder.clearChannelMessages(CHANNEL_ID))
+        assertEquals(emptyList(), holder.messages(CHANNEL_ID))
+        assertEquals(listOf("other-channel"), holder.messages("other").map(ChatMessage::id))
     }
 
     @Test
@@ -114,14 +147,15 @@ class ChatRuntimeStateHolderTest {
         timestampMillis: Long,
         text: String = id,
         channelId: String = CHANNEL_ID,
+        authorId: String = "author",
     ) = ChatMessage(
         id = id,
         channelId = channelId,
         channelLogin = "channel",
         author = ChatAuthor(
-            id = "author",
-            login = "author",
-            displayName = "Author",
+            id = authorId,
+            login = authorId,
+            displayName = authorId,
         ),
         text = text,
         timestamp = "2026-01-01T00:00:00Z",

@@ -5,6 +5,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import io.ferventio.app.domain.ChatMessage
 import io.ferventio.app.domain.ConnectionStatus
+import io.ferventio.app.domain.ModerationAction
+import io.ferventio.app.domain.ModerationState
+import kotlin.time.Clock
 
 data class ChatRuntimeSnapshot(
     val messagesByChannel: Map<String, List<ChatMessage>> = emptyMap(),
@@ -94,6 +97,71 @@ class ChatRuntimeStateHolder(
             channelId = normalizedChannelId,
             messages = messages + existing,
         )
+    }
+
+    fun markMessageDeleted(
+        channelId: String,
+        messageId: String,
+        atMillis: Long = Clock.System.now().toEpochMilliseconds(),
+    ): Boolean {
+        val normalizedChannelId = requireChannelId(channelId)
+        val normalizedMessageId = messageId.trim().takeIf(String::isNotEmpty)
+            ?: throw IllegalArgumentException("Chat message id must not be blank")
+        var changed = false
+        val updated = messagesByChannel[normalizedChannelId].orEmpty().map { message ->
+            if (message.id != normalizedMessageId) {
+                message
+            } else {
+                changed = true
+                message.copy(
+                    flags = message.flags.copy(isDeleted = true),
+                    moderation = ModerationState(
+                        action = ModerationAction.DELETE,
+                        atMillis = atMillis,
+                    ),
+                )
+            }
+        }
+        if (changed) {
+            messagesByChannel = messagesByChannel + (normalizedChannelId to updated)
+        }
+        return changed
+    }
+
+    fun markUserMessagesDeleted(
+        channelId: String,
+        userId: String,
+        atMillis: Long = Clock.System.now().toEpochMilliseconds(),
+    ): Int {
+        val normalizedChannelId = requireChannelId(channelId)
+        val normalizedUserId = userId.trim().takeIf(String::isNotEmpty)
+            ?: throw IllegalArgumentException("Chat user id must not be blank")
+        var changed = 0
+        val updated = messagesByChannel[normalizedChannelId].orEmpty().map { message ->
+            if (message.userId != normalizedUserId) {
+                message
+            } else {
+                changed += 1
+                message.copy(
+                    flags = message.flags.copy(isDeleted = true),
+                    moderation = ModerationState(
+                        action = ModerationAction.TIMEOUT,
+                        atMillis = atMillis,
+                    ),
+                )
+            }
+        }
+        if (changed > 0) {
+            messagesByChannel = messagesByChannel + (normalizedChannelId to updated)
+        }
+        return changed
+    }
+
+    fun clearChannelMessages(channelId: String): Boolean {
+        val normalizedChannelId = requireChannelId(channelId)
+        if (normalizedChannelId !in messagesByChannel) return false
+        messagesByChannel = messagesByChannel - normalizedChannelId
+        return true
     }
 
     fun removeChannel(channelId: String) {
