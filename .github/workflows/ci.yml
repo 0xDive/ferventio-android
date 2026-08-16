@@ -64,6 +64,7 @@ jobs:
         run: |
           ./gradlew \
             :shared:compileKotlinMetadata \
+            :shared:testAndroidHostTest \
             :core:domain:testDebugUnitTest \
             :core:database:testDebugUnitTest \
             :core:domain:lintDebug \
