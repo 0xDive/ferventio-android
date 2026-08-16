@@ -11,6 +11,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withTimeout
 import kotlin.random.Random
+import kotlin.time.Clock
 
 data class TwitchEventSubConnectionUpdate(
     val status: ConnectionStatus,
@@ -31,6 +32,8 @@ internal class TwitchEventSubSocketClient(
     private val onError: (Throwable) -> Unit,
     private val delayAction: suspend (Long) -> Unit = { millis -> delay(millis) },
     private val jitterFraction: () -> Double = { Random.nextDouble() },
+    private val nowEpochMillis: () -> Long = { Clock.System.now().toEpochMilliseconds() },
+    private val deliveryGate: TwitchEventSubDeliveryGate = TwitchEventSubDeliveryGate(),
 ) {
     private var closed = false
 
@@ -83,6 +86,9 @@ internal class TwitchEventSubSocketClient(
                         val envelope = receiveProtocolEnvelope(
                             TwitchEventSubConnectionPolicy.receiveTimeoutMillis(keepaliveSeconds),
                         )
+                        if (!deliveryGate.shouldDeliver(envelope, nowEpochMillis())) {
+                            continue
+                        }
                         onEnvelope(envelope)
                         when (envelope.type) {
                             "session_reconnect" -> {
@@ -151,6 +157,7 @@ internal class TwitchEventSubSocketClient(
     fun close() {
         if (closed) return
         closed = true
+        deliveryGate.clear()
         client.close()
     }
 
