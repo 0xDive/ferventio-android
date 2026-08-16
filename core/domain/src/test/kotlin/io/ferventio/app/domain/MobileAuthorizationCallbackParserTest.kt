@@ -16,6 +16,30 @@ class MobileAuthorizationCallbackParserTest {
     }
 
     @Test
+    fun `scheme and host identifiers are matched case insensitively`() {
+        val result = MobileAuthorizationCallbackParser.parse(
+            components = components(
+                scheme = "IO.FERVENTIO.APP",
+                host = "OAUTH",
+                codeValues = listOf("code"),
+                stateValues = listOf("state"),
+            ),
+            expectedScheme = "io.ferventio.app",
+        )
+
+        assertEquals(
+            MobileAuthorizationCallbackParseResult.Parsed(
+                MobileAuthorizationCallbackPayload(
+                    code = "code",
+                    state = "state",
+                    errorCode = null,
+                ),
+            ),
+            result,
+        )
+    }
+
+    @Test
     fun `matching route extracts normalized callback values`() {
         val result = MobileAuthorizationCallbackParser.parse(
             components = components(
