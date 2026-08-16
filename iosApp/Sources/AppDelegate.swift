@@ -9,6 +9,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
 
     private let runtimeState = MainViewControllerKt.IosRuntimeState()
     private var authenticationRuntimeBridge: MobileAuthenticationRuntimeBridge?
+    private var pushBackendRegistrationRuntimeBridge: PushBackendRegistrationRuntimeBridge?
     private lazy var lifecycleObserver = AppLifecycleObserver(
         stateHolder: runtimeState.lifecycle
     )
@@ -30,12 +31,23 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         }
 
         do {
+            pushBackendRegistrationRuntimeBridge = try PushBackendRegistrationRuntimeBridge.live(
+                stateHolder: runtimeState.pushRegistration
+            )
+        } catch {
+            runtimeState.pushRegistration.markBackendRegistrationFailed(
+                message: String(describing: error)
+            )
+        }
+
+        do {
             let authenticationRuntimeBridge = try MobileAuthenticationRuntimeBridge.live(
                 stateHolder: runtimeState.authentication
             )
             self.authenticationRuntimeBridge = authenticationRuntimeBridge
-            Task { @MainActor in
+            Task { @MainActor [weak self] in
                 await authenticationRuntimeBridge.restore()
+                await self?.synchronizePushBackendRegistration()
             }
         } catch {
             runtimeState.authentication.markFailed(
@@ -48,6 +60,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
             onAuthenticate: { [weak self] in
                 Task { @MainActor [weak self] in
                     await self?.authenticationRuntimeBridge?.signIn()
+                    await self?.synchronizePushBackendRegistration()
                 }
             }
         )
@@ -57,8 +70,12 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
-        Task {
+        Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
             await pushRuntimeBridge.refreshAuthorizationStatus()
+            await synchronizePushBackendRegistration()
         }
     }
 
@@ -67,6 +84,9 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
         pushRuntimeBridge.didRegister(deviceToken: deviceToken)
+        Task { @MainActor [weak self] in
+            await self?.synchronizePushBackendRegistration()
+        }
     }
 
     func application(
@@ -99,5 +119,11 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
 
     func applicationWillTerminate(_ application: UIApplication) {
         lifecycleObserver.stop()
+    }
+
+    private func synchronizePushBackendRegistration() async {
+        await pushBackendRegistrationRuntimeBridge?.synchronize(
+            authentication: runtimeState.authentication.state.authentication
+        )
     }
 }
