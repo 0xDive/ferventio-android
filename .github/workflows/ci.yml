@@ -62,13 +62,31 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Unit tests, lint, flavor isolation and debug builds
+      - name: Compile common domain
+        run: |
+          ./gradlew \
+            :core:domain:compileCommonMainKotlinMetadata \
+            --no-configuration-cache \
+            --stacktrace
+
+      - name: Compile shared common UI
         run: |
           ./gradlew \
             :shared:compileCommonMainKotlinMetadata \
-            :shared:testAndroidHostTest \
-            :core:domain:compileCommonMainKotlinMetadata \
+            --no-configuration-cache \
+            --stacktrace
+
+      - name: Run KMP Android host tests
+        run: |
+          ./gradlew \
             :core:domain:testAndroidHostTest \
+            :shared:testAndroidHostTest \
+            --no-configuration-cache \
+            --stacktrace
+
+      - name: Android tests, lint, flavor isolation and debug builds
+        run: |
+          ./gradlew \
             :core:database:testDebugUnitTest \
             :core:database:lintDebug \
             :app:testFossDebugUnitTest \
