@@ -84,6 +84,14 @@ jobs:
             --no-configuration-cache \
             --stacktrace
 
+      - name: Verify auth persistence compatibility
+        run: |
+          ./gradlew \
+            :app:testFossDebugUnitTest \
+            --tests io.ferventio.app.data.AuthSessionPayloadCodecTest \
+            --no-configuration-cache \
+            --stacktrace
+
       - name: Android tests, lint, flavor isolation and debug builds
         run: |
           ./gradlew \
