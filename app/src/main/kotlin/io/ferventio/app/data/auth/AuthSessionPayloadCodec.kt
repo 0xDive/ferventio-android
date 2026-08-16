@@ -2,6 +2,7 @@ package io.ferventio.app.data
 
 import io.ferventio.app.domain.AuthenticationPersistenceValidation
 import io.ferventio.app.domain.BackendSessionCredential
+import io.ferventio.app.domain.StoredAuthentication
 import io.ferventio.app.domain.TwitchAccessLease
 import io.ferventio.app.domain.TwitchSession
 import java.io.ByteArrayInputStream
@@ -18,11 +19,6 @@ internal object AuthSessionPayloadCodec {
     private const val MAGIC = "FERVAUTH"
     private const val VERSION = 2
     private const val LEGACY_VERSION = "backend-session-v1"
-
-    data class StoredAuthentication(
-        val backendCredential: BackendSessionCredential,
-        val accessLease: TwitchAccessLease?,
-    )
 
     fun encode(
         backendCredential: BackendSessionCredential,
