@@ -18,6 +18,7 @@ fun MainViewController(
         FerventioTheme {
             FerventioAuthenticationRoot(
                 state = iosRuntimeState.authentication.state,
+                workspace = iosRuntimeState.workspace,
                 onAuthenticate = onAuthenticate,
             )
         }

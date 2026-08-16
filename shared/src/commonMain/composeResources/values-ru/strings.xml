@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">Ferventio</string>
+    <string name="auth_sign_in_with_twitch">Войти через Twitch</string>
+    <string name="workspace_channels">Каналы</string>
+    <string name="workspace_chats">Чаты</string>
+    <string name="workspace_loading">Загружаем каналы…</string>
+    <string name="workspace_load_failed">Не удалось восстановить каналы</string>
+    <string name="workspace_no_channels">Пока нет каналов</string>
+    <string name="workspace_no_channels_summary">Здесь появятся каналы из синхронизированных настроек.</string>
+    <string name="workspace_menu">Открыть каналы</string>
+    <string name="workspace_signed_in_as">Выполнен вход как @%1$s</string>
+</resources>

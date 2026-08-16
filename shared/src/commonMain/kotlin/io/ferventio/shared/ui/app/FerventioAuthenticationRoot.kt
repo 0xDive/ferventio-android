@@ -14,10 +14,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.ferventio.shared.auth.MobileAuthenticationState
 import io.ferventio.shared.auth.MobileAuthenticationStatus
+import io.ferventio.shared.generated.resources.Res
+import io.ferventio.shared.workspace.WorkspaceRuntimeStateHolder
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun FerventioAuthenticationRoot(
     state: MobileAuthenticationState,
+    workspace: WorkspaceRuntimeStateHolder,
     onAuthenticate: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -33,10 +37,15 @@ fun FerventioAuthenticationRoot(
             modifier = modifier,
         )
 
-        MobileAuthenticationStatus.SIGNED_IN -> FerventioSignedInLanding(
+        MobileAuthenticationStatus.SIGNED_IN -> FerventioWorkspaceShell(
+            state = workspace,
             login = state.authentication?.accessLease?.session?.login,
             modifier = modifier,
-        )
+        ) {
+            FerventioSignedInLanding(
+                login = state.authentication?.accessLease?.session?.login,
+            )
+        }
     }
 }
 
@@ -56,7 +65,7 @@ private fun FerventioSignedOutScreen(
             FerventioBrandMark()
             Spacer(Modifier.height(24.dp))
             Button(onClick = onAuthenticate) {
-                Text("Twitch")
+                Text(stringResource(Res.string.auth_sign_in_with_twitch))
             }
         }
     }

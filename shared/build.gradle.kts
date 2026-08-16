@@ -37,6 +37,7 @@ kotlin {
             implementation(compose.foundation)
             implementation(compose.material3)
             implementation(compose.ui)
+            implementation(compose.components.resources)
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.ktor.client.core)
@@ -53,4 +54,8 @@ kotlin {
             implementation(libs.ktor.client.mock)
         }
     }
+}
+
+compose.resources {
+    packageOfResClass = "io.ferventio.shared.generated.resources"
 }
