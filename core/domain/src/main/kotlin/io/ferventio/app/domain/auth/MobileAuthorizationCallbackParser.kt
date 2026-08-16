@@ -38,8 +38,8 @@ object MobileAuthorizationCallbackParser {
         require(expectedScheme.isNotBlank()) { "OAuth callback scheme must not be blank" }
 
         if (
-            components.scheme != expectedScheme ||
-            components.host != "oauth" ||
+            components.scheme?.equals(expectedScheme, ignoreCase = true) != true ||
+            components.host?.equals("oauth", ignoreCase = true) != true ||
             components.path != "/callback"
         ) {
             return MobileAuthorizationCallbackParseResult.NotCallback
