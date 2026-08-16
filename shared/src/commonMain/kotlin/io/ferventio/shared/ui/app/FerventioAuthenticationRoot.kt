@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import io.ferventio.shared.auth.MobileAuthenticationState
 import io.ferventio.shared.auth.MobileAuthenticationStatus
 import io.ferventio.shared.generated.resources.Res
+import io.ferventio.shared.generated.resources.auth_sign_in_with_twitch
 import io.ferventio.shared.workspace.WorkspaceRuntimeStateHolder
 import org.jetbrains.compose.resources.stringResource
 

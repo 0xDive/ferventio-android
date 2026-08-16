@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.weight
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -35,6 +34,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.ferventio.app.domain.ChatChannel
 import io.ferventio.shared.generated.resources.Res
+import io.ferventio.shared.generated.resources.workspace_channels
+import io.ferventio.shared.generated.resources.workspace_chats
+import io.ferventio.shared.generated.resources.workspace_load_failed
+import io.ferventio.shared.generated.resources.workspace_loading
+import io.ferventio.shared.generated.resources.workspace_menu
+import io.ferventio.shared.generated.resources.workspace_no_channels
+import io.ferventio.shared.generated.resources.workspace_no_channels_summary
+import io.ferventio.shared.generated.resources.workspace_signed_in_as
 import io.ferventio.shared.workspace.WorkspaceLoadStatus
 import io.ferventio.shared.workspace.WorkspaceRuntimeStateHolder
 import kotlinx.coroutines.launch
