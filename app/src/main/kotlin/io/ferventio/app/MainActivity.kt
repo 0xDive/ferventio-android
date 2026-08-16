@@ -19,6 +19,9 @@ import androidx.lifecycle.repeatOnLifecycle
 import io.ferventio.app.crash.CrashReporter
 import io.ferventio.app.crash.LocalCrashReportExport
 import io.ferventio.app.data.BackupFileIo
+import io.ferventio.app.domain.MobileAuthorizationCallbackComponents
+import io.ferventio.app.domain.MobileAuthorizationCallbackParseResult
+import io.ferventio.app.domain.MobileAuthorizationCallbackParser
 import io.ferventio.app.performance.PerformanceRuntimeState
 import io.ferventio.app.push.NotificationPresenter
 import io.ferventio.app.ui.FerventioApp
@@ -162,13 +165,41 @@ class MainActivity : ComponentActivity() {
 
     private fun processAuthIntent(intent: Intent?) {
         val data = intent?.data ?: return
-        if (data.scheme != BuildConfig.APPLICATION_ID || data.host != "oauth" || data.path != "/callback") return
-        if (intent.getBooleanExtra(EXTRA_AUTH_CALLBACK_CONSUMED, false)) return
-        container.controller.handleAuthorizationCallback(
-            code = data.getQueryParameter("code"),
-            state = data.getQueryParameter("state"),
-            errorCode = data.getQueryParameter("error"),
+        val parsed = MobileAuthorizationCallbackParser.parse(
+            components = MobileAuthorizationCallbackComponents(
+                scheme = data.scheme,
+                host = data.host,
+                path = data.path,
+                hasUserInfo = data.userInfo != null,
+                fragment = data.fragment,
+                codeValues = data.getQueryParameters("code"),
+                stateValues = data.getQueryParameters("state"),
+                errorValues = data.getQueryParameters("error"),
+            ),
+            expectedScheme = BuildConfig.APPLICATION_ID,
         )
+        if (parsed is MobileAuthorizationCallbackParseResult.NotCallback) return
+        if (intent.getBooleanExtra(EXTRA_AUTH_CALLBACK_CONSUMED, false)) return
+
+        when (parsed) {
+            MobileAuthorizationCallbackParseResult.InvalidCallback -> {
+                container.controller.handleAuthorizationCallback(
+                    code = null,
+                    state = null,
+                    errorCode = null,
+                )
+            }
+
+            is MobileAuthorizationCallbackParseResult.Parsed -> {
+                container.controller.handleAuthorizationCallback(
+                    code = parsed.payload.code,
+                    state = parsed.payload.state,
+                    errorCode = parsed.payload.errorCode,
+                )
+            }
+
+            MobileAuthorizationCallbackParseResult.NotCallback -> return
+        }
         // Keep the original data URI intact: ActivityScenario matches lifecycle callbacks by
         // action/data/type/component. Extras are ignored by that matching logic, so this marker
         // prevents duplicate callback handling without breaking Activity teardown or recreation.
