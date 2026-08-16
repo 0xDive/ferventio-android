@@ -33,24 +33,31 @@ final class BackendAuthorizationSessionAdapter {
             url: authorizationURL,
             callbackScheme: request.callbackScheme
         )
-        guard
-            callbackURL.scheme?.caseInsensitiveCompare(request.callbackScheme) == .orderedSame,
-            let components = URLComponents(url: callbackURL, resolvingAgainstBaseURL: false)
-        else {
+        guard let components = URLComponents(
+            url: callbackURL,
+            resolvingAgainstBaseURL: false
+        ) else {
             throw Error.invalidCallbackURL
         }
 
         let queryItems = components.queryItems ?? []
-        func value(named name: String) -> String? {
-            queryItems.first(where: { $0.name == name })?.value
+        func values(named name: String) -> [String?] {
+            queryItems
+                .filter { $0.name == name }
+                .map(\.value)
         }
 
         let nowEpochMillis = Int64(Date().timeIntervalSince1970 * 1_000)
-        return evaluator.evaluate(
+        return evaluator.evaluateComponents(
             request: request,
-            callbackCode: value(named: "code"),
-            callbackState: value(named: "state"),
-            callbackErrorCode: value(named: "error"),
+            callbackScheme: components.scheme,
+            callbackHost: components.host,
+            callbackPath: components.path,
+            callbackHasUserInfo: components.user != nil || components.password != nil,
+            callbackFragment: components.fragment,
+            callbackCodeValues: values(named: "code"),
+            callbackStateValues: values(named: "state"),
+            callbackErrorCodeValues: values(named: "error"),
             nowEpochMillis: nowEpochMillis
         )
     }
