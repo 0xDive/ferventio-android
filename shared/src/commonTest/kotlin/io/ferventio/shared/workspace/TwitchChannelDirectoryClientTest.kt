@@ -70,6 +70,47 @@ class TwitchChannelDirectoryClientTest {
         assertTrue(channels.none { it.id == "unexpected" })
     }
 
+    @Test
+    fun resolvesModeratedChannelsWithAndroidHelixContract() = runTest {
+        var authorization: String? = null
+        var clientId: String? = null
+        var requestedUserId: String? = null
+        var requestedFirst: String? = null
+        val engine = MockEngine { request ->
+            authorization = request.headers[HttpHeaders.Authorization]
+            clientId = request.headers["Client-Id"]
+            requestedUserId = request.url.parameters["user_id"]
+            requestedFirst = request.url.parameters["first"]
+            assertEquals("/helix/moderation/channels", request.url.encodedPath)
+            respond(
+                content = ByteReadChannel(
+                    """
+                    {
+                      "data": [
+                        {"broadcaster_id":"2"},
+                        {"broadcaster_id":"3"},
+                        {"broadcaster_id":"2"},
+                        {"broadcaster_id":" "}
+                      ]
+                    }
+                    """.trimIndent(),
+                ),
+                status = HttpStatusCode.OK,
+            )
+        }
+        val client = TwitchChannelDirectoryClient(
+            HttpClient(engine) { expectSuccess = false },
+        )
+
+        val moderated = client.resolveModeratedChannelIds(authentication())
+
+        assertEquals("Bearer access-token", authorization)
+        assertEquals("client-id", clientId)
+        assertEquals("viewer-id", requestedUserId)
+        assertEquals("100", requestedFirst)
+        assertEquals(setOf("2", "3"), moderated)
+    }
+
     private fun authentication() = StoredAuthentication(
         backendCredential = BackendSessionCredential(
             serverUrl = "https://example.test",

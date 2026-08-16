@@ -48,6 +48,13 @@ class WorkspaceBootstrapCoordinator(
         resolved.selectedChannelId?.let(state::selectChannel)
         state.updatePinnedChannelIds(snapshot.channels.pinnedChannelIds)
 
+        val session = authentication.accessLease?.session
+            ?: error("Workspace bootstrap requires a Twitch access lease")
+        val moderatedChannelIds = runCatching {
+            directory.resolveModeratedChannelIds(authentication)
+        }.getOrDefault(emptySet()) + session.userId
+        state.updateModeratorChannelIds(moderatedChannelIds)
+
         return WorkspaceBootstrapOutcome(
             remoteSettingsAvailable = true,
             settingsRevision = snapshot.revision,

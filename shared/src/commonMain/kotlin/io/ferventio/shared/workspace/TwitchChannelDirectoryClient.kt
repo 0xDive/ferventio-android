@@ -21,7 +21,7 @@ class TwitchChannelDirectoryException(
     val responseBody: String,
 ) : IllegalStateException("Twitch Helix HTTP $statusCode")
 
-/** Shared Helix user resolver matching Android's saved-login workspace bootstrap. */
+/** Shared Helix workspace resolver matching Android's channel and moderator bootstrap semantics. */
 class TwitchChannelDirectoryClient(
     private val client: HttpClient = createPlatformMobileAuthenticationHttpClient(),
 ) {
@@ -34,19 +34,16 @@ class TwitchChannelDirectoryClient(
         authentication: StoredAuthentication,
         logins: List<String>,
     ): List<ChatChannel> {
-        AuthenticationPersistenceValidation.requireValid(
-            authentication.backendCredential,
-            authentication.accessLease,
-        )
-        val lease = authentication.accessLease
-            ?: error("Twitch channel resolution requires an access lease")
+        val lease = requireAccessLease(authentication)
         val normalizedLogins = WorkspaceChannelBootstrapPolicy.normalizeLogins(logins).take(MAX_LOGINS)
         if (normalizedLogins.isEmpty()) return emptyList()
         val requested = normalizedLogins.toHashSet()
 
         val response = client.get(TWITCH_USERS_URL) {
-            header(HttpHeaders.Authorization, "Bearer ${lease.accessToken}")
-            header("Client-Id", lease.session.clientId)
+            twitchHeaders(
+                accessToken = lease.accessToken,
+                clientId = lease.session.clientId,
+            )
             url {
                 normalizedLogins.forEach { login ->
                     parameters.append("login", login)
@@ -54,12 +51,7 @@ class TwitchChannelDirectoryClient(
             }
         }
         val body = response.bodyAsText()
-        if (response.status.value !in 200..299) {
-            throw TwitchChannelDirectoryException(
-                statusCode = response.status.value,
-                responseBody = body.take(300),
-            )
-        }
+        ensureSuccess(response.status.value, body)
 
         val data = runCatching {
             json.parseToJsonElement(body).jsonObject["data"]?.jsonArray.orEmpty()
@@ -86,11 +78,70 @@ class TwitchChannelDirectoryClient(
         }
     }
 
+    @Throws(Exception::class)
+    suspend fun resolveModeratedChannelIds(
+        authentication: StoredAuthentication,
+    ): Set<String> {
+        val lease = requireAccessLease(authentication)
+        val response = client.get(TWITCH_MODERATED_CHANNELS_URL) {
+            twitchHeaders(
+                accessToken = lease.accessToken,
+                clientId = lease.session.clientId,
+            )
+            url {
+                parameters.append("user_id", lease.session.userId)
+                parameters.append("first", MAX_MODERATED_CHANNELS.toString())
+            }
+        }
+        val body = response.bodyAsText()
+        ensureSuccess(response.status.value, body)
+
+        val data = runCatching {
+            json.parseToJsonElement(body).jsonObject["data"]?.jsonArray.orEmpty()
+        }.getOrElse {
+            throw IllegalStateException("Twitch returned malformed moderated-channels JSON", it)
+        }
+        return buildSet {
+            data.forEach { element ->
+                element.runCatching { jsonObject }.getOrNull()
+                    ?.string("broadcaster_id")
+                    ?.let(::add)
+            }
+        }
+    }
+
+    private fun requireAccessLease(authentication: StoredAuthentication) =
+        authentication.also {
+            AuthenticationPersistenceValidation.requireValid(
+                it.backendCredential,
+                it.accessLease,
+            )
+        }.accessLease ?: error("Twitch workspace resolution requires an access lease")
+
+    private fun io.ktor.client.request.HttpRequestBuilder.twitchHeaders(
+        accessToken: String,
+        clientId: String,
+    ) {
+        header(HttpHeaders.Authorization, "Bearer $accessToken")
+        header("Client-Id", clientId)
+    }
+
+    private fun ensureSuccess(statusCode: Int, body: String) {
+        if (statusCode !in 200..299) {
+            throw TwitchChannelDirectoryException(
+                statusCode = statusCode,
+                responseBody = body.take(300),
+            )
+        }
+    }
+
     private fun kotlinx.serialization.json.JsonObject.string(name: String): String? =
         this[name]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf(String::isNotEmpty)
 
     private companion object {
         const val MAX_LOGINS = 100
+        const val MAX_MODERATED_CHANNELS = 100
         const val TWITCH_USERS_URL = "https://api.twitch.tv/helix/users"
+        const val TWITCH_MODERATED_CHANNELS_URL = "https://api.twitch.tv/helix/moderation/channels"
     }
 }
