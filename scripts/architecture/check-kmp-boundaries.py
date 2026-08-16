@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail when commonMain starts depending on platform-specific APIs or Android app layers."""
+"""Fail when multiplatform common sources depend on platform-specific APIs or Android app layers."""
 from __future__ import annotations
 
 import argparse
@@ -24,19 +24,25 @@ FORBIDDEN_PREFIXES = (
     "io.ferventio.app.push.",
 )
 
+COMMON_SOURCE_ROOTS = (
+    "shared/src/commonMain/kotlin",
+    "core/domain/src/main/kotlin",
+)
+
 
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[2])
     args = parser.parse_args()
     root = args.root.resolve()
-    common_main = root / "shared/src/commonMain/kotlin"
     errors: list[str] = []
 
-    if not common_main.is_dir():
-        errors.append("shared/src/commonMain/kotlin is missing")
-    else:
-        for path in sorted(common_main.rglob("*.kt")):
+    for relative_root in COMMON_SOURCE_ROOTS:
+        common_root = root / relative_root
+        if not common_root.is_dir():
+            errors.append(f"{relative_root} is missing")
+            continue
+        for path in sorted(common_root.rglob("*.kt")):
             text = path.read_text(encoding="utf-8")
             for imported in IMPORT_RE.findall(text):
                 if imported.startswith(FORBIDDEN_PREFIXES):
@@ -44,12 +50,12 @@ def main() -> int:
                     errors.append(f"{relative} imports platform/app-layer type {imported}")
 
     if errors:
-        print("KMP commonMain boundary validation failed:", file=sys.stderr)
+        print("KMP common source boundary validation failed:", file=sys.stderr)
         for error in errors:
             print(f" - {error}", file=sys.stderr)
         return 1
 
-    print("KMP commonMain boundaries OK")
+    print("KMP common source boundaries OK")
     return 0
 
 

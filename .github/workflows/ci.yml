@@ -67,9 +67,9 @@ jobs:
           ./gradlew \
             :shared:compileKotlinMetadata \
             :shared:testAndroidHostTest \
-            :core:domain:testDebugUnitTest \
+            :core:domain:compileKotlinMetadata \
+            :core:domain:testAndroidHostTest \
             :core:database:testDebugUnitTest \
-            :core:domain:lintDebug \
             :core:database:lintDebug \
             :app:testFossDebugUnitTest \
             :app:testPlayDebugUnitTest \
