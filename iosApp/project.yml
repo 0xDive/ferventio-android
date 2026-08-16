@@ -28,6 +28,10 @@ targets:
           - UIInterfaceOrientationPortrait
           - UIInterfaceOrientationLandscapeLeft
           - UIInterfaceOrientationLandscapeRight
+    entitlements:
+      path: Generated/Ferventio.entitlements
+      properties:
+        aps-environment: $(APS_ENVIRONMENT)
     dependencies:
       - framework: ../shared/build/bin/iosSimulatorArm64/debugFramework/FerventioShared.framework
         embed: false
@@ -35,6 +39,12 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.ferventio.app
         FERVENTIO_SERVER_URL: https://ferventio.godive.dev
+        MARKETING_VERSION: 0.0.1
+        CURRENT_PROJECT_VERSION: 1
         SWIFT_VERSION: "6.0"
         TARGETED_DEVICE_FAMILY: "1,2"
-        CODE_SIGNING_ALLOWED: NO
+      configs:
+        Debug:
+          APS_ENVIRONMENT: development
+        Release:
+          APS_ENVIRONMENT: production
