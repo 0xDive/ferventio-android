@@ -25,6 +25,68 @@ class BackendAuthorizationCallbackEvaluatorTest {
     }
 
     @Test
+    fun evaluatesStrictCallbackComponentsBeforeStatePolicy() {
+        val request = request()
+
+        val result = evaluator.evaluateComponents(
+            request = request,
+            callbackScheme = request.callbackScheme,
+            callbackHost = "oauth",
+            callbackPath = "/callback",
+            callbackHasUserInfo = false,
+            callbackFragment = null,
+            callbackCodeValues = listOf(" authorization-code "),
+            callbackStateValues = listOf(" ${request.state} "),
+            callbackErrorCodeValues = emptyList(),
+            nowEpochMillis = 1_000L,
+        )
+
+        assertEquals(BackendAuthorizationCallbackStatus.COMPLETE, result.status)
+        assertEquals("authorization-code", result.code)
+        assertEquals(request.state, result.state)
+    }
+
+    @Test
+    fun rejectsDuplicateStateBeforePolicyEvaluation() {
+        val request = request()
+
+        val result = evaluator.evaluateComponents(
+            request = request,
+            callbackScheme = request.callbackScheme,
+            callbackHost = "oauth",
+            callbackPath = "/callback",
+            callbackHasUserInfo = false,
+            callbackFragment = null,
+            callbackCodeValues = listOf("authorization-code"),
+            callbackStateValues = listOf(request.state, "unexpected-state"),
+            callbackErrorCodeValues = emptyList(),
+            nowEpochMillis = 1_000L,
+        )
+
+        assertEquals(BackendAuthorizationCallbackStatus.INVALID_CALLBACK, result.status)
+    }
+
+    @Test
+    fun rejectsUnsafeCallbackRouteComponents() {
+        val request = request()
+
+        val result = evaluator.evaluateComponents(
+            request = request,
+            callbackScheme = request.callbackScheme,
+            callbackHost = "oauth",
+            callbackPath = "/callback",
+            callbackHasUserInfo = true,
+            callbackFragment = null,
+            callbackCodeValues = listOf("authorization-code"),
+            callbackStateValues = listOf(request.state),
+            callbackErrorCodeValues = emptyList(),
+            nowEpochMillis = 1_000L,
+        )
+
+        assertEquals(BackendAuthorizationCallbackStatus.INVALID_CALLBACK, result.status)
+    }
+
+    @Test
     fun rejectsMismatchedStateBeforeReturningOAuthError() {
         val result = evaluator.evaluate(
             request = request(),
