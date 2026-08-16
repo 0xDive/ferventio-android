@@ -38,7 +38,7 @@ google-services.json
 *service-account*.json
 *firebase-admin*.json
 *firebase-credentials*.json
-*gcp-credentials.json
+*gcp-credentials*.json
 
 # Security reports and local tools
 .security-tools/
