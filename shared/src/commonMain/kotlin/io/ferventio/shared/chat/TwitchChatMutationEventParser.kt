@@ -38,7 +38,7 @@ internal sealed interface TwitchChatMutationEvent {
 internal object TwitchChatMutationEventParser {
     fun parse(envelope: TwitchEventSubProtocolEnvelope): TwitchChatMutationEvent? {
         if (envelope.type != "notification") return null
-        val event = envelope.event ?: return null
+        val event = envelope.eventPayload ?: return null
         val channelId = event.requiredString("broadcaster_user_id")
         val eventSubMessageId = envelope.messageId?.takeIf(String::isNotBlank)
         val createdAt = envelope.messageTimestamp?.takeIf(String::isNotBlank)
