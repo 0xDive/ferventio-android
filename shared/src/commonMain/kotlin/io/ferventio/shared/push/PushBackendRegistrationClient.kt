@@ -1,6 +1,8 @@
 package io.ferventio.shared.push
 
+import io.ferventio.app.domain.AuthenticationPersistenceValidation
 import io.ferventio.app.domain.MobileDeviceIdentity
+import io.ferventio.app.domain.StoredAuthentication
 import io.ktor.client.HttpClient
 import io.ktor.client.request.header
 import io.ktor.client.request.put
@@ -97,6 +99,35 @@ class ApnsPushRegistrationCoordinator(
         appVersion = appVersion,
         context = PushRegistrationContext(),
     )
+
+    @Throws(Exception::class)
+    suspend fun registerAuthenticated(
+        serverUrl: String,
+        identity: MobileDeviceIdentity,
+        apnsDeviceToken: String,
+        appVersion: String,
+        authentication: StoredAuthentication,
+    ): PushRegistrationRequest {
+        AuthenticationPersistenceValidation.requireValid(
+            authentication.backendCredential,
+            authentication.accessLease,
+        )
+        val session = authentication.accessLease?.session
+            ?: error("Authenticated push registration requires a Twitch access lease")
+        require(session.userId.isNotBlank() && session.login.isNotBlank()) {
+            "Authenticated push registration requires Twitch user identity"
+        }
+        return register(
+            serverUrl = serverUrl,
+            identity = identity,
+            apnsDeviceToken = apnsDeviceToken,
+            appVersion = appVersion,
+            context = PushRegistrationContext(
+                userId = session.userId,
+                userLogin = session.login,
+            ),
+        )
+    }
 
     @Throws(Exception::class)
     suspend fun register(

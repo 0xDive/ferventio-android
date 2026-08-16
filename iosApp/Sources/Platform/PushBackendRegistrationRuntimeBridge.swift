@@ -88,11 +88,12 @@ final class PushBackendRegistrationRuntimeBridge {
 
         do {
             let identity = try identityStore.loadOrCreate()
-            _ = try await coordinator.register(
+            _ = try await coordinator.registerAuthenticated(
                 serverUrl: authentication.backendCredential.serverUrl,
                 identity: identity,
                 apnsDeviceToken: deviceToken,
-                appVersion: appVersion
+                appVersion: appVersion,
+                authentication: authentication
             )
 
             guard stateHolder.deviceToken == deviceToken else {
