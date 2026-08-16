@@ -15,6 +15,10 @@ benchmark/build/
 !build-logic/src/main/kotlin/io/ferventio/build/
 !build-logic/src/main/kotlin/io/ferventio/build/*.kt
 
+# Generated iOS project files
+/iosApp/Ferventio.xcodeproj/
+/iosApp/Generated/
+
 # Local release configuration and credentials
 gradle-local.properties
 gragle.properties
@@ -34,7 +38,7 @@ google-services.json
 *service-account*.json
 *firebase-admin*.json
 *firebase-credentials*.json
-*gcp-credentials*.json
+*gcp-credentials.json
 
 # Security reports and local tools
 .security-tools/
