@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import io.ferventio.app.domain.ChatRepeatSummary
 import io.ferventio.shared.ui.chat.RepeatCountBadge
+import io.ferventio.shared.ui.chat.formatRepeatParticipantSummary
 
 @Composable
 internal fun ChatRepeatCountBadge(
@@ -16,17 +17,8 @@ internal fun ChatRepeatCountBadge(
     )
 }
 
-internal fun ChatRepeatParticipantSummary(summary: ChatRepeatSummary): String {
-    if (summary.participants.isEmpty()) return ""
-
-    val visibleNames = summary.participants
-        .map { participant -> participant.displayName }
-        .filter(String::isNotBlank)
-        .joinToString(", ")
-
-    return when {
-        visibleNames.isBlank() -> ""
-        summary.omittedParticipantCount > 0 -> "$visibleNames +${summary.omittedParticipantCount}"
-        else -> visibleNames
-    }
-}
+internal fun ChatRepeatParticipantSummary(summary: ChatRepeatSummary): String =
+    formatRepeatParticipantSummary(
+        displayNames = summary.participants.map { participant -> participant.displayName },
+        omittedParticipantCount = summary.omittedParticipantCount,
+    )
