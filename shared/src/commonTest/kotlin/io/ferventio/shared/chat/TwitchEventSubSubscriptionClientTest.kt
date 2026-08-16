@@ -46,7 +46,7 @@ class TwitchEventSubSubscriptionClientTest {
         val request = requireNotNull(captured)
         assertEquals("Bearer access-token", request.headers[HttpHeaders.Authorization])
         assertEquals("client-id", request.headers["Client-Id"])
-        assertTrue(request.headers[HttpHeaders.ContentType]?.startsWith("application/json") == true)
+        assertTrue(request.body.contentType?.toString()?.startsWith("application/json") == true)
         val root = Json.parseToJsonElement(request.body.toByteArray().decodeToString()).jsonObject
         assertEquals("channel.chat.message", root.getValue("type").jsonPrimitive.content)
         assertEquals("1", root.getValue("version").jsonPrimitive.content)
