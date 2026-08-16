@@ -15,7 +15,7 @@ concurrency:
 
 jobs:
   framework:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v7
@@ -29,8 +29,13 @@ jobs:
         with:
           cache-read-only: ${{ github.event_name == 'pull_request' }}
 
+      - name: Select supported Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.4.1.app/Contents/Developer
+
       - name: Verify Apple toolchain
-        run: xcodebuild -version
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphonesimulator --show-sdk-version
 
       - name: Compile common domain for iOS simulator
         run: |
