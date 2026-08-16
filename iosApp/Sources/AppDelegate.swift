@@ -11,6 +11,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     private var authenticationRuntimeBridge: MobileAuthenticationRuntimeBridge?
     private var workspaceRuntimeBridge: WorkspaceRuntimeBridge?
     private var pushBackendRegistrationRuntimeBridge: PushBackendRegistrationRuntimeBridge?
+    private var authenticatedChatRuntimeBridge: AuthenticatedChatRuntimeBridge?
     private lazy var lifecycleObserver = AppLifecycleObserver(
         stateHolder: runtimeState.lifecycle
     )
@@ -27,6 +28,9 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
         lifecycleObserver.start(applicationState: application.applicationState)
+        authenticatedChatRuntimeBridge = AuthenticatedChatRuntimeBridge(
+            stateHolder: runtimeState.chat
+        )
         Task {
             await pushRuntimeBridge.refreshAuthorizationAndRestoreRemoteRegistration()
         }
@@ -89,10 +93,15 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
             await pushRuntimeBridge.refreshAuthorizationAndRestoreRemoteRegistration()
             if runtimeState.workspace.isReadyForPushRegistration {
                 await synchronizePushBackendRegistration()
+                synchronizeAuthenticatedChatRuntime()
             } else {
                 await restoreWorkspaceAndSynchronizePush()
             }
         }
+    }
+
+    func applicationDidEnterBackground(_ application: UIApplication) {
+        authenticatedChatRuntimeBridge?.stop()
     }
 
     func application(
@@ -134,26 +143,39 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     }
 
     func applicationWillTerminate(_ application: UIApplication) {
+        authenticatedChatRuntimeBridge?.stop()
         lifecycleObserver.stop()
     }
 
     private func restoreWorkspaceAndSynchronizePush() async {
         let authentication = runtimeState.authentication.state.authentication
         guard let authentication else {
+            authenticatedChatRuntimeBridge?.stop(clearState: true)
             runtimeState.workspace.clear()
             return
         }
         guard let workspaceRuntimeBridge else {
+            authenticatedChatRuntimeBridge?.stop()
             return
         }
         if await workspaceRuntimeBridge.restore(authentication: authentication) {
             await synchronizePushBackendRegistration()
+            synchronizeAuthenticatedChatRuntime()
+        } else {
+            authenticatedChatRuntimeBridge?.stop()
         }
     }
 
     private func synchronizePushBackendRegistration() async {
         await pushBackendRegistrationRuntimeBridge?.synchronize(
             authentication: runtimeState.authentication.state.authentication
+        )
+    }
+
+    private func synchronizeAuthenticatedChatRuntime() {
+        authenticatedChatRuntimeBridge?.synchronize(
+            authentication: runtimeState.authentication.state.authentication,
+            workspaceState: runtimeState.workspace
         )
     }
 }
