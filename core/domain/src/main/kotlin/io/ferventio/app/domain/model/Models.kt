@@ -1,7 +1,8 @@
 package io.ferventio.app.domain
 
 import androidx.compose.runtime.Immutable
-import java.time.Instant
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 
 data class BackendSessionCredential(
@@ -628,7 +629,9 @@ sealed interface ChatEvent {
     ) : ChatEvent
 }
 
-fun String.toEpochMillisOrNow(nowMillis: Long = System.currentTimeMillis()): Long =
+fun String.toEpochMillisOrNow(
+    nowMillis: Long = Clock.System.now().toEpochMilliseconds(),
+): Long =
     takeIf(String::isNotBlank)
-        ?.let { value -> runCatching { Instant.parse(value).toEpochMilli() }.getOrNull() }
+        ?.let { value -> Instant.parseOrNull(value)?.toEpochMilliseconds() }
         ?: nowMillis
