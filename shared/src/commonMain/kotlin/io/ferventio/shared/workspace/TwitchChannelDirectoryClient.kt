@@ -79,7 +79,7 @@ class TwitchChannelDirectoryClient(
                         id = id,
                         login = login,
                         displayName = displayName,
-                        avatarUrl = item.string("profile_image_url"),
+                        profileImageUrl = item.string("profile_image_url"),
                     ),
                 )
             }
