@@ -1,9 +1,10 @@
 import FerventioShared
 import UIKit
+import UserNotifications
 
 @main
 @MainActor
-final class AppDelegate: UIResponder, UIApplicationDelegate {
+final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     var window: UIWindow?
 
     private let runtimeState = MainViewControllerKt.IosRuntimeState()
@@ -13,11 +14,15 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
     private lazy var pushRuntimeBridge = PushNotificationRuntimeBridge(
         stateHolder: runtimeState.pushRegistration
     )
+    private lazy var pushNavigationBridge = PushNotificationNavigationBridge(
+        inbox: runtimeState.pushNavigation
+    )
 
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        UNUserNotificationCenter.current().delegate = self
         lifecycleObserver.start(applicationState: application.applicationState)
         Task {
             await pushRuntimeBridge.refreshAuthorizationStatus()
@@ -48,6 +53,27 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         didFailToRegisterForRemoteNotificationsWithError error: Swift.Error
     ) {
         pushRuntimeBridge.didFailToRegister(error: error)
+    }
+
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification
+    ) async -> UNNotificationPresentationOptions {
+        [.banner, .list, .sound]
+    }
+
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse
+    ) async {
+        guard let payload = PushNotificationNavigationPayload(
+            userInfo: response.notification.request.content.userInfo
+        ) else {
+            return
+        }
+        await MainActor.run {
+            pushNavigationBridge.handle(payload)
+        }
     }
 
     func applicationWillTerminate(_ application: UIApplication) {
