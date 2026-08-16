@@ -63,6 +63,7 @@ jobs:
       - name: Unit tests, lint, flavor isolation and debug builds
         run: |
           ./gradlew \
+            :shared:compileKotlinMetadata \
             :core:domain:testDebugUnitTest \
             :core:database:testDebugUnitTest \
             :core:domain:lintDebug \
