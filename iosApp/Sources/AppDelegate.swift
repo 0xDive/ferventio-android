@@ -8,6 +8,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     var window: UIWindow?
 
     private let runtimeState = MainViewControllerKt.IosRuntimeState()
+    private var authenticationRuntimeBridge: MobileAuthenticationRuntimeBridge?
     private lazy var lifecycleObserver = AppLifecycleObserver(
         stateHolder: runtimeState.lifecycle
     )
@@ -28,8 +29,28 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
             await pushRuntimeBridge.refreshAuthorizationStatus()
         }
 
+        do {
+            let authenticationRuntimeBridge = try MobileAuthenticationRuntimeBridge.live(
+                stateHolder: runtimeState.authentication
+            )
+            self.authenticationRuntimeBridge = authenticationRuntimeBridge
+            Task { @MainActor in
+                await authenticationRuntimeBridge.restore()
+            }
+        } catch {
+            runtimeState.authentication.markFailed(
+                errorMessage: String(describing: error)
+            )
+        }
+
         let window = UIWindow(frame: UIScreen.main.bounds)
-        window.rootViewController = MainViewControllerKt.MainViewController()
+        window.rootViewController = MainViewControllerKt.MainViewController(
+            onAuthenticate: { [weak self] in
+                Task { @MainActor [weak self] in
+                    await self?.authenticationRuntimeBridge?.signIn()
+                }
+            }
+        )
         window.makeKeyAndVisible()
         self.window = window
         return true
