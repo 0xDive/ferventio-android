@@ -26,6 +26,9 @@ import io.ferventio.app.performance.PerformanceRuntimeState
 import io.ferventio.app.push.NotificationPresenter
 import io.ferventio.app.ui.FerventioApp
 import io.ferventio.app.ui.resolveAppString
+import io.ferventio.shared.push.PushNavigationInput
+import io.ferventio.shared.push.PushNavigationPolicy
+import io.ferventio.shared.push.PushNavigationTarget
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -207,27 +210,36 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun processNotificationIntent(intent: Intent?) {
-        val destination = intent?.getStringExtra(NotificationPresenter.EXTRA_DESTINATION)
-        if (destination == "push_settings") {
-            container.controller.openSettings()
-            clearNotificationExtras(intent)
-            return
+        val currentIntent = intent ?: return
+        val target = PushNavigationPolicy.resolve(
+            PushNavigationInput(
+                channelId = currentIntent.getStringExtra(NotificationPresenter.EXTRA_CHANNEL_ID),
+                channelLogin = currentIntent.getStringExtra(NotificationPresenter.EXTRA_CHANNEL_LOGIN),
+                messageId = currentIntent.getStringExtra(NotificationPresenter.EXTRA_MESSAGE_ID),
+                destination = currentIntent.getStringExtra(NotificationPresenter.EXTRA_DESTINATION),
+            ),
+        ) ?: return
+
+        when (target) {
+            PushNavigationTarget.PushSettings -> container.controller.openSettings()
+            is PushNavigationTarget.Mentions -> {
+                target.channel.id ?: return
+                container.controller.openMentions()
+            }
+            is PushNavigationTarget.Moderation -> {
+                val channelId = target.channel.id ?: return
+                container.controller.openModeration(channelId)
+            }
+            is PushNavigationTarget.Message -> {
+                val channelId = target.channel.id ?: return
+                container.controller.navigateToMessage(channelId, target.messageId)
+            }
+            is PushNavigationTarget.Channel -> {
+                val channelId = target.channel.id ?: return
+                container.controller.selectChannel(channelId)
+            }
         }
-        val channelId = intent?.getStringExtra(NotificationPresenter.EXTRA_CHANNEL_ID)
-            ?.takeIf(String::isNotBlank)
-            ?: return
-        val messageId = intent.getStringExtra(NotificationPresenter.EXTRA_MESSAGE_ID)
-            ?.takeIf(String::isNotBlank)
-        if (destination == "moderation") {
-            container.controller.openModeration(channelId)
-        } else if (destination == "mentions") {
-            container.controller.openMentions()
-        } else if (messageId != null) {
-            container.controller.navigateToMessage(channelId, messageId)
-        } else {
-            container.controller.selectChannel(channelId)
-        }
-        clearNotificationExtras(intent)
+        clearNotificationExtras(currentIntent)
     }
 
     private fun processPerformanceIntent(intent: Intent?) {
