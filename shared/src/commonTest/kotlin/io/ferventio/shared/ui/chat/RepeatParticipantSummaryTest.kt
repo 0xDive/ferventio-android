@@ -1,39 +1,50 @@
 package io.ferventio.shared.ui.chat
 
+import io.ferventio.app.domain.ChatRepeatParticipant
+import io.ferventio.app.domain.ChatRepeatSummary
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class RepeatParticipantSummaryTest {
     @Test
-    fun emptyNamesProduceEmptySummary() {
-        assertEquals(
-            "",
-            formatRepeatParticipantSummary(
-                displayNames = listOf("", "   "),
-                omittedParticipantCount = 3,
+    fun formatsVisibleParticipantsAndOmittedCount() {
+        val summary = ChatRepeatSummary(
+            anchorMessageId = "m1",
+            count = 4,
+            participants = listOf(
+                ChatRepeatParticipant(userId = "u1", displayName = "Alice"),
+                ChatRepeatParticipant(userId = "u2", displayName = "Bob"),
             ),
+            totalParticipantCount = 3,
         )
+
+        assertEquals("Alice, Bob +1", formatRepeatParticipantSummary(summary))
     }
 
     @Test
-    fun visibleNamesAreJoinedInOrder() {
-        assertEquals(
-            "Alice, Bob",
-            formatRepeatParticipantSummary(
-                displayNames = listOf("Alice", "", "Bob"),
-                omittedParticipantCount = 0,
+    fun skipsBlankParticipantNames() {
+        val summary = ChatRepeatSummary(
+            anchorMessageId = "m1",
+            count = 3,
+            participants = listOf(
+                ChatRepeatParticipant(userId = "u1", displayName = ""),
+                ChatRepeatParticipant(userId = "u2", displayName = "Bob"),
             ),
+            totalParticipantCount = 2,
         )
+
+        assertEquals("Bob", formatRepeatParticipantSummary(summary))
     }
 
     @Test
-    fun omittedParticipantsAreAppended() {
-        assertEquals(
-            "Alice, Bob +4",
-            formatRepeatParticipantSummary(
-                displayNames = listOf("Alice", "Bob"),
-                omittedParticipantCount = 4,
-            ),
+    fun returnsEmptyWhenNoVisibleNamesExist() {
+        val summary = ChatRepeatSummary(
+            anchorMessageId = "m1",
+            count = 3,
+            participants = emptyList(),
+            totalParticipantCount = 0,
         )
+
+        assertEquals("", formatRepeatParticipantSummary(summary))
     }
 }

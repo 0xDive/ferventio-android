@@ -11,13 +11,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import io.ferventio.app.domain.ChatRepeatSummary
 
 @Composable
 fun RepeatCountBadge(
-    count: Int,
+    summary: ChatRepeatSummary,
     modifier: Modifier = Modifier,
 ) {
-    if (count < 2) return
+    if (summary.count < 2) return
 
     Surface(
         modifier = modifier,
@@ -31,7 +32,7 @@ fun RepeatCountBadge(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "×$count",
+                text = "×${summary.count}",
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
             )

@@ -1,16 +1,16 @@
 package io.ferventio.shared.ui.chat
 
-fun formatRepeatParticipantSummary(
-    displayNames: List<String>,
-    omittedParticipantCount: Int,
-): String {
-    val visibleNames = displayNames
+import io.ferventio.app.domain.ChatRepeatSummary
+
+fun formatRepeatParticipantSummary(summary: ChatRepeatSummary): String {
+    val visibleNames = summary.participants
+        .map { participant -> participant.displayName }
         .filter(String::isNotBlank)
         .joinToString(", ")
 
     return when {
         visibleNames.isBlank() -> ""
-        omittedParticipantCount > 0 -> "$visibleNames +$omittedParticipantCount"
+        summary.omittedParticipantCount > 0 -> "$visibleNames +${summary.omittedParticipantCount}"
         else -> visibleNames
     }
 }

@@ -11,14 +11,8 @@ internal fun ChatRepeatCountBadge(
     summary: ChatRepeatSummary,
     modifier: Modifier = Modifier,
 ) {
-    RepeatCountBadge(
-        count = summary.count,
-        modifier = modifier,
-    )
+    RepeatCountBadge(summary = summary, modifier = modifier)
 }
 
 internal fun ChatRepeatParticipantSummary(summary: ChatRepeatSummary): String =
-    formatRepeatParticipantSummary(
-        displayNames = summary.participants.map { participant -> participant.displayName },
-        omittedParticipantCount = summary.omittedParticipantCount,
-    )
+    formatRepeatParticipantSummary(summary)
