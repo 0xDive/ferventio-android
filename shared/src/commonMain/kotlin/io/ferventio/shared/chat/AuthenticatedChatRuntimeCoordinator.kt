@@ -1,0 +1,66 @@
+package io.ferventio.shared.chat
+
+import io.ferventio.app.domain.ConnectionStatus
+import io.ferventio.app.domain.StoredAuthentication
+import io.ferventio.shared.workspace.WorkspaceRuntimeSnapshot
+import kotlin.Throws
+
+/**
+ * Public KMP entry point for authenticated Twitch chat transport.
+ *
+ * The coordinator owns the socket lifecycle while writing all observable state into the supplied
+ * [ChatRuntimeStateHolder], allowing Compose Android/iOS surfaces to share one chat state graph.
+ */
+class AuthenticatedChatRuntimeCoordinator(
+    val state: ChatRuntimeStateHolder,
+) {
+    constructor() : this(ChatRuntimeStateHolder())
+
+    private var runningClient: TwitchEventSubSocketClient? = null
+    private var sessionRuntime: TwitchChatSessionRuntime? = null
+
+    @Throws(Exception::class)
+    suspend fun run(
+        authentication: StoredAuthentication,
+        workspace: WorkspaceRuntimeSnapshot,
+    ) {
+        check(runningClient == null) { "Authenticated chat runtime is already running" }
+        require(workspace.channels.isNotEmpty()) {
+            "Authenticated chat runtime requires at least one workspace channel"
+        }
+
+        val runtime = TwitchChatSessionRuntime(
+            authentication = authentication,
+            workspace = workspace,
+            state = state,
+        )
+        val client = TwitchEventSubSocketClient(
+            onStatusChanged = runtime::onConnectionUpdate,
+            onSessionReady = runtime::onSessionReady,
+            onEnvelope = { envelope -> runtime.onEnvelope(envelope) },
+            onMalformedEnvelope = { _ -> Unit },
+            onError = runtime::onSocketError,
+        )
+        sessionRuntime = runtime
+        runningClient = client
+
+        try {
+            client.run()
+        } finally {
+            runtime.close()
+            client.close()
+            if (runningClient === client) {
+                runningClient = null
+                sessionRuntime = null
+            }
+            if (state.connectionStatus != ConnectionStatus.FAILED) {
+                state.updateConnection(ConnectionStatus.DISCONNECTED)
+            }
+        }
+    }
+
+    fun close() {
+        sessionRuntime?.close()
+        runningClient?.close()
+    }
+}

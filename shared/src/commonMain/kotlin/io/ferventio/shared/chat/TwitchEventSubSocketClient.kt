@@ -32,12 +32,15 @@ internal class TwitchEventSubSocketClient(
     private val delayAction: suspend (Long) -> Unit = { millis -> delay(millis) },
     private val jitterFraction: () -> Double = { Random.nextDouble() },
 ) {
+    private var closed = false
+
     suspend fun run() {
+        check(!closed) { "EventSub socket client is already closed" }
         var socketUrl = TwitchEventSubConnectionPolicy.DEFAULT_SOCKET_URL
         var createSubscriptions = true
         var reconnectAttempt = 0
 
-        while (currentCoroutineContext().isActive) {
+        while (currentCoroutineContext().isActive && !closed) {
             var twitchReconnectUrl: String? = null
             var stopAfterRevocation = false
             try {
@@ -76,7 +79,7 @@ internal class TwitchEventSubSocketClient(
                     publishStatus(ConnectionStatus.CONNECTED, 0)
                     reconnectAttempt = 0
 
-                    while (currentCoroutineContext().isActive) {
+                    while (currentCoroutineContext().isActive && !closed) {
                         val envelope = receiveProtocolEnvelope(
                             TwitchEventSubConnectionPolicy.receiveTimeoutMillis(keepaliveSeconds),
                         )
@@ -103,6 +106,7 @@ internal class TwitchEventSubSocketClient(
                     }
                 }
 
+                if (closed) return
                 if (stopAfterRevocation) return
                 if (twitchReconnectUrl != null) {
                     socketUrl = requireNotNull(twitchReconnectUrl)
@@ -112,10 +116,21 @@ internal class TwitchEventSubSocketClient(
                 error("Twitch EventSub WebSocket closed without a reconnect instruction")
             } catch (cancelled: CancellationException) {
                 throw cancelled
+            } catch (setup: TwitchEventSubBootstrapException) {
+                if (closed) return
+                onError(setup)
+                publishStatus(
+                    status = ConnectionStatus.FAILED,
+                    attempt = reconnectAttempt,
+                    error = setup.message ?: "EventSub subscription bootstrap failed",
+                )
+                return
             } catch (error: Throwable) {
+                if (closed) return
                 onError(error)
             }
 
+            if (closed) return
             reconnectAttempt += 1
             createSubscriptions = true
             socketUrl = TwitchEventSubConnectionPolicy.DEFAULT_SOCKET_URL
@@ -134,6 +149,8 @@ internal class TwitchEventSubSocketClient(
     }
 
     fun close() {
+        if (closed) return
+        closed = true
         client.close()
     }
 
