@@ -1,10 +1,6 @@
+import FerventioShared
 import Foundation
 import Security
-
-struct DeviceIdentity: Equatable, Sendable {
-    let installationID: String
-    let deviceSecret: String
-}
 
 struct DeviceIdentityStore: Sendable {
     enum Error: Swift.Error, Equatable {
@@ -17,24 +13,24 @@ struct DeviceIdentityStore: Sendable {
         self.store = store
     }
 
-    func loadOrCreate() throws -> DeviceIdentity {
+    func loadOrCreate() throws -> MobileDeviceIdentity {
         let installationID = try store.string(forKey: Keys.installationID)
         let deviceSecret = try store.string(forKey: Keys.deviceSecret)
 
         if let installationID,
            let deviceSecret,
            isValid(installationID: installationID, deviceSecret: deviceSecret) {
-            return DeviceIdentity(
-                installationID: installationID,
+            return MobileDeviceIdentity(
+                installationId: installationID,
                 deviceSecret: deviceSecret
             )
         }
 
-        let identity = DeviceIdentity(
-            installationID: UUID().uuidString.lowercased(),
+        let identity = MobileDeviceIdentity(
+            installationId: UUID().uuidString.lowercased(),
             deviceSecret: try makeDeviceSecret()
         )
-        try store.set(identity.installationID, forKey: Keys.installationID)
+        try store.set(identity.installationId, forKey: Keys.installationID)
         try store.set(identity.deviceSecret, forKey: Keys.deviceSecret)
         return identity
     }
