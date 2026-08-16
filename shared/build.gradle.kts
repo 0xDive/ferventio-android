@@ -25,12 +25,13 @@ kotlin {
         target.binaries.framework {
             baseName = "FerventioShared"
             isStatic = true
+            export(project(":core:domain"))
         }
     }
 
     sourceSets {
         commonMain.dependencies {
-            implementation(project(":core:domain"))
+            api(project(":core:domain"))
             implementation(compose.runtime)
             implementation(compose.foundation)
             implementation(compose.material3)
