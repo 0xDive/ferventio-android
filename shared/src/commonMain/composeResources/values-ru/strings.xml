@@ -9,4 +9,11 @@
     <string name="workspace_no_channels_summary">Здесь появятся каналы из синхронизированных настроек.</string>
     <string name="workspace_menu">Открыть каналы</string>
     <string name="workspace_signed_in_as">Выполнен вход как @%1$s</string>
+    <string name="chat_waiting_for_messages">Ждём сообщения…</string>
+    <string name="chat_status_disconnected">Чат отключён</string>
+    <string name="chat_status_connecting">Подключаемся к чату…</string>
+    <string name="chat_status_waiting_welcome">Ждём Twitch…</string>
+    <string name="chat_status_creating_subscriptions">Подписываемся на события чата…</string>
+    <string name="chat_status_reconnecting">Переподключаемся к чату…</string>
+    <string name="chat_status_failed">Не удалось подключить чат</string>
 </resources>

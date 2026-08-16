@@ -9,4 +9,11 @@
     <string name="workspace_no_channels_summary">Your synced channels will appear here.</string>
     <string name="workspace_menu">Open channels</string>
     <string name="workspace_signed_in_as">Signed in as @%1$s</string>
+    <string name="chat_waiting_for_messages">Waiting for messages…</string>
+    <string name="chat_status_disconnected">Chat disconnected</string>
+    <string name="chat_status_connecting">Connecting to chat…</string>
+    <string name="chat_status_waiting_welcome">Waiting for Twitch…</string>
+    <string name="chat_status_creating_subscriptions">Subscribing to chat…</string>
+    <string name="chat_status_reconnecting">Reconnecting to chat…</string>
+    <string name="chat_status_failed">Chat connection failed</string>
 </resources>

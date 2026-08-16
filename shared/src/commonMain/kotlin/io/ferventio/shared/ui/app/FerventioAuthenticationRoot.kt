@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -16,6 +17,7 @@ import io.ferventio.shared.auth.MobileAuthenticationState
 import io.ferventio.shared.auth.MobileAuthenticationStatus
 import io.ferventio.shared.generated.resources.Res
 import io.ferventio.shared.generated.resources.auth_sign_in_with_twitch
+import io.ferventio.shared.ui.chat.FerventioChatTimeline
 import io.ferventio.shared.workspace.WorkspaceRuntimeStateHolder
 import org.jetbrains.compose.resources.stringResource
 
@@ -42,10 +44,10 @@ fun FerventioAuthenticationRoot(
             state = workspace,
             login = state.authentication?.accessLease?.session?.login,
             modifier = modifier,
-        ) {
-            FerventioSignedInLanding(
-                login = state.authentication?.accessLease?.session?.login,
-            )
+        ) { channel ->
+            key(channel.id) {
+                FerventioChatTimeline(channel = channel)
+            }
         }
     }
 }
@@ -67,25 +69,6 @@ private fun FerventioSignedOutScreen(
             Spacer(Modifier.height(24.dp))
             Button(onClick = onAuthenticate) {
                 Text(stringResource(Res.string.auth_sign_in_with_twitch))
-            }
-        }
-    }
-}
-
-@Composable
-private fun FerventioSignedInLanding(
-    login: String?,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            FerventioBrandMark()
-            login?.takeIf(String::isNotBlank)?.let { value ->
-                Spacer(Modifier.height(16.dp))
-                Text("@$value")
             }
         }
     }
