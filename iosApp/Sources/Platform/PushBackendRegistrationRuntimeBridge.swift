@@ -44,7 +44,10 @@ final class PushBackendRegistrationRuntimeBridge {
     }
 
     func synchronize(authentication: StoredAuthentication?) async {
-        guard let authentication else {
+        guard
+            let authentication,
+            workspaceState.isReadyForPushRegistration
+        else {
             return
         }
 
@@ -60,6 +63,11 @@ final class PushBackendRegistrationRuntimeBridge {
         pendingAuthentication = nil
 
         while let currentAuthentication = nextAuthentication {
+            guard workspaceState.isReadyForPushRegistration else {
+                pendingAuthentication = currentAuthentication
+                break
+            }
+
             let revision = workspaceState.pushContextRevision
             let authenticationFingerprint = fingerprint(for: currentAuthentication)
             guard
@@ -84,7 +92,7 @@ final class PushBackendRegistrationRuntimeBridge {
             if let queuedAuthentication = pendingAuthentication {
                 nextAuthentication = queuedAuthentication
                 pendingAuthentication = nil
-            } else if contextChanged {
+            } else if contextChanged && workspaceState.isReadyForPushRegistration {
                 // Serialize token/workspace changes behind an in-flight PUT so the newest context
                 // always wins on the backend instead of allowing stale completion order.
                 nextAuthentication = currentAuthentication
@@ -125,7 +133,8 @@ final class PushBackendRegistrationRuntimeBridge {
 
             guard
                 stateHolder.deviceToken == deviceToken,
-                workspaceState.pushContextRevision == pushContextRevision
+                workspaceState.pushContextRevision == pushContextRevision,
+                workspaceState.isReadyForPushRegistration
             else {
                 return true
             }
@@ -137,7 +146,8 @@ final class PushBackendRegistrationRuntimeBridge {
         } catch {
             guard
                 stateHolder.deviceToken == deviceToken,
-                workspaceState.pushContextRevision == pushContextRevision
+                workspaceState.pushContextRevision == pushContextRevision,
+                workspaceState.isReadyForPushRegistration
             else {
                 return true
             }

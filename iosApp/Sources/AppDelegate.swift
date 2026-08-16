@@ -9,6 +9,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
 
     private let runtimeState = MainViewControllerKt.IosRuntimeState()
     private var authenticationRuntimeBridge: MobileAuthenticationRuntimeBridge?
+    private var workspaceRuntimeBridge: WorkspaceRuntimeBridge?
     private var pushBackendRegistrationRuntimeBridge: PushBackendRegistrationRuntimeBridge?
     private lazy var lifecycleObserver = AppLifecycleObserver(
         stateHolder: runtimeState.lifecycle
@@ -42,13 +43,23 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         }
 
         do {
+            workspaceRuntimeBridge = try WorkspaceRuntimeBridge.live(
+                stateHolder: runtimeState.workspace
+            )
+        } catch {
+            runtimeState.workspace.markLoadFailed(
+                errorMessage: String(describing: error)
+            )
+        }
+
+        do {
             let authenticationRuntimeBridge = try MobileAuthenticationRuntimeBridge.live(
                 stateHolder: runtimeState.authentication
             )
             self.authenticationRuntimeBridge = authenticationRuntimeBridge
             Task { @MainActor [weak self] in
                 await authenticationRuntimeBridge.restore()
-                await self?.synchronizePushBackendRegistration()
+                await self?.restoreWorkspaceAndSynchronizePush()
             }
         } catch {
             runtimeState.authentication.markFailed(
@@ -61,7 +72,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
             onAuthenticate: { [weak self] in
                 Task { @MainActor [weak self] in
                     await self?.authenticationRuntimeBridge?.signIn()
-                    await self?.synchronizePushBackendRegistration()
+                    await self?.restoreWorkspaceAndSynchronizePush()
                 }
             }
         )
@@ -76,7 +87,11 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
                 return
             }
             await pushRuntimeBridge.refreshAuthorizationAndRestoreRemoteRegistration()
-            await synchronizePushBackendRegistration()
+            if runtimeState.workspace.isReadyForPushRegistration {
+                await synchronizePushBackendRegistration()
+            } else {
+                await restoreWorkspaceAndSynchronizePush()
+            }
         }
     }
 
@@ -120,6 +135,20 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
 
     func applicationWillTerminate(_ application: UIApplication) {
         lifecycleObserver.stop()
+    }
+
+    private func restoreWorkspaceAndSynchronizePush() async {
+        let authentication = runtimeState.authentication.state.authentication
+        guard let authentication else {
+            runtimeState.workspace.clear()
+            return
+        }
+        guard let workspaceRuntimeBridge else {
+            return
+        }
+        if await workspaceRuntimeBridge.restore(authentication: authentication) {
+            await synchronizePushBackendRegistration()
+        }
     }
 
     private func synchronizePushBackendRegistration() async {

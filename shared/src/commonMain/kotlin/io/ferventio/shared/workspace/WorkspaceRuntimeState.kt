@@ -6,6 +6,13 @@ import androidx.compose.runtime.setValue
 import io.ferventio.app.domain.ChannelOrder
 import io.ferventio.app.domain.ChatChannel
 
+enum class WorkspaceLoadStatus {
+    IDLE,
+    LOADING,
+    READY,
+    FAILED,
+}
+
 data class WorkspaceRuntimeSnapshot(
     val channels: List<ChatChannel> = emptyList(),
     val selectedChannelId: String? = null,
@@ -42,8 +49,20 @@ class WorkspaceRuntimeStateHolder(
     var pushContextRevision by mutableStateOf(0L)
         private set
 
+    var loadStatus by mutableStateOf(WorkspaceLoadStatus.IDLE)
+        private set
+
+    var loadErrorMessage by mutableStateOf<String?>(null)
+        private set
+
+    var settingsRevision by mutableStateOf(0L)
+        private set
+
     val channelIds: List<String>
         get() = channels.map { it.id }
+
+    val isReadyForPushRegistration: Boolean
+        get() = loadStatus == WorkspaceLoadStatus.READY
 
     val snapshot: WorkspaceRuntimeSnapshot
         get() = WorkspaceRuntimeSnapshot(
@@ -60,6 +79,23 @@ class WorkspaceRuntimeStateHolder(
         updatePinnedChannelIds(initialSnapshot.pinnedChannelIds)
         updateModeratorChannelIds(initialSnapshot.moderatorChannelIds)
         pushContextRevision = maxOf(pushContextRevision, initialSnapshot.pushContextRevision)
+    }
+
+    fun markLoadStarted() {
+        loadStatus = WorkspaceLoadStatus.LOADING
+        loadErrorMessage = null
+    }
+
+    fun markLoadReady(settingsRevision: Long) {
+        require(settingsRevision >= 0L) { "Workspace settings revision must not be negative" }
+        this.settingsRevision = settingsRevision
+        loadStatus = WorkspaceLoadStatus.READY
+        loadErrorMessage = null
+    }
+
+    fun markLoadFailed(errorMessage: String?) {
+        loadStatus = WorkspaceLoadStatus.FAILED
+        loadErrorMessage = errorMessage?.trim()?.takeIf(String::isNotEmpty)
     }
 
     fun replaceChannels(value: List<ChatChannel>) {
@@ -136,6 +172,9 @@ class WorkspaceRuntimeStateHolder(
         selectedChannelId = null
         pinnedChannelIds = emptyList()
         moderatorChannelIds = emptySet()
+        loadStatus = WorkspaceLoadStatus.IDLE
+        loadErrorMessage = null
+        settingsRevision = 0L
         if (affectedPushContext) {
             bumpPushContextRevision()
         }

@@ -4,7 +4,9 @@ import io.ferventio.app.domain.ChatChannel
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class WorkspaceRuntimeStateHolderTest {
     private val alpha = ChatChannel(
@@ -142,7 +144,38 @@ class WorkspaceRuntimeStateHolderTest {
     }
 
     @Test
-    fun clearResetsWorkspaceIdentityStateAndInvalidatesPushContext() {
+    fun loadStateGatesPushRegistrationWithoutChangingPushContextRevision() {
+        val holder = WorkspaceRuntimeStateHolder(
+            WorkspaceRuntimeSnapshot(channels = listOf(alpha)),
+        )
+        val revision = holder.pushContextRevision
+
+        assertEquals(WorkspaceLoadStatus.IDLE, holder.loadStatus)
+        assertFalse(holder.isReadyForPushRegistration)
+
+        holder.markLoadStarted()
+        assertEquals(WorkspaceLoadStatus.LOADING, holder.loadStatus)
+        assertFalse(holder.isReadyForPushRegistration)
+        assertNull(holder.loadErrorMessage)
+
+        holder.markLoadFailed(" temporary failure ")
+        assertEquals(WorkspaceLoadStatus.FAILED, holder.loadStatus)
+        assertEquals("temporary failure", holder.loadErrorMessage)
+        assertFalse(holder.isReadyForPushRegistration)
+        assertEquals(listOf("1"), holder.channelIds)
+        assertEquals(revision, holder.pushContextRevision)
+
+        holder.markLoadStarted()
+        holder.markLoadReady(settingsRevision = 42L)
+        assertEquals(WorkspaceLoadStatus.READY, holder.loadStatus)
+        assertEquals(42L, holder.settingsRevision)
+        assertTrue(holder.isReadyForPushRegistration)
+        assertNull(holder.loadErrorMessage)
+        assertEquals(revision, holder.pushContextRevision)
+    }
+
+    @Test
+    fun clearResetsWorkspaceIdentityAndLoadStateAndInvalidatesPushContext() {
         val holder = WorkspaceRuntimeStateHolder(
             WorkspaceRuntimeSnapshot(
                 channels = listOf(alpha),
@@ -151,6 +184,7 @@ class WorkspaceRuntimeStateHolderTest {
                 moderatorChannelIds = setOf("1"),
             ),
         )
+        holder.markLoadReady(settingsRevision = 9L)
         val revision = holder.pushContextRevision
 
         holder.clear()
@@ -159,7 +193,18 @@ class WorkspaceRuntimeStateHolderTest {
         assertNull(holder.selectedChannelId)
         assertEquals(emptyList(), holder.pinnedChannelIds)
         assertEquals(emptySet(), holder.moderatorChannelIds)
+        assertEquals(WorkspaceLoadStatus.IDLE, holder.loadStatus)
+        assertEquals(0L, holder.settingsRevision)
+        assertNull(holder.loadErrorMessage)
+        assertFalse(holder.isReadyForPushRegistration)
         assertEquals(revision + 1L, holder.pushContextRevision)
+    }
+
+    @Test
+    fun negativeSettingsRevisionIsRejected() {
+        assertFailsWith<IllegalArgumentException> {
+            WorkspaceRuntimeStateHolder().markLoadReady(settingsRevision = -1L)
+        }
     }
 
     @Test
