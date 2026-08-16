@@ -47,7 +47,9 @@ jobs:
           python3 scripts/security/test-check-repository-secrets.py
 
       - name: Architecture boundaries
-        run: python3 scripts/architecture/check-module-boundaries.py --root .
+        run: |
+          python3 scripts/architecture/check-module-boundaries.py --root .
+          python3 scripts/architecture/check-kmp-boundaries.py --root .
 
       - name: Resource localization contract
         run: python3 scripts/localization/check_ui_localization.py
