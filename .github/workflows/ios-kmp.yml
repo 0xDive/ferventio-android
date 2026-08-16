@@ -16,7 +16,7 @@ concurrency:
 jobs:
   framework:
     runs-on: macos-15
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v7
 
@@ -47,4 +47,26 @@ jobs:
             --stacktrace
 
       - name: Verify shared framework output
-        run: test -d shared/build/bin/iosSimulatorArm64/debugFramework/FerventioShared.framework
+        run: |
+          test -d shared/build/bin/iosSimulatorArm64/debugFramework/FerventioShared.framework
+          grep -R "MainViewController" shared/build/bin/iosSimulatorArm64/debugFramework/FerventioShared.framework/Headers
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate iOS application project
+        working-directory: iosApp
+        run: xcodegen generate
+
+      - name: Build iOS application for simulator
+        run: |
+          xcodebuild \
+            -project iosApp/Ferventio.xcodeproj \
+            -scheme Ferventio \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=YES \
+            CODE_SIGNING_ALLOWED=NO \
+            build

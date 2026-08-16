@@ -1,0 +1,31 @@
+name: Ferventio
+
+options:
+  bundleIdPrefix: io.ferventio
+  deploymentTarget:
+    iOS: "16.0"
+
+targets:
+  Ferventio:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+    info:
+      path: Generated/Info.plist
+      properties:
+        CFBundleDisplayName: Ferventio
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    dependencies:
+      - framework: ../shared/build/bin/iosSimulatorArm64/debugFramework/FerventioShared.framework
+        embed: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.ferventio.app
+        SWIFT_VERSION: "6.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGNING_ALLOWED: NO
