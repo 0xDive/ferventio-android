@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import io.ferventio.shared.auth.MobileAuthenticationStateHolder
+import io.ferventio.shared.chat.ChatRuntimeStateHolder
 import io.ferventio.shared.push.PushNavigationInbox
 import io.ferventio.shared.push.PushRegistrationStateHolder
 import io.ferventio.shared.workspace.WorkspaceRuntimeStateHolder
@@ -12,6 +13,7 @@ class FerventioRuntimeState(
     val lifecycle: AppLifecycleStateHolder,
     val authentication: MobileAuthenticationStateHolder,
     val workspace: WorkspaceRuntimeStateHolder,
+    val chat: ChatRuntimeStateHolder,
     val pushRegistration: PushRegistrationStateHolder,
     val pushNavigation: PushNavigationInbox,
 ) {
@@ -19,6 +21,7 @@ class FerventioRuntimeState(
         lifecycle = AppLifecycleStateHolder(),
         authentication = MobileAuthenticationStateHolder(),
         workspace = WorkspaceRuntimeStateHolder(),
+        chat = ChatRuntimeStateHolder(),
         pushRegistration = PushRegistrationStateHolder(),
         pushNavigation = PushNavigationInbox(),
     )
