@@ -13,17 +13,23 @@ struct DeviceIdentityStore: Sendable {
         self.store = store
     }
 
-    func loadOrCreate() throws -> MobileDeviceIdentity {
-        let installationID = try store.string(forKey: Keys.installationID)
-        let deviceSecret = try store.string(forKey: Keys.deviceSecret)
+    func loadExisting() throws -> MobileDeviceIdentity? {
+        guard
+            let installationID = try store.string(forKey: Keys.installationID),
+            let deviceSecret = try store.string(forKey: Keys.deviceSecret),
+            isValid(installationID: installationID, deviceSecret: deviceSecret)
+        else {
+            return nil
+        }
+        return MobileDeviceIdentity(
+            installationId: installationID,
+            deviceSecret: deviceSecret
+        )
+    }
 
-        if let installationID,
-           let deviceSecret,
-           isValid(installationID: installationID, deviceSecret: deviceSecret) {
-            return MobileDeviceIdentity(
-                installationId: installationID,
-                deviceSecret: deviceSecret
-            )
+    func loadOrCreate() throws -> MobileDeviceIdentity {
+        if let identity = try loadExisting() {
+            return identity
         }
 
         let identity = MobileDeviceIdentity(

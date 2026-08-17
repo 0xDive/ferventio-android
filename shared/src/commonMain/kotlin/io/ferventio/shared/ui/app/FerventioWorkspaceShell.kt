@@ -34,6 +34,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.ferventio.app.domain.ChatChannel
 import io.ferventio.shared.generated.resources.Res
+import io.ferventio.shared.generated.resources.auth_sign_out
 import io.ferventio.shared.generated.resources.workspace_channels
 import io.ferventio.shared.generated.resources.workspace_chats
 import io.ferventio.shared.generated.resources.workspace_load_failed
@@ -52,6 +53,7 @@ import org.jetbrains.compose.resources.stringResource
 fun FerventioWorkspaceShell(
     state: WorkspaceRuntimeStateHolder,
     login: String?,
+    onSignOut: () -> Unit = {},
     modifier: Modifier = Modifier,
     content: @Composable (ChatChannel) -> Unit,
 ) {
@@ -89,6 +91,18 @@ fun FerventioWorkspaceShell(
                             scope.launch { drawerState.close() }
                         },
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
+                    )
+                }
+                HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
+                TextButton(
+                    onClick = onSignOut,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                ) {
+                    Text(
+                        text = stringResource(Res.string.auth_sign_out),
+                        color = MaterialTheme.colorScheme.error,
                     )
                 }
             }

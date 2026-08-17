@@ -26,6 +26,7 @@ fun FerventioAuthenticationRoot(
     state: MobileAuthenticationState,
     workspace: WorkspaceRuntimeStateHolder,
     onAuthenticate: () -> Unit,
+    onSignOut: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     when (state.status) {
@@ -43,6 +44,7 @@ fun FerventioAuthenticationRoot(
         MobileAuthenticationStatus.SIGNED_IN -> FerventioWorkspaceShell(
             state = workspace,
             login = state.authentication?.accessLease?.session?.login,
+            onSignOut = onSignOut,
             modifier = modifier,
         ) { channel ->
             key(channel.id) {

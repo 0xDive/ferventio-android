@@ -85,12 +85,15 @@ final class MobileAuthenticationRuntimeBridge {
         }
     }
 
-    func signOut() {
+    @discardableResult
+    func signOut() -> Bool {
         do {
             try sessionStore.clear()
             stateHolder.signOut()
+            return true
         } catch {
             stateHolder.markFailed(errorMessage: String(describing: error))
+            return false
         }
     }
 }

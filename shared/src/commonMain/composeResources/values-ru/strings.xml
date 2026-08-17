@@ -1,6 +1,7 @@
 <resources>
     <string name="app_name">Ferventio</string>
     <string name="auth_sign_in_with_twitch">Войти через Twitch</string>
+    <string name="auth_sign_out">Выйти</string>
     <string name="workspace_channels">Каналы</string>
     <string name="workspace_chats">Чаты</string>
     <string name="workspace_loading">Загружаем каналы…</string>

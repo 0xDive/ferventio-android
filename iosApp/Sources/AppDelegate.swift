@@ -78,6 +78,11 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
                     await self?.authenticationRuntimeBridge?.signIn()
                     await self?.restoreWorkspaceAndSynchronizePush()
                 }
+            },
+            onSignOut: { [weak self] in
+                Task { @MainActor [weak self] in
+                    await self?.signOutAndCleanup()
+                }
             }
         )
         window.makeKeyAndVisible()
@@ -147,11 +152,21 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         lifecycleObserver.stop()
     }
 
+    private func signOutAndCleanup() async {
+        guard authenticationRuntimeBridge?.signOut() == true else {
+            return
+        }
+        authenticatedChatRuntimeBridge?.stop(clearState: true)
+        runtimeState.workspace.clear()
+        await synchronizePushBackendRegistration()
+    }
+
     private func restoreWorkspaceAndSynchronizePush() async {
         let authentication = runtimeState.authentication.state.authentication
         guard let authentication else {
             authenticatedChatRuntimeBridge?.stop(clearState: true)
             runtimeState.workspace.clear()
+            await synchronizePushBackendRegistration()
             return
         }
         guard let workspaceRuntimeBridge else {

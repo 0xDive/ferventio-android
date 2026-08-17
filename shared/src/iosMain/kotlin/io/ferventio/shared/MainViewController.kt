@@ -13,6 +13,7 @@ fun IosRuntimeState(): FerventioRuntimeState = iosRuntimeState
 
 fun MainViewController(
     onAuthenticate: () -> Unit = {},
+    onSignOut: () -> Unit = {},
 ): UIViewController = ComposeUIViewController {
     ProvideFerventioRuntimeState(iosRuntimeState) {
         FerventioTheme {
@@ -20,6 +21,7 @@ fun MainViewController(
                 state = iosRuntimeState.authentication.state,
                 workspace = iosRuntimeState.workspace,
                 onAuthenticate = onAuthenticate,
+                onSignOut = onSignOut,
             )
         }
     }

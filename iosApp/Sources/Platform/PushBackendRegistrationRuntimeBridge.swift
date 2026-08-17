@@ -7,24 +7,29 @@ final class PushBackendRegistrationRuntimeBridge {
     private let workspaceState: WorkspaceRuntimeStateHolder
     private let identityStore: DeviceIdentityStore
     private let coordinator: ApnsPushRegistrationCoordinator
+    private let serverURL: String
     private let appVersion: String
 
     private var synchronizationInFlight = false
+    private var cleanupRequested = false
     private var pendingAuthentication: StoredAuthentication?
     private var lastRegisteredPushContextRevision: Int64?
     private var lastRegisteredAuthenticationFingerprint: String?
+    private var lastRegisteredServerURL: String?
 
     init(
         stateHolder: PushRegistrationStateHolder,
         workspaceState: WorkspaceRuntimeStateHolder,
         identityStore: DeviceIdentityStore,
         coordinator: ApnsPushRegistrationCoordinator = ApnsPushRegistrationCoordinator(),
+        serverURL: String,
         appVersion: String
     ) {
         self.stateHolder = stateHolder
         self.workspaceState = workspaceState
         self.identityStore = identityStore
         self.coordinator = coordinator
+        self.serverURL = serverURL
         self.appVersion = appVersion
     }
 
@@ -39,15 +44,17 @@ final class PushBackendRegistrationRuntimeBridge {
             stateHolder: stateHolder,
             workspaceState: workspaceState,
             identityStore: DeviceIdentityStore(store: keychain),
+            serverURL: configuration.serverURL,
             appVersion: resolvedAppVersion(bundle: bundle)
         )
     }
 
     func synchronize(authentication: StoredAuthentication?) async {
-        guard
-            let authentication,
-            workspaceState.isReadyForPushRegistration
-        else {
+        guard let authentication else {
+            await unregister()
+            return
+        }
+        guard !cleanupRequested, workspaceState.isReadyForPushRegistration else {
             return
         }
 
@@ -63,6 +70,9 @@ final class PushBackendRegistrationRuntimeBridge {
         pendingAuthentication = nil
 
         while let currentAuthentication = nextAuthentication {
+            guard !cleanupRequested else {
+                break
+            }
             guard workspaceState.isReadyForPushRegistration else {
                 pendingAuthentication = currentAuthentication
                 break
@@ -89,6 +99,9 @@ final class PushBackendRegistrationRuntimeBridge {
                 pushContextRevision: revision
             )
 
+            guard !cleanupRequested else {
+                break
+            }
             if let queuedAuthentication = pendingAuthentication {
                 nextAuthentication = queuedAuthentication
                 pendingAuthentication = nil
@@ -99,6 +112,37 @@ final class PushBackendRegistrationRuntimeBridge {
             } else {
                 nextAuthentication = nil
             }
+        }
+    }
+
+    func unregister() async {
+        pendingAuthentication = nil
+        cleanupRequested = true
+
+        // A DELETE must be ordered after any already-started PUT. Otherwise a slow PUT could finish
+        // after sign-out and recreate the registration that was just removed.
+        while synchronizationInFlight {
+            await Task.yield()
+        }
+
+        defer { cleanupRequested = false }
+
+        do {
+            guard let identity = try identityStore.loadExisting() else {
+                resetBackendRegistrationTracking()
+                stateHolder.clearBackendRegistration()
+                return
+            }
+            try await coordinator.unregister(
+                serverUrl: lastRegisteredServerURL ?? serverURL,
+                identity: identity
+            )
+            resetBackendRegistrationTracking()
+            stateHolder.clearBackendRegistration()
+        } catch {
+            stateHolder.markBackendRegistrationFailed(
+                message: String(describing: error)
+            )
         }
     }
 
@@ -132,6 +176,7 @@ final class PushBackendRegistrationRuntimeBridge {
             )
 
             guard
+                !cleanupRequested,
                 stateHolder.deviceToken == deviceToken,
                 workspaceState.pushContextRevision == pushContextRevision,
                 workspaceState.isReadyForPushRegistration
@@ -141,10 +186,12 @@ final class PushBackendRegistrationRuntimeBridge {
 
             lastRegisteredPushContextRevision = pushContextRevision
             lastRegisteredAuthenticationFingerprint = authenticationFingerprint
+            lastRegisteredServerURL = authentication.backendCredential.serverUrl
             stateHolder.markBackendRegistered()
             return false
         } catch {
             guard
+                !cleanupRequested,
                 stateHolder.deviceToken == deviceToken,
                 workspaceState.pushContextRevision == pushContextRevision,
                 workspaceState.isReadyForPushRegistration
@@ -157,6 +204,12 @@ final class PushBackendRegistrationRuntimeBridge {
             )
             return false
         }
+    }
+
+    private func resetBackendRegistrationTracking() {
+        lastRegisteredPushContextRevision = nil
+        lastRegisteredAuthenticationFingerprint = nil
+        lastRegisteredServerURL = nil
     }
 
     private func fingerprint(for authentication: StoredAuthentication) -> String {
