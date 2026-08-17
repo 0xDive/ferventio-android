@@ -158,7 +158,11 @@ class ChatRuntimeStateHolder(
         channelId: String,
         userId: String,
         atMillis: Long = Clock.System.now().toEpochMilliseconds(),
+        action: ModerationAction = ModerationAction.TIMEOUT,
     ): Int {
+        require(action == ModerationAction.TIMEOUT || action == ModerationAction.BAN) {
+            "User message clearing action must be TIMEOUT or BAN"
+        }
         val normalizedChannelId = requireChannelId(channelId)
         val normalizedUserId = userId.trim().takeIf(String::isNotEmpty)
             ?: throw IllegalArgumentException("Chat user id must not be blank")
@@ -168,7 +172,7 @@ class ChatRuntimeStateHolder(
                 changed += 1
                 message.copy(
                     flags = message.flags.copy(isDeleted = true),
-                    moderation = ModerationState(ModerationAction.TIMEOUT, atMillis = atMillis),
+                    moderation = ModerationState(action, atMillis = atMillis),
                 )
             }
         }
