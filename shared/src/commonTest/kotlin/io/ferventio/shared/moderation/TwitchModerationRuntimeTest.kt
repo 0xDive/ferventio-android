@@ -168,6 +168,34 @@ class TwitchModerationRuntimeTest {
     }
 
     @Test
+    fun forbiddenMutationPreservesMessagesWithoutRequestingReauthentication() = runTest {
+        val state = ChatRuntimeStateHolder().apply {
+            append(message("message-1", "user-a"))
+        }
+        state.updateConnection(ConnectionStatus.CONNECTED)
+        val gateway = FakeModerationGateway(
+            failure = TwitchModerationMutationException(
+                operation = "delete",
+                statusCode = 403,
+                twitchMessage = "moderator permission required",
+            ),
+        )
+        val runtime = TwitchModerationRuntime(state, gateway)
+
+        assertFailsWith<TwitchModerationMutationException> {
+            runtime.deleteChatMessage(
+                authentication = authentication(),
+                broadcasterId = CHANNEL_ID,
+                messageId = "message-1",
+            )
+        }
+
+        assertFalse(state.messages(CHANNEL_ID).single().isDeleted)
+        assertFalse(state.authenticationRequired)
+        assertEquals(ConnectionStatus.CONNECTED, state.connectionStatus)
+    }
+
+    @Test
     fun unbanDoesNotRestorePreviouslyModeratedMessages() = runTest {
         val state = ChatRuntimeStateHolder().apply {
             append(message("message-1", "user-a"))
