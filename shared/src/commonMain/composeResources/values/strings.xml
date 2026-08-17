@@ -10,6 +10,8 @@
     <string name="workspace_menu">Open channels</string>
     <string name="workspace_signed_in_as">Signed in as @%1$s</string>
     <string name="chat_waiting_for_messages">Waiting for messages…</string>
+    <string name="chat_message_deleted">[message deleted]</string>
+    <string name="chat_replying_to">Replying to %1$s</string>
     <string name="chat_status_disconnected">Chat disconnected</string>
     <string name="chat_status_connecting">Connecting to chat…</string>
     <string name="chat_status_waiting_welcome">Waiting for Twitch…</string>

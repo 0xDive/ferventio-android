@@ -10,6 +10,8 @@
     <string name="workspace_menu">Открыть каналы</string>
     <string name="workspace_signed_in_as">Выполнен вход как @%1$s</string>
     <string name="chat_waiting_for_messages">Ждём сообщения…</string>
+    <string name="chat_message_deleted">[сообщение удалено]</string>
+    <string name="chat_replying_to">Ответ для %1$s</string>
     <string name="chat_status_disconnected">Чат отключён</string>
     <string name="chat_status_connecting">Подключаемся к чату…</string>
     <string name="chat_status_waiting_welcome">Ждём Twitch…</string>
