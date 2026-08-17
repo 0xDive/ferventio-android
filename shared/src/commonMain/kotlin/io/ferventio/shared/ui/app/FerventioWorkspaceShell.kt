@@ -35,6 +35,10 @@ import androidx.compose.ui.unit.dp
 import io.ferventio.app.domain.ChatChannel
 import io.ferventio.shared.generated.resources.Res
 import io.ferventio.shared.generated.resources.auth_sign_out
+import io.ferventio.shared.generated.resources.notifications_enable
+import io.ferventio.shared.generated.resources.notifications_enabled
+import io.ferventio.shared.generated.resources.notifications_open_settings
+import io.ferventio.shared.generated.resources.notifications_title
 import io.ferventio.shared.generated.resources.workspace_channels
 import io.ferventio.shared.generated.resources.workspace_chats
 import io.ferventio.shared.generated.resources.workspace_load_failed
@@ -43,6 +47,7 @@ import io.ferventio.shared.generated.resources.workspace_menu
 import io.ferventio.shared.generated.resources.workspace_no_channels
 import io.ferventio.shared.generated.resources.workspace_no_channels_summary
 import io.ferventio.shared.generated.resources.workspace_signed_in_as
+import io.ferventio.shared.push.PushAuthorizationStatus
 import io.ferventio.shared.workspace.WorkspaceLoadStatus
 import io.ferventio.shared.workspace.WorkspaceRuntimeStateHolder
 import kotlinx.coroutines.launch
@@ -54,6 +59,9 @@ fun FerventioWorkspaceShell(
     state: WorkspaceRuntimeStateHolder,
     login: String?,
     onSignOut: () -> Unit = {},
+    notificationAuthorizationStatus: PushAuthorizationStatus = PushAuthorizationStatus.UNKNOWN,
+    onRequestNotificationPermission: () -> Unit = {},
+    onOpenNotificationSettings: () -> Unit = {},
     modifier: Modifier = Modifier,
     content: @Composable (ChatChannel) -> Unit,
 ) {
@@ -62,11 +70,12 @@ fun FerventioWorkspaceShell(
     val selectedChannel = state.channels.firstOrNull { it.id == state.selectedChannelId }
         ?: state.channels.firstOrNull()
     val menuDescription = stringResource(Res.string.workspace_menu)
+    val notificationAction = notificationPermissionAction(notificationAuthorizationStatus)
 
     ModalNavigationDrawer(
         modifier = modifier,
         drawerState = drawerState,
-        gesturesEnabled = state.channels.isNotEmpty(),
+        gesturesEnabled = true,
         drawerContent = {
             ModalDrawerSheet {
                 Text(
@@ -94,6 +103,39 @@ fun FerventioWorkspaceShell(
                     )
                 }
                 HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
+                Text(
+                    text = stringResource(Res.string.notifications_title),
+                    modifier = Modifier.padding(start = 24.dp, top = 16.dp, end = 24.dp),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                TextButton(
+                    onClick = {
+                        when (notificationAction) {
+                            NotificationPermissionAction.REQUEST_PERMISSION ->
+                                onRequestNotificationPermission()
+                            NotificationPermissionAction.OPEN_SETTINGS ->
+                                onOpenNotificationSettings()
+                            NotificationPermissionAction.NONE -> Unit
+                        }
+                    },
+                    enabled = notificationAction != NotificationPermissionAction.NONE,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp),
+                ) {
+                    Text(
+                        text = when (notificationAction) {
+                            NotificationPermissionAction.REQUEST_PERMISSION ->
+                                stringResource(Res.string.notifications_enable)
+                            NotificationPermissionAction.OPEN_SETTINGS ->
+                                stringResource(Res.string.notifications_open_settings)
+                            NotificationPermissionAction.NONE ->
+                                stringResource(Res.string.notifications_enabled)
+                        },
+                    )
+                }
+                HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
                 TextButton(
                     onClick = onSignOut,
                     modifier = Modifier
@@ -117,7 +159,6 @@ fun FerventioWorkspaceShell(
                     navigationIcon = {
                         TextButton(
                             onClick = { scope.launch { drawerState.open() } },
-                            enabled = state.channels.isNotEmpty(),
                             modifier = Modifier.semantics {
                                 contentDescription = menuDescription
                             },

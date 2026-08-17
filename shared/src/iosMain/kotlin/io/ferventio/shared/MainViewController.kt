@@ -14,6 +14,8 @@ fun IosRuntimeState(): FerventioRuntimeState = iosRuntimeState
 fun MainViewController(
     onAuthenticate: () -> Unit = {},
     onSignOut: () -> Unit = {},
+    onRequestNotificationPermission: () -> Unit = {},
+    onOpenNotificationSettings: () -> Unit = {},
 ): UIViewController = ComposeUIViewController {
     ProvideFerventioRuntimeState(iosRuntimeState) {
         FerventioTheme {
@@ -22,6 +24,9 @@ fun MainViewController(
                 workspace = iosRuntimeState.workspace,
                 onAuthenticate = onAuthenticate,
                 onSignOut = onSignOut,
+                pushAuthorizationStatus = iosRuntimeState.pushRegistration.authorizationStatus,
+                onRequestNotificationPermission = onRequestNotificationPermission,
+                onOpenNotificationSettings = onOpenNotificationSettings,
             )
         }
     }

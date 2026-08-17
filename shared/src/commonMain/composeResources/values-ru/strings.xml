@@ -10,6 +10,10 @@
     <string name="workspace_no_channels_summary">Здесь появятся каналы из синхронизированных настроек.</string>
     <string name="workspace_menu">Открыть каналы</string>
     <string name="workspace_signed_in_as">Выполнен вход как @%1$s</string>
+    <string name="notifications_title">Уведомления</string>
+    <string name="notifications_enable">Включить уведомления</string>
+    <string name="notifications_open_settings">Открыть настройки уведомлений</string>
+    <string name="notifications_enabled">Уведомления включены</string>
     <string name="chat_waiting_for_messages">Ждём сообщения…</string>
     <string name="chat_message_deleted">[сообщение удалено]</string>
     <string name="chat_replying_to">Ответ для %1$s</string>

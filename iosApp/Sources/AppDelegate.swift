@@ -83,6 +83,16 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
                 Task { @MainActor [weak self] in
                     await self?.signOutAndCleanup()
                 }
+            },
+            onRequestNotificationPermission: { [weak self] in
+                Task { @MainActor [weak self] in
+                    await self?.requestNotificationPermission()
+                }
+            },
+            onOpenNotificationSettings: { [weak self] in
+                Task { @MainActor [weak self] in
+                    self?.openNotificationSettings()
+                }
             }
         )
         window.makeKeyAndVisible()
@@ -150,6 +160,21 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     func applicationWillTerminate(_ application: UIApplication) {
         authenticatedChatRuntimeBridge?.stop()
         lifecycleObserver.stop()
+    }
+
+    private func requestNotificationPermission() async {
+        do {
+            _ = try await pushRuntimeBridge.requestAuthorizationAndRegister()
+        } catch {
+            await pushRuntimeBridge.refreshAuthorizationStatus()
+        }
+    }
+
+    private func openNotificationSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else {
+            return
+        }
+        UIApplication.shared.open(url)
     }
 
     private func signOutAndCleanup() async {
