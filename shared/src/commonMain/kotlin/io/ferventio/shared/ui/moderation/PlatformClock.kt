@@ -1,3 +1,5 @@
 package io.ferventio.shared.ui.moderation
 
-internal expect fun currentEpochMillis(): Long
+import kotlin.time.Clock
+
+internal fun currentEpochMillis(): Long = Clock.System.now().toEpochMilliseconds()
