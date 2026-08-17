@@ -50,12 +50,14 @@ class AuthenticatedChatRuntimeCoordinator(
             }
             state.clearAuthenticationRequired()
 
+            lateinit var client: TwitchEventSubSocketClient
             val runtime = TwitchChatSessionRuntime(
                 authentication = authentication,
                 workspace = workspace,
                 state = state,
+                onFatalSessionError = { client.close() },
             )
-            val client = TwitchEventSubSocketClient(
+            client = TwitchEventSubSocketClient(
                 onStatusChanged = runtime::onConnectionUpdate,
                 onSessionReady = runtime::onSessionReady,
                 onEnvelope = { envelope -> runtime.onEnvelope(envelope) },
