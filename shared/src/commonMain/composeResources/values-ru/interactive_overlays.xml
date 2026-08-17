@@ -31,5 +31,6 @@
 <string name="interactive_confirm_end_poll">Завершить активный опрос сейчас?</string>
 <string name="interactive_confirm_lock_prediction">Закрыть приём ставок в активном прогнозе?</string>
 <string name="interactive_confirm_cancel_prediction">Отменить активный прогноз?</string>
+<string name="interactive_confirm_resolve_prediction">Завершить прогноз с исходом «%1$s» как победителем?</string>
 <string name="interactive_confirm_action">Подтвердить</string>
 </resources>
