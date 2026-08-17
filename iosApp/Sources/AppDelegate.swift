@@ -247,6 +247,12 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     }
 
     private func synchronizeReadyAuthenticatedRuntime() async {
+        // A refresh may have started while active and completed after the app transitioned to
+        // background. Never recreate the EventSub session from that stale foreground callback.
+        guard UIApplication.shared.applicationState == .active else {
+            authenticatedChatRuntimeBridge?.stop()
+            return
+        }
         if runtimeState.workspace.isReadyForPushRegistration {
             await synchronizePushBackendRegistration()
             synchronizeAuthenticatedChatRuntime()
