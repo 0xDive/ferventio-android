@@ -20,7 +20,7 @@ class NukeExecutionCoordinatorTest {
             moderationAction = NukeModerationAction { user, durationSeconds, reason ->
                 calls += Triple(user.userId, durationSeconds, reason)
             },
-            delayAction = delays::add,
+            delayAction = { millis -> delays += millis },
         )
 
         val result = coordinator.execute(plan("one", "two", "three"))
@@ -70,7 +70,7 @@ class NukeExecutionCoordinatorTest {
                 }
             },
             delayAction = {},
-            shouldStopAfterFailure = Throwable::shouldStopNukeExecution,
+            shouldStopAfterFailure = { error -> error.shouldStopNukeExecution() },
         )
 
         val result = coordinator.execute(plan("one", "two", "three"))
@@ -89,7 +89,7 @@ class NukeExecutionCoordinatorTest {
             moderationAction = NukeModerationAction { _, _, _ -> calls += 1 },
             delayAction = {},
         )
-        val oversized = plan(*(1..101).map(Int::toString).toTypedArray())
+        val oversized = plan(*(1..101).map { it.toString() }.toTypedArray())
 
         assertFailsWith<IllegalArgumentException> {
             coordinator.execute(oversized)
