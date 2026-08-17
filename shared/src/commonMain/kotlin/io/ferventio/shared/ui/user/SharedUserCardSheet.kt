@@ -65,14 +65,27 @@ internal fun SharedUserCardSheet(
     val effectiveData = rememberRemoteUserCardData(data)
     val runtime = LocalFerventioRuntimeState.current
     val uriHandler = LocalUriHandler.current
-    val profileBadges = effectiveData.recentMessages
+    val liveMessages = runtime.chat.messages(effectiveData.channelId)
+    val displayedRecentMessages = effectiveData.recentMessages.map { cached ->
+        liveMessages.firstOrNull { live -> live.id == cached.id } ?: cached
+    }
+    val liveData = effectiveData.copy(recentMessages = displayedRecentMessages)
+    val profileBadges = displayedRecentMessages
         .asReversed()
         .firstOrNull { it.badges.isNotEmpty() }
         ?.badges
         .orEmpty()
     val sourceMessage = effectiveData.sourceMessageId?.let { id ->
-        effectiveData.recentMessages.firstOrNull { it.id == id }
+        liveMessages.firstOrNull { it.id == id }
+            ?: displayedRecentMessages.firstOrNull { it.id == id }
     }
+    val moderationAvailability = userCardModerationAvailability(
+        data = liveData,
+        authenticatedUserId = runtime.authentication.state.authentication
+            ?.accessLease
+            ?.session
+            ?.userId,
+    )
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         LazyColumn(
@@ -174,6 +187,15 @@ internal fun SharedUserCardSheet(
                 }
             }
 
+            if (
+                moderationAvailability.canModerateUser ||
+                moderationAvailability.canDeleteSourceMessage
+            ) {
+                item(key = "moderation-actions") {
+                    UserCardModerationActions(liveData)
+                }
+            }
+
             sourceMessage?.let { selected ->
                 item(key = "selected-message") {
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -191,7 +213,7 @@ internal fun SharedUserCardSheet(
                 Text(
                     text = stringResource(
                         Res.string.user_card_recent_messages,
-                        effectiveData.recentMessages.size,
+                        displayedRecentMessages.size,
                     ),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
@@ -199,7 +221,7 @@ internal fun SharedUserCardSheet(
             }
 
             items(
-                items = effectiveData.recentMessages
+                items = displayedRecentMessages
                     .filterNot { it.id == effectiveData.sourceMessageId }
                     .takeLast(USER_CARD_VISIBLE_MESSAGE_LIMIT)
                     .asReversed(),
