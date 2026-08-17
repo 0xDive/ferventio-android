@@ -204,7 +204,7 @@ class TwitchModerationClientTest {
         assertEquals(0, requestCount)
     }
 
-    private fun requestBody(request: HttpRequestData) = Json
+    private suspend fun requestBody(request: HttpRequestData) = Json
         .parseToJsonElement(request.body.toByteArray().decodeToString())
         .jsonObject
 
