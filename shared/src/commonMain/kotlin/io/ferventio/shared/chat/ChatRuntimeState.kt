@@ -142,7 +142,12 @@ class ChatRuntimeStateHolder(
             ?: throw IllegalArgumentException("Chat message id must not be blank")
         var changed = false
         val updated = messagesByChannel[normalizedChannelId].orEmpty().map { message ->
-            if (message.id != normalizedMessageId) message else {
+            if (
+                message.id != normalizedMessageId ||
+                !shouldApplyModeration(message, ModerationAction.DELETE)
+            ) {
+                message
+            } else {
                 changed = true
                 message.copy(
                     flags = message.flags.copy(isDeleted = true),
@@ -168,7 +173,12 @@ class ChatRuntimeStateHolder(
             ?: throw IllegalArgumentException("Chat user id must not be blank")
         var changed = 0
         val updated = messagesByChannel[normalizedChannelId].orEmpty().map { message ->
-            if (message.userId != normalizedUserId) message else {
+            if (
+                message.userId != normalizedUserId ||
+                !shouldApplyModeration(message, action)
+            ) {
+                message
+            } else {
                 changed += 1
                 message.copy(
                     flags = message.flags.copy(isDeleted = true),
@@ -263,6 +273,20 @@ class ChatRuntimeStateHolder(
         return byId.values
             .sortedWith(compareBy(ChatMessage::timestampMillis, ChatMessage::id))
             .takeLast(MAX_MESSAGES_PER_CHANNEL)
+    }
+
+    private fun shouldApplyModeration(
+        message: ChatMessage,
+        action: ModerationAction,
+    ): Boolean = !message.isDeleted ||
+        moderationPriority(action) > moderationPriority(message.moderation.action)
+
+    private fun moderationPriority(action: ModerationAction?): Int = when (action) {
+        ModerationAction.BAN -> 3
+        ModerationAction.TIMEOUT -> 2
+        ModerationAction.DELETE -> 1
+        ModerationAction.CLEAR,
+        null -> 0
     }
 
     private fun normalizeBadgeAssets(value: Map<String, ChatBadgeAsset>): Map<String, ChatBadgeAsset> =
