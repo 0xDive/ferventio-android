@@ -3,6 +3,7 @@ package io.ferventio.shared.ui.moderation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -11,6 +12,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,11 +59,14 @@ internal fun NukeExecutionControls(
         mutableStateOf<NukeExecutionPlan?>(null)
     }
     var executing by remember(channelId) { mutableStateOf(false) }
-    var result by remember(channelId, config, previewedAtMillis) {
-        mutableStateOf<NukeExecutionResult?>(null)
-    }
-    var failureMessage by remember(channelId, config, previewedAtMillis) {
-        mutableStateOf<String?>(null)
+    var result by remember(channelId) { mutableStateOf<NukeExecutionResult?>(null) }
+    var failureMessage by remember(channelId) { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(config) {
+        if (!executing) {
+            result = null
+            failureMessage = null
+        }
     }
 
     val authenticationAvailable = runtime.authentication.state.authentication != null
@@ -123,7 +128,9 @@ internal fun NukeExecutionControls(
             ) {
                 Column(
                     verticalArrangement = Arrangement.spacedBy(4.dp),
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 10.dp, vertical = 8.dp),
                 ) {
                     Text(
                         text = stringResource(
@@ -199,7 +206,9 @@ internal fun NukeExecutionControls(
                                             reason = reason,
                                         )
                                     },
-                                    shouldStopAfterFailure = Throwable::shouldStopNukeExecution,
+                                    shouldStopAfterFailure = { error ->
+                                        error.shouldStopNukeExecution()
+                                    },
                                 )
                                 result = coordinator.execute(approvedPlan)
                             } catch (error: Exception) {
