@@ -136,7 +136,10 @@ internal class TwitchEventSubBootstrapCoordinator(
         for (spec in bootstrap.remainingSubscriptions) {
             val channel = channelById.getValue(spec.broadcasterId)
             val error = createCatching(authentication, sessionId, spec)
-            if (error != null) failures += error.toFailure(channel, spec.type)
+            if (error != null) {
+                failures += error.toFailure(channel, spec.type)
+                if (error.isTwitchAuthenticationFailure()) break
+            }
         }
         return failures
     }
