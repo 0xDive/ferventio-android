@@ -146,7 +146,10 @@ internal class TwitchUserCardClient(
     }
 
     private fun normalizeOptionalLogin(value: String): String? {
-        val normalized = value.trim().removePrefix("@").lowercase()
+        val normalized = value.trim()
+            .removePrefix("@")
+            .removePrefix("#")
+            .lowercase()
         if (normalized.isEmpty()) return null
         require(TWITCH_LOGIN_REGEX.matches(normalized)) { "Invalid Twitch login" }
         return normalized
