@@ -25,7 +25,7 @@
     <string name="chat_status_failed">Chat connection failed</string>
     <string name="nuke_preview_action">Nuke preview</string>
     <string name="nuke_preview_title">Nuke preview</string>
-    <string name="nuke_preview_read_only">Read-only preview. No moderation action is executed from this screen.</string>
+    <string name="nuke_preview_read_only">Preview the exact targets before running mass moderation.</string>
     <string name="nuke_query_label">Message text or pattern</string>
     <string name="nuke_plain_text">Plain text</string>
     <string name="nuke_regex">Regex</string>
@@ -44,6 +44,17 @@
     <string name="nuke_no_matches">No matching targets in this window.</string>
     <string name="nuke_error_empty_query">Enter text or a pattern to preview targets.</string>
     <string name="nuke_error_invalid_query">The pattern is invalid.</string>
+    <string name="nuke_execute">Timeout previewed users</string>
+    <string name="nuke_execute_confirm_title">Confirm mass moderation</string>
+    <string name="nuke_execute_confirm_body">Timeout %1$d previewed users for 10 minutes? This uses the frozen preview and will not include newer messages.</string>
+    <string name="nuke_execute_confirm">Run nuke</string>
+    <string name="nuke_execute_cancel">Cancel</string>
+    <string name="nuke_execute_running">Running moderation…</string>
+    <string name="nuke_execute_too_many">Too many target users. Narrow the preview to at most %1$d users.</string>
+    <string name="nuke_execute_auth_required">Twitch authentication is unavailable.</string>
+    <string name="nuke_execute_failed">Nuke failed: %1$s</string>
+    <string name="nuke_execute_result">Attempted %1$d · succeeded %2$d · failed %3$d</string>
+    <string name="nuke_execute_stopped_early">Stopped early after a non-repeatable Twitch error.</string>
     <string name="nuke_close">Close</string>
     <string name="user_card_title">User card</string>
     <string name="user_card_id">ID: %1$s</string>
