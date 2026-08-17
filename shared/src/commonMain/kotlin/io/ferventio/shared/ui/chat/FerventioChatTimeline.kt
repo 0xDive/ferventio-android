@@ -172,6 +172,7 @@ private fun ChatMessageRow(
     val chat = LocalFerventioRuntimeState.current.chat
     val deletedPlaceholder = stringResource(Res.string.chat_message_deleted)
     val presentation = projectChatMessage(message, deletedPlaceholder)
+    val renderSegments = groupChatMessageSegments(presentation.segments)
     val uriHandler = LocalUriHandler.current
     val linkColor = MaterialTheme.colorScheme.primary
     val mentionColor = MaterialTheme.colorScheme.tertiary
@@ -224,7 +225,8 @@ private fun ChatMessageRow(
                     },
                 ),
             ) {
-                presentation.segments.forEachIndexed { index, segment ->
+                renderSegments.forEachIndexed { index, renderSegment ->
+                    val segment = renderSegment.base
                     if (segment.imageUrl != null && segment.kind.isInlineEmote()) {
                         appendInlineContent(inlineSegmentId(index), segment.text.ifBlank { "emote" })
                         return@forEachIndexed
@@ -299,9 +301,9 @@ private fun ChatMessageRow(
                     },
                 )
             }
-            presentation.segments.forEachIndexed { index, segment ->
-                val imageUrl = segment.imageUrl ?: return@forEachIndexed
-                if (!segment.kind.isInlineEmote()) return@forEachIndexed
+            renderSegments.forEachIndexed { index, renderSegment ->
+                val imageUrl = renderSegment.base.imageUrl ?: return@forEachIndexed
+                if (!renderSegment.base.kind.isInlineEmote()) return@forEachIndexed
                 put(
                     inlineSegmentId(index),
                     InlineTextContent(
@@ -311,9 +313,9 @@ private fun ChatMessageRow(
                             placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
                         ),
                     ) {
-                        SharedInlineEmote(
-                            imageUrl = imageUrl,
-                            code = segment.text,
+                        SharedInlineEmoteStack(
+                            base = renderSegment.base,
+                            overlays = renderSegment.overlays,
                             modifier = Modifier.fillMaxSize(),
                         )
                     },
@@ -368,10 +370,36 @@ private fun inlineBadgeId(index: Int): String = "badge_$index"
 private fun inlineSegmentId(index: Int): String = "segment_$index"
 
 @Composable
+private fun SharedInlineEmoteStack(
+    base: ChatMessageSegment,
+    overlays: List<ChatMessageSegment>,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        SharedInlineEmote(
+            imageUrl = requireNotNull(base.imageUrl),
+            code = base.text,
+            modifier = Modifier.fillMaxSize(),
+            showFallback = true,
+        )
+        overlays.forEach { overlay ->
+            val imageUrl = overlay.imageUrl ?: return@forEach
+            SharedInlineEmote(
+                imageUrl = imageUrl,
+                code = overlay.text,
+                modifier = Modifier.fillMaxSize(),
+                showFallback = false,
+            )
+        }
+    }
+}
+
+@Composable
 private fun SharedInlineEmote(
     imageUrl: String,
     code: String,
     modifier: Modifier = Modifier,
+    showFallback: Boolean = true,
 ) {
     val painter = rememberAsyncImagePainter(model = imageUrl)
     val state by painter.state.collectAsState()
@@ -383,7 +411,7 @@ private fun SharedInlineEmote(
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxSize(),
             )
-        } else {
+        } else if (showFallback) {
             Text(
                 text = "•",
                 style = MaterialTheme.typography.labelSmall,

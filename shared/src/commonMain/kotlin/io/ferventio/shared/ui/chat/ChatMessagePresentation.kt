@@ -22,6 +22,7 @@ internal data class ChatMessageSegment(
     val kind: ChatMessageSegmentKind,
     val url: String? = null,
     val imageUrl: String? = null,
+    val zeroWidth: Boolean = false,
 )
 
 internal data class ChatReplyPresentation(
@@ -97,6 +98,7 @@ private fun projectFragment(fragment: ChatFragment): List<ChatMessageSegment> = 
             text = fragment.text,
             kind = ChatMessageSegmentKind.THIRD_PARTY_EMOTE,
             imageUrl = ChatAssetResolver.absoluteImageUrl(fragment.imageUrl),
+            zeroWidth = fragment.zeroWidth,
         ),
     )
     is ChatFragment.Gif -> listOf(
