@@ -18,9 +18,9 @@ class TwitchModerationRuntime(
         authentication: StoredAuthentication,
         broadcasterId: String,
         messageId: String,
-    ): Boolean {
+    ): Boolean = executeMutation {
         gateway.deleteChatMessage(authentication, broadcasterId, messageId)
-        return chatState.markMessageDeleted(
+        chatState.markMessageDeleted(
             channelId = broadcasterId,
             messageId = messageId,
             atMillis = currentEpochMillis(),
@@ -33,7 +33,7 @@ class TwitchModerationRuntime(
         targetUserId: String,
         durationSeconds: Int,
         reason: String? = null,
-    ): Int {
+    ): Int = executeMutation {
         gateway.timeoutUser(
             authentication = authentication,
             broadcasterId = broadcasterId,
@@ -41,7 +41,7 @@ class TwitchModerationRuntime(
             durationSeconds = durationSeconds,
             reason = reason,
         )
-        return chatState.markUserMessagesDeleted(
+        chatState.markUserMessagesDeleted(
             channelId = broadcasterId,
             userId = targetUserId,
             atMillis = currentEpochMillis(),
@@ -54,14 +54,14 @@ class TwitchModerationRuntime(
         broadcasterId: String,
         targetUserId: String,
         reason: String? = null,
-    ): Int {
+    ): Int = executeMutation {
         gateway.banUser(
             authentication = authentication,
             broadcasterId = broadcasterId,
             targetUserId = targetUserId,
             reason = reason,
         )
-        return chatState.markUserMessagesDeleted(
+        chatState.markUserMessagesDeleted(
             channelId = broadcasterId,
             userId = targetUserId,
             atMillis = currentEpochMillis(),
@@ -73,15 +73,28 @@ class TwitchModerationRuntime(
         authentication: StoredAuthentication,
         broadcasterId: String,
         targetUserId: String,
-    ) {
+    ) = executeMutation {
         gateway.unbanUser(authentication, broadcasterId, targetUserId)
     }
 
     suspend fun clearChatMessages(
         authentication: StoredAuthentication,
         broadcasterId: String,
-    ): Boolean {
+    ): Boolean = executeMutation {
         gateway.clearChatMessages(authentication, broadcasterId)
-        return chatState.clearChannelMessages(broadcasterId)
+        chatState.clearChannelMessages(broadcasterId)
+    }
+
+    private suspend fun <T> executeMutation(block: suspend () -> T): T = try {
+        block()
+    } catch (error: TwitchModerationMutationException) {
+        if (error.statusCode in AUTH_FAILURE_CODES) {
+            chatState.markAuthenticationRequired(error.message)
+        }
+        throw error
+    }
+
+    private companion object {
+        val AUTH_FAILURE_CODES = setOf(401, 403)
     }
 }
