@@ -36,6 +36,16 @@ internal class TwitchChatSessionRuntime(
     }
 
     fun onEnvelope(envelope: TwitchEventSubProtocolEnvelope): Boolean {
+        if (
+            envelope.type == "revocation" &&
+            TwitchEventSubConnectionPolicy.shouldStopAfterRevocation(envelope.revocationStatus)
+        ) {
+            onSocketError(
+                TwitchEventSubAuthorizationRevokedException(envelope.subscriptionType),
+            )
+            return true
+        }
+
         val mutation = runCatching { TwitchChatMutationEventParser.parse(envelope) }.getOrNull()
         if (mutation != null) {
             when (mutation) {
