@@ -8,6 +8,7 @@ import io.ferventio.app.domain.TwitchSession
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -61,6 +62,75 @@ class TwitchEventSubBootstrapCoordinatorTest {
             },
         )
         assertEquals(listOf("first-login", "second-login"), result.failures.map { it.channel.login })
+    }
+
+    @Test
+    fun unauthorizedPrimaryStopsChannelFallback() = runTest {
+        val first = channel("one", "first-login")
+        val second = channel("two", "second-login")
+        val calls = mutableListOf<Pair<String, String>>()
+        val coordinator = TwitchEventSubBootstrapCoordinator { _, _, spec ->
+            calls += spec.broadcasterId to spec.type
+            throw TwitchEventSubSubscriptionException(
+                statusCode = 401,
+                twitchMessage = "OAuth token is invalid",
+            )
+        }
+
+        val error = assertFailsWith<TwitchEventSubBootstrapException> {
+            coordinator.bootstrap(
+                authentication = authentication(),
+                sessionId = "socket-session",
+                channels = listOf(first, second),
+                moderatedChannelIds = emptySet(),
+            )
+        }
+
+        assertEquals(
+            listOf(first.id to TwitchEventSubSubscriptionPolicy.PRIMARY_EVENT_TYPE),
+            calls,
+        )
+        assertTrue(error.isTwitchAuthenticationFailure())
+        assertEquals("first-login", error.failures.single().channel.login)
+    }
+
+    @Test
+    fun forbiddenPrimaryCanFallBackToNextChannel() = runTest {
+        val first = channel("one", "first-login")
+        val second = channel("two", "second-login")
+        val calls = mutableListOf<Pair<String, String>>()
+        val coordinator = TwitchEventSubBootstrapCoordinator { _, _, spec ->
+            calls += spec.broadcasterId to spec.type
+            if (
+                spec.broadcasterId == first.id &&
+                spec.type == TwitchEventSubSubscriptionPolicy.PRIMARY_EVENT_TYPE
+            ) {
+                throw TwitchEventSubSubscriptionException(
+                    statusCode = 403,
+                    twitchMessage = "subscription missing proper authorization",
+                )
+            }
+        }
+
+        val result = coordinator.bootstrap(
+            authentication = authentication(),
+            sessionId = "socket-session",
+            channels = listOf(first, second),
+            moderatedChannelIds = emptySet(),
+        )
+
+        assertEquals(second, result.connectedChannel)
+        assertTrue(result.noticeReady)
+        assertEquals(2, result.subscriptionCount)
+        assertEquals(
+            listOf(
+                first.id to TwitchEventSubSubscriptionPolicy.PRIMARY_EVENT_TYPE,
+                second.id to TwitchEventSubSubscriptionPolicy.PRIMARY_EVENT_TYPE,
+                second.id to TwitchEventSubSubscriptionPolicy.NOTICE_EVENT_TYPE,
+            ),
+            calls,
+        )
+        assertFalse(result.failures.single().cause!!.isTwitchAuthenticationFailure())
     }
 
     @Test
