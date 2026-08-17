@@ -95,6 +95,33 @@ class ChatMessagePresentationTest {
     }
 
     @Test
+    fun projectsGifAssetAndNormalizesReplyPreview() {
+        val presentation = projectChatMessage(
+            message = message(
+                text = "party",
+                fragments = listOf(
+                    ChatFragment.Gif(
+                        text = "party",
+                        gifId = "gif-1",
+                        url = "//cdn.example.test/party.gif",
+                    ),
+                ),
+                reply = ReplyContext(
+                    parentMessageId = "parent",
+                    parentUserName = "  Bob  ",
+                    parentMessageBody = " first line\n   second line ",
+                ),
+            ),
+            deletedPlaceholder = "[deleted]",
+        )
+
+        assertEquals("Bob", presentation.reply?.authorLabel)
+        assertEquals("first line second line", presentation.reply?.bodyPreview)
+        assertEquals(ChatMessageSegmentKind.GIF, presentation.segments.single().kind)
+        assertEquals("https://cdn.example.test/party.gif", presentation.segments.single().imageUrl)
+    }
+
+    @Test
     fun invalidThirdPartyAssetKeepsTextFallback() {
         val presentation = projectChatMessage(
             message = message(
@@ -138,6 +165,7 @@ class ChatMessagePresentationTest {
         assertTrue(presentation.isDeleted)
         assertEquals(listOf("[deleted]"), presentation.segments.map(ChatMessageSegment::text))
         assertEquals("alice", presentation.reply?.authorLabel)
+        assertEquals("do not quote this", presentation.reply?.bodyPreview)
         assertEquals(listOf("moderator", "subscriber"), presentation.badgeLabels)
         assertEquals(listOf("moderator", "subscriber"), presentation.badges.map(ChatBadge::setId))
         assertFalse(presentation.segments.any { "secret" in it.text })
