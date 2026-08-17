@@ -88,13 +88,16 @@ class TwitchModerationRuntime(
     private suspend fun <T> executeMutation(block: suspend () -> T): T = try {
         block()
     } catch (error: TwitchModerationMutationException) {
-        if (error.statusCode in AUTH_FAILURE_CODES) {
+        // Twitch uses 401 for invalid/mismatched tokens and missing scopes. A 403 means the
+        // authenticated user lacks moderator permission in this broadcaster's channel, so
+        // reauthorizing the same account is not a useful recovery action.
+        if (error.statusCode == AUTHENTICATION_FAILURE_CODE) {
             chatState.markAuthenticationRequired(error.message)
         }
         throw error
     }
 
     private companion object {
-        val AUTH_FAILURE_CODES = setOf(401, 403)
+        const val AUTHENTICATION_FAILURE_CODE = 401
     }
 }
