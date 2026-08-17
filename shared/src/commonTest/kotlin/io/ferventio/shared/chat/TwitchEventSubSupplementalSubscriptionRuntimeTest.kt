@@ -47,7 +47,41 @@ class TwitchEventSubSupplementalSubscriptionRuntimeTest {
     }
 
     @Test
-    fun nonAuthenticationSupplementalFailureKeepsPrimaryChatConnected() = runTest {
+    fun forbiddenSupplementalFailureKeepsPrimaryChatConnected() = runTest {
+        val state = ChatRuntimeStateHolder()
+        state.updateConnection(ConnectionStatus.CONNECTED)
+        var calls = 0
+        var fatalError: Throwable? = null
+        val runtime = runtime(
+            state = state,
+            onFatalSessionError = { fatalError = it },
+        ) { _, _, _ ->
+            calls += 1
+            if (calls == 3) {
+                throw TwitchEventSubSubscriptionException(
+                    statusCode = 403,
+                    twitchMessage = "subscription missing proper authorization",
+                )
+            }
+        }
+
+        assertEquals(2, runtime.onSessionReady("socket-session"))
+        runCurrent()
+
+        assertTrue(calls > 3)
+        assertFalse(state.authenticationRequired)
+        assertEquals(ConnectionStatus.CONNECTED, state.connectionStatus)
+        assertTrue(
+            state.connectionErrorMessage.orEmpty().contains("channel.chat.message_delete"),
+        )
+        assertTrue(
+            state.connectionErrorMessage.orEmpty().contains("subscription missing proper authorization"),
+        )
+        assertNull(fatalError)
+    }
+
+    @Test
+    fun serverFailureDuringSupplementalSubscriptionsKeepsPrimaryChatConnected() = runTest {
         val state = ChatRuntimeStateHolder()
         state.updateConnection(ConnectionStatus.CONNECTED)
         var calls = 0
@@ -71,9 +105,6 @@ class TwitchEventSubSupplementalSubscriptionRuntimeTest {
         assertTrue(calls > 3)
         assertFalse(state.authenticationRequired)
         assertEquals(ConnectionStatus.CONNECTED, state.connectionStatus)
-        assertTrue(
-            state.connectionErrorMessage.orEmpty().contains("channel.chat.message_delete"),
-        )
         assertTrue(state.connectionErrorMessage.orEmpty().contains("temporary Twitch failure"))
         assertNull(fatalError)
     }
