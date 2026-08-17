@@ -106,6 +106,23 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
                 return
             }
             await pushRuntimeBridge.refreshAuthorizationAndRestoreRemoteRegistration()
+            guard let authenticationRuntimeBridge else {
+                return
+            }
+            switch await authenticationRuntimeBridge.refreshForForeground() {
+            case .deferred:
+                return
+            case .signedOut:
+                authenticatedChatRuntimeBridge?.stop(clearState: true)
+                runtimeState.workspace.clear()
+                await synchronizePushBackendRegistration()
+                return
+            case .unavailable:
+                authenticatedChatRuntimeBridge?.stop()
+                return
+            case .ready:
+                break
+            }
             if runtimeState.workspace.isReadyForPushRegistration {
                 await synchronizePushBackendRegistration()
                 synchronizeAuthenticatedChatRuntime()

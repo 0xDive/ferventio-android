@@ -1,6 +1,13 @@
 import FerventioShared
 import Foundation
 
+enum ForegroundAuthenticationRefreshDisposition {
+    case ready
+    case signedOut
+    case unavailable
+    case deferred
+}
+
 @MainActor
 final class MobileAuthenticationRuntimeBridge {
     private let configuration: AppConfiguration
@@ -9,6 +16,7 @@ final class MobileAuthenticationRuntimeBridge {
     private let sessionStore: AuthenticationSessionStore
     private let coordinator: MobileAuthenticationCoordinator
     private let browser: BackendAuthorizationSessionAdapter
+    private var initialRestorePending = true
     private var authorizationInFlight = false
 
     init(
@@ -41,6 +49,7 @@ final class MobileAuthenticationRuntimeBridge {
     }
 
     func restore() async {
+        defer { initialRestorePending = false }
         do {
             guard let persisted = try sessionStore.load() else {
                 stateHolder.restore(authentication: nil)
@@ -55,6 +64,38 @@ final class MobileAuthenticationRuntimeBridge {
             stateHolder.restore(authentication: authentication)
         } catch {
             stateHolder.markFailed(errorMessage: String(describing: error))
+        }
+    }
+
+    func refreshForForeground() async -> ForegroundAuthenticationRefreshDisposition {
+        guard !initialRestorePending, !authorizationInFlight else {
+            return .deferred
+        }
+        guard let authentication = stateHolder.state.authentication else {
+            return .signedOut
+        }
+
+        do {
+            let identity = try identityStore.loadOrCreate()
+            let result = try await coordinator.refreshAuthenticationForForeground(
+                identity: identity,
+                authentication: authentication
+            )
+            if result.shouldSignOut {
+                try? sessionStore.clear()
+                stateHolder.signOut()
+                return .signedOut
+            }
+            guard let refreshed = result.authentication else {
+                return .unavailable
+            }
+            if result.shouldPersist {
+                try sessionStore.save(refreshed)
+            }
+            stateHolder.markSignedIn(authentication: refreshed)
+            return .ready
+        } catch {
+            return .unavailable
         }
     }
 

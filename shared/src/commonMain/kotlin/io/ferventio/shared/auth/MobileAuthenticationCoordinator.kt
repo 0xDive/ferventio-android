@@ -4,9 +4,11 @@ import io.ferventio.app.domain.AuthenticationPersistenceValidation
 import io.ferventio.app.domain.MobileDeviceIdentity
 import io.ferventio.app.domain.MobileDeviceIdentityValidation
 import io.ferventio.app.domain.StoredAuthentication
+import io.ferventio.app.domain.TwitchAccessLease
 import io.ferventio.app.domain.TwitchAccessLeasePolicy
 import kotlin.Throws
 import kotlin.time.Clock
+import kotlinx.coroutines.CancellationException
 
 enum class MobileAuthenticationFailureReason {
     NOT_CALLBACK,
@@ -33,6 +35,21 @@ class MobileAuthenticationFlowException(
         }
     },
 )
+
+data class MobileAuthenticationRefreshResult(
+    val authentication: StoredAuthentication?,
+    val shouldPersist: Boolean,
+    val shouldSignOut: Boolean,
+) {
+    init {
+        require(!shouldPersist || authentication != null) {
+            "Persistable authentication refresh must include authentication"
+        }
+        require(!shouldSignOut || authentication == null) {
+            "Signed-out authentication refresh must not include authentication"
+        }
+    }
+}
 
 /**
  * Shared orchestration for the mobile backend authorization handshake and persisted-session restore.
@@ -105,6 +122,71 @@ class MobileAuthenticationCoordinator(
         )
     }
 
+    /**
+     * Refreshes an already signed-in mobile session when the app returns to foreground.
+     *
+     * A short backend lease is renewed before platform code restarts EventSub. During a transient
+     * backend outage, the existing Twitch credential may still be reused under the narrower
+     * stale-if-error domain policy. A missing/expired device session is terminal; temporary failures
+     * without a safe cached credential return an unavailable result without destroying local state.
+     */
+    @Throws(Exception::class)
+    suspend fun refreshAuthenticationForForeground(
+        identity: MobileDeviceIdentity,
+        authentication: StoredAuthentication,
+    ): MobileAuthenticationRefreshResult {
+        try {
+            MobileDeviceIdentityValidation.requireValid(identity)
+            AuthenticationPersistenceValidation.requireValid(
+                authentication.backendCredential,
+                authentication.accessLease,
+            )
+        } catch (_: IllegalArgumentException) {
+            return signedOutRefresh()
+        }
+
+        val now = nowEpochMillis()
+        if (authentication.backendCredential.expiresAtEpochMillis <= now) {
+            return signedOutRefresh()
+        }
+
+        val cachedLease = authentication.accessLease
+        if (
+            cachedLease != null &&
+            TwitchAccessLeasePolicy.canReuseWithoutBackendCall(cachedLease, now)
+        ) {
+            return readyRefresh(authentication, shouldPersist = false)
+        }
+
+        val refreshedLease = try {
+            backend.leaseAccessToken(
+                storedAuthentication = authentication,
+                installationId = identity.installationId,
+                deviceSecret = identity.deviceSecret,
+                forceRefresh = false,
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: MobileBackendAuthenticationException) {
+            return when {
+                error.statusCode == 401 || error.statusCode == 403 -> signedOutRefresh()
+                error.statusCode.isTransientBackendStatus() ->
+                    outageFallback(authentication, cachedLease, now)
+                else -> unavailableRefresh()
+            }
+        } catch (_: Exception) {
+            return outageFallback(authentication, cachedLease, now)
+        }
+
+        return readyRefresh(
+            authentication = StoredAuthentication(
+                backendCredential = authentication.backendCredential,
+                accessLease = refreshedLease,
+            ),
+            shouldPersist = true,
+        )
+    }
+
     @Throws(Exception::class)
     suspend fun completeAuthorization(
         identity: MobileDeviceIdentity,
@@ -153,6 +235,44 @@ class MobileAuthenticationCoordinator(
             deviceSecret = identity.deviceSecret,
         )
     }
+
+    private fun outageFallback(
+        authentication: StoredAuthentication,
+        cachedLease: TwitchAccessLease?,
+        nowEpochMillis: Long,
+    ): MobileAuthenticationRefreshResult =
+        if (
+            cachedLease != null &&
+            TwitchAccessLeasePolicy.canUseDuringBackendOutage(cachedLease, nowEpochMillis)
+        ) {
+            readyRefresh(authentication, shouldPersist = false)
+        } else {
+            unavailableRefresh()
+        }
+
+    private fun readyRefresh(
+        authentication: StoredAuthentication,
+        shouldPersist: Boolean,
+    ) = MobileAuthenticationRefreshResult(
+        authentication = authentication,
+        shouldPersist = shouldPersist,
+        shouldSignOut = false,
+    )
+
+    private fun signedOutRefresh() = MobileAuthenticationRefreshResult(
+        authentication = null,
+        shouldPersist = false,
+        shouldSignOut = true,
+    )
+
+    private fun unavailableRefresh() = MobileAuthenticationRefreshResult(
+        authentication = null,
+        shouldPersist = false,
+        shouldSignOut = false,
+    )
+
+    private fun Int.isTransientBackendStatus(): Boolean =
+        this == 408 || this == 425 || this == 429 || this in 500..599
 
     private fun BackendAuthorizationCallbackStatus.toFailureReason(): MobileAuthenticationFailureReason =
         when (this) {

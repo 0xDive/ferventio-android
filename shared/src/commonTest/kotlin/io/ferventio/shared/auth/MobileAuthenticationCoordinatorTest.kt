@@ -17,6 +17,9 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class MobileAuthenticationCoordinatorTest {
     private val identity = MobileDeviceIdentity(
@@ -125,6 +128,65 @@ class MobileAuthenticationCoordinatorTest {
     }
 
     @Test
+    fun foregroundRefreshReusesFreshLeaseWithoutPersisting() = runTest {
+        val authentication = authenticationWithFreshLease()
+
+        val result = coordinatorResponding("{}").refreshAuthenticationForForeground(
+            identity = identity,
+            authentication = authentication,
+        )
+
+        assertEquals(authentication, result.authentication)
+        assertFalse(result.shouldPersist)
+        assertFalse(result.shouldSignOut)
+    }
+
+    @Test
+    fun foregroundRefreshUsesCachedTwitchCredentialDuringBackendOutage() = runTest {
+        val authentication = authenticationWithStaleLease(twitchExpiresAtEpochMillis = 8_200_000L)
+        val coordinator = coordinatorResponding(
+            body = """{"error":"temporarily unavailable"}""",
+            status = HttpStatusCode.ServiceUnavailable,
+        )
+
+        val result = coordinator.refreshAuthenticationForForeground(identity, authentication)
+
+        assertEquals(authentication, result.authentication)
+        assertFalse(result.shouldPersist)
+        assertFalse(result.shouldSignOut)
+    }
+
+    @Test
+    fun foregroundRefreshReturnsUnavailableWhenOutageFallbackIsTooCloseToExpiry() = runTest {
+        val authentication = authenticationWithStaleLease(twitchExpiresAtEpochMillis = 1_020_000L)
+        val coordinator = coordinatorResponding(
+            body = """{"error":"temporarily unavailable"}""",
+            status = HttpStatusCode.ServiceUnavailable,
+        )
+
+        val result = coordinator.refreshAuthenticationForForeground(identity, authentication)
+
+        assertNull(result.authentication)
+        assertFalse(result.shouldPersist)
+        assertFalse(result.shouldSignOut)
+    }
+
+    @Test
+    fun foregroundRefreshSignsOutRejectedBackendSession() = runTest {
+        val authentication = authenticationWithStaleLease(twitchExpiresAtEpochMillis = 8_200_000L)
+        val coordinator = coordinatorResponding(
+            body = """{"error":"authentication record not found"}""",
+            status = HttpStatusCode.Unauthorized,
+        )
+
+        val result = coordinator.refreshAuthenticationForForeground(identity, authentication)
+
+        assertNull(result.authentication)
+        assertFalse(result.shouldPersist)
+        assertTrue(result.shouldSignOut)
+    }
+
+    @Test
     fun completeTurnsAcceptedCallbackIntoStoredAuthentication() = runTest {
         val coordinator = coordinatorResponding(
             """
@@ -201,11 +263,38 @@ class MobileAuthenticationCoordinatorTest {
         ),
     )
 
-    private fun coordinatorResponding(body: String): MobileAuthenticationCoordinator {
+    private fun authenticationWithStaleLease(
+        twitchExpiresAtEpochMillis: Long,
+    ) = StoredAuthentication(
+        backendCredential = BackendSessionCredential(
+            serverUrl = "https://example.test",
+            token = "backend-session",
+            expiresAtEpochMillis = 4_600_000L,
+        ),
+        accessLease = TwitchAccessLease(
+            accessToken = "cached-token",
+            leaseExpiresAtEpochMillis = 990_000L,
+            twitchExpiresAtEpochMillis = twitchExpiresAtEpochMillis,
+            twitchValidatedAtEpochMillis = 900_000L,
+            backendSessionExpiresAtEpochMillis = 4_600_000L,
+            session = TwitchSession(
+                clientId = "client",
+                userId = "user",
+                login = "login",
+                scopes = setOf("chat:read"),
+                expiresInSeconds = 7_200L,
+            ),
+        ),
+    )
+
+    private fun coordinatorResponding(
+        body: String,
+        status: HttpStatusCode = HttpStatusCode.OK,
+    ): MobileAuthenticationCoordinator {
         val engine = MockEngine {
             respond(
                 content = ByteReadChannel(body),
-                status = HttpStatusCode.OK,
+                status = status,
                 headers = headersOf(
                     HttpHeaders.ContentType,
                     ContentType.Application.Json.toString(),
