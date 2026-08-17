@@ -23,4 +23,26 @@
     <string name="chat_status_creating_subscriptions">Подписываемся на события чата…</string>
     <string name="chat_status_reconnecting">Переподключаемся к чату…</string>
     <string name="chat_status_failed">Не удалось подключить чат</string>
+    <string name="nuke_preview_action">Предпросмотр nuke</string>
+    <string name="nuke_preview_title">Предпросмотр nuke</string>
+    <string name="nuke_preview_read_only">Только предпросмотр. На этом экране moderation-действия не выполняются.</string>
+    <string name="nuke_query_label">Текст сообщения или шаблон</string>
+    <string name="nuke_plain_text">Обычный текст</string>
+    <string name="nuke_regex">Regex</string>
+    <string name="nuke_case_sensitive">Учитывать регистр</string>
+    <string name="nuke_time_window">Временное окно</string>
+    <string name="nuke_seconds">%1$d с</string>
+    <string name="nuke_exclude_broadcaster">Исключить владельца канала</string>
+    <string name="nuke_exclude_moderators">Исключить модераторов</string>
+    <string name="nuke_exclude_vips">Исключить VIP</string>
+    <string name="nuke_matched_messages">Совпавшие сообщения</string>
+    <string name="nuke_matched_users">Совпавшие пользователи</string>
+    <string name="nuke_scanned_messages">Проверенные сообщения</string>
+    <string name="nuke_excluded_matches">Исключённые совпадения</string>
+    <string name="nuke_samples">Примеры сообщений</string>
+    <string name="nuke_all_target_users">Пользователи-цели</string>
+    <string name="nuke_no_matches">В этом окне нет подходящих целей.</string>
+    <string name="nuke_error_empty_query">Введите текст или шаблон для предпросмотра целей.</string>
+    <string name="nuke_error_invalid_query">Шаблон некорректен.</string>
+    <string name="nuke_close">Закрыть</string>
 </resources>
