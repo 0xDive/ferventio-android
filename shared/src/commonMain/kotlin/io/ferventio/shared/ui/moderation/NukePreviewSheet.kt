@@ -311,7 +311,7 @@ internal fun NukePreviewSheet(
                 }
             }
 
-            if (preview != null && preview.matchedUserCount > 0) {
+            if (preview != null) {
                 item(key = "execute") {
                     NukeExecutionControls(
                         channelId = channelId,
