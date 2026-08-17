@@ -119,11 +119,11 @@ class TwitchCheermoteClient(
         (this[name] as? JsonPrimitive)?.booleanOrNull
 
     private fun JsonObject?.preferredImageUrl(): String? {
-        if (this == null) return null
+        val images = this ?: return null
         return sequenceOf("2", "1.5", "1", "3", "4")
-            .mapNotNull(::string)
+            .mapNotNull { size -> images.string(size) }
             .firstOrNull()
-            ?: values.asSequence()
+            ?: images.values.asSequence()
                 .mapNotNull { value -> (value as? JsonPrimitive)?.contentOrNull?.trim() }
                 .firstOrNull(String::isNotEmpty)
     }
