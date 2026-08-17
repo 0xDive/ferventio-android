@@ -13,6 +13,7 @@ internal class TwitchChatSessionRuntime(
     private val workspace: WorkspaceRuntimeSnapshot,
     private val state: ChatRuntimeStateHolder,
     private val bootstrapCoordinator: TwitchEventSubBootstrapCoordinator = TwitchEventSubBootstrapCoordinator(),
+    private val onFatalSessionError: (Throwable) -> Unit = {},
 ) {
     private var supplementalSubscriptionsJob: Job? = null
 
@@ -112,6 +113,7 @@ internal class TwitchChatSessionRuntime(
             .firstOrNull(Throwable::isTwitchAuthenticationFailure)
         if (authenticationFailure != null) {
             onSocketError(authenticationFailure)
+            onFatalSessionError(authenticationFailure)
             return
         }
 
