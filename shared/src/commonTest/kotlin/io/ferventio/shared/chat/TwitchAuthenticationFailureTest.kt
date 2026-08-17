@@ -19,11 +19,11 @@ class TwitchAuthenticationFailureTest {
     }
 
     @Test
-    fun recognizesForbiddenSubscription() {
-        assertTrue(
+    fun doesNotTreatForbiddenSubscriptionAsExpiredAuthentication() {
+        assertFalse(
             TwitchEventSubSubscriptionException(
                 statusCode = 403,
-                twitchMessage = "Forbidden",
+                twitchMessage = "subscription missing proper authorization",
             ).isTwitchAuthenticationFailure(),
         )
     }
