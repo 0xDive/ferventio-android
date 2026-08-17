@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.em
 import coil3.compose.AsyncImagePainter
 import coil3.compose.rememberAsyncImagePainter
 import io.ferventio.app.domain.ChatBadge
+import io.ferventio.app.domain.ChatBadgeAsset
 import io.ferventio.app.domain.ChatChannel
 import io.ferventio.app.domain.ChatMessage
 import io.ferventio.app.domain.ConnectionStatus
@@ -160,6 +161,7 @@ private fun ChatConnectionBanner(chat: ChatRuntimeStateHolder) {
 
 @Composable
 private fun ChatMessageRow(message: ChatMessage) {
+    val chat = LocalFerventioRuntimeState.current.chat
     val deletedPlaceholder = stringResource(Res.string.chat_message_deleted)
     val presentation = projectChatMessage(message, deletedPlaceholder)
     val uriHandler = LocalUriHandler.current
@@ -273,6 +275,7 @@ private fun ChatMessageRow(message: ChatMessage) {
                     ) {
                         SharedBadgeIcon(
                             badge = badge,
+                            asset = chat.badgeAsset(message.channelId, badge),
                             modifier = Modifier.fillMaxSize(),
                         )
                     },
@@ -362,8 +365,14 @@ private fun SharedInlineEmote(
 @Composable
 private fun SharedBadgeIcon(
     badge: ChatBadge,
+    asset: ChatBadgeAsset?,
     modifier: Modifier = Modifier,
 ) {
+    val imageUrl = asset?.imageUrl2x?.takeIf(String::isNotBlank)
+        ?: asset?.imageUrl1x?.takeIf(String::isNotBlank)
+        ?: asset?.imageUrl4x?.takeIf(String::isNotBlank)
+    val painter = rememberAsyncImagePainter(model = imageUrl)
+    val painterState by painter.state.collectAsState()
     val symbol = when (badge.setId) {
         "broadcaster" -> "♛"
         "moderator", "vip" -> "◆"
@@ -379,11 +388,20 @@ private fun SharedBadgeIcon(
         else -> badge.setId.firstOrNull()?.uppercase() ?: "•"
     }
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        Text(
-            text = symbol,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.Bold,
-        )
+        if (imageUrl != null && painterState is AsyncImagePainter.State.Success) {
+            Image(
+                painter = painter,
+                contentDescription = asset?.title?.takeIf(String::isNotBlank) ?: badge.setId,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Text(
+                text = symbol,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+            )
+        }
     }
 }
