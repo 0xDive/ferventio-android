@@ -79,6 +79,7 @@ internal class TwitchEventSubSocketClient(
                             "Twitch EventSub session did not receive any subscriptions"
                         }
                     }
+                    if (closed) return@webSocket
                     publishStatus(ConnectionStatus.CONNECTED, 0)
                     reconnectAttempt = 0
 
