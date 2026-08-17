@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilterChip
@@ -479,8 +481,8 @@ private fun DurationPresets(
             text = stringResource(Res.string.interactive_duration),
             style = MaterialTheme.typography.labelMedium,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            values.forEach { seconds ->
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            items(values) { seconds ->
                 FilterChip(
                     selected = selected == seconds,
                     onClick = { onSelected(seconds) },
