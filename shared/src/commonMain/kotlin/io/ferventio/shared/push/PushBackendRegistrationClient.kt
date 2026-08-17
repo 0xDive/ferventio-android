@@ -6,12 +6,14 @@ import io.ferventio.app.domain.StoredAuthentication
 import io.ferventio.app.domain.TwitchSession
 import io.ferventio.shared.workspace.WorkspaceRuntimeSnapshot
 import io.ktor.client.HttpClient
+import io.ktor.client.request.delete
 import io.ktor.client.request.header
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
 import io.ktor.http.contentType
 import kotlin.Throws
@@ -20,6 +22,8 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+
+private const val DEVICE_SECRET_HEADER = "X-Device-Secret"
 
 class PushBackendRegistrationException(
     val statusCode: Int,
@@ -47,6 +51,39 @@ class PushBackendRegistrationClient(
             setBody(json.encodeToString(request))
         }
         val body = response.bodyAsText()
+        if (response.status.value !in 200..299) {
+            throw PushBackendRegistrationException(
+                statusCode = response.status.value,
+                backendMessage = decodeBackendError(body),
+            )
+        }
+    }
+
+    /**
+     * Removes this installation from the backend. A missing registration is already the desired
+     * state, so HTTP 404 is treated as a successful idempotent cleanup.
+     */
+    @Throws(Exception::class)
+    suspend fun unregister(
+        serverUrl: String,
+        identity: MobileDeviceIdentity,
+    ) {
+        val installationId = identity.installationId.trim()
+        val deviceSecret = identity.deviceSecret.trim()
+        require(installationId.isNotEmpty()) { "Push installation ID must not be blank" }
+        require(deviceSecret.isNotEmpty()) { "Push device secret must not be blank" }
+
+        val baseUrl = validateServerUrl(serverUrl)
+        val response = client.delete(
+            "$baseUrl/v1/push/registrations/$installationId",
+        ) {
+            header(DEVICE_SECRET_HEADER, deviceSecret)
+            header(HttpHeaders.Accept, ContentType.Application.Json.toString())
+        }
+        val body = response.bodyAsText()
+        if (response.status == HttpStatusCode.NotFound) {
+            return
+        }
         if (response.status.value !in 200..299) {
             throw PushBackendRegistrationException(
                 statusCode = response.status.value,
@@ -169,6 +206,14 @@ class ApnsPushRegistrationCoordinator(
         )
         backend.register(serverUrl, request)
         return request
+    }
+
+    @Throws(Exception::class)
+    suspend fun unregister(
+        serverUrl: String,
+        identity: MobileDeviceIdentity,
+    ) {
+        backend.unregister(serverUrl, identity)
     }
 
     private fun requireAuthenticatedSession(authentication: StoredAuthentication): TwitchSession {

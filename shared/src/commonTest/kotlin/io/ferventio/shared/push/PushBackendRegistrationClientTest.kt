@@ -10,6 +10,7 @@ import io.ferventio.shared.workspace.WorkspaceRuntimeSnapshot
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
+import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.utils.io.ByteReadChannel
 import kotlinx.coroutines.test.runTest
@@ -52,6 +53,57 @@ class PushBackendRegistrationClientTest {
         assertEquals("ios", request.platform)
         assertEquals("apns", request.provider)
         assertEquals("token", request.apnsDeviceToken)
+    }
+
+    @Test
+    fun apnsCoordinatorUnregistersWithDeviceSecret() = runTest {
+        var requestedMethod: HttpMethod? = null
+        var requestedUrl: String? = null
+        var requestedSecret: String? = null
+        val engine = MockEngine { request ->
+            requestedMethod = request.method
+            requestedUrl = request.url.toString()
+            requestedSecret = request.headers["X-Device-Secret"]
+            respond(
+                content = ByteReadChannel(""),
+                status = HttpStatusCode.NoContent,
+            )
+        }
+        val coordinator = ApnsPushRegistrationCoordinator(
+            backend = PushBackendRegistrationClient(
+                client = HttpClient(engine) { expectSuccess = false },
+            ),
+        )
+
+        coordinator.unregister(
+            serverUrl = "https://example.test/",
+            identity = identity,
+        )
+
+        assertEquals(HttpMethod.Delete, requestedMethod)
+        assertEquals(
+            "https://example.test/v1/push/registrations/installation-id",
+            requestedUrl,
+        )
+        assertEquals(identity.deviceSecret, requestedSecret)
+    }
+
+    @Test
+    fun unregisterTreatsMissingRegistrationAsAlreadyClean() = runTest {
+        val engine = MockEngine {
+            respond(
+                content = ByteReadChannel("{\"error\":\"registration not found\"}"),
+                status = HttpStatusCode.NotFound,
+            )
+        }
+        val backend = PushBackendRegistrationClient(
+            client = HttpClient(engine) { expectSuccess = false },
+        )
+
+        backend.unregister(
+            serverUrl = "https://example.test",
+            identity = identity,
+        )
     }
 
     @Test
@@ -173,6 +225,29 @@ class PushBackendRegistrationClientTest {
 
         assertEquals(400, error.statusCode)
         assertEquals("invalid registration", error.backendMessage)
+    }
+
+    @Test
+    fun unregisterSurfacesDeviceSecretMismatch() = runTest {
+        val engine = MockEngine {
+            respond(
+                content = ByteReadChannel("{\"error\":\"device secret mismatch\"}"),
+                status = HttpStatusCode.Forbidden,
+            )
+        }
+        val backend = PushBackendRegistrationClient(
+            client = HttpClient(engine) { expectSuccess = false },
+        )
+
+        val error = assertFailsWith<PushBackendRegistrationException> {
+            backend.unregister(
+                serverUrl = "https://example.test",
+                identity = identity,
+            )
+        }
+
+        assertEquals(403, error.statusCode)
+        assertEquals("device secret mismatch", error.backendMessage)
     }
 
     @Test
