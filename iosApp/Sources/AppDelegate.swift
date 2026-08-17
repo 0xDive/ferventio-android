@@ -117,35 +117,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
                 return
             }
             await pushRuntimeBridge.refreshAuthorizationAndRestoreRemoteRegistration()
-            guard let authenticationRuntimeBridge else {
-                return
-            }
-            let disposition: ForegroundAuthenticationRefreshDisposition
-            if runtimeState.chat.authenticationRequired {
-                disposition = await authenticationRuntimeBridge.refreshAfterAuthenticationRejection()
-            } else {
-                disposition = await authenticationRuntimeBridge.refreshForForeground()
-            }
-            switch disposition {
-            case .deferred:
-                return
-            case .signedOut:
-                authenticatedChatRuntimeBridge?.stop(clearState: true)
-                runtimeState.workspace.clear()
-                await synchronizePushBackendRegistration()
-                return
-            case .unavailable:
-                authenticatedChatRuntimeBridge?.stop()
-                return
-            case .ready:
-                break
-            }
-            if runtimeState.workspace.isReadyForPushRegistration {
-                await synchronizePushBackendRegistration()
-                synchronizeAuthenticatedChatRuntime()
-            } else {
-                await restoreWorkspaceAndSynchronizePush()
-            }
+            await refreshAuthenticationAndSynchronizeRuntime()
         }
     }
 
@@ -238,12 +210,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         case .unavailable:
             authenticatedChatRuntimeBridge?.stop()
         case .ready:
-            if runtimeState.workspace.isReadyForPushRegistration {
-                await synchronizePushBackendRegistration()
-                synchronizeAuthenticatedChatRuntime()
-            } else {
-                await restoreWorkspaceAndSynchronizePush()
-            }
+            await synchronizeReadyAuthenticatedRuntime()
         }
     }
 
@@ -251,13 +218,35 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         guard UIApplication.shared.applicationState == .active else {
             return
         }
-        guard runtimeState.authentication.state.authentication != nil else {
+        await pushRuntimeBridge.refreshAuthorizationAndRestoreRemoteRegistration()
+        await refreshAuthenticationAndSynchronizeRuntime()
+    }
+
+    private func refreshAuthenticationAndSynchronizeRuntime() async {
+        guard let authenticationRuntimeBridge else {
             return
         }
+        let disposition: ForegroundAuthenticationRefreshDisposition
         if runtimeState.chat.authenticationRequired {
-            await recoverAuthenticationAfterChatRejection()
-            return
+            disposition = await authenticationRuntimeBridge.refreshAfterAuthenticationRejection()
+        } else {
+            disposition = await authenticationRuntimeBridge.refreshForForeground()
         }
+        switch disposition {
+        case .deferred:
+            return
+        case .signedOut:
+            authenticatedChatRuntimeBridge?.stop(clearState: true)
+            runtimeState.workspace.clear()
+            await synchronizePushBackendRegistration()
+        case .unavailable:
+            authenticatedChatRuntimeBridge?.stop()
+        case .ready:
+            await synchronizeReadyAuthenticatedRuntime()
+        }
+    }
+
+    private func synchronizeReadyAuthenticatedRuntime() async {
         if runtimeState.workspace.isReadyForPushRegistration {
             await synchronizePushBackendRegistration()
             synchronizeAuthenticatedChatRuntime()
