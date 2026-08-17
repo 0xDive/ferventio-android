@@ -47,6 +47,7 @@ import io.ferventio.app.domain.ChatBadge
 import io.ferventio.app.domain.ChatBadgeAsset
 import io.ferventio.app.domain.ChatChannel
 import io.ferventio.app.domain.ChatMessage
+import io.ferventio.app.domain.CheermoteAsset
 import io.ferventio.app.domain.ConnectionStatus
 import io.ferventio.app.domain.ThirdPartyEmoteAsset
 import io.ferventio.shared.chat.ChatRuntimeStateHolder
@@ -78,6 +79,7 @@ fun FerventioChatTimeline(
     val chat = LocalFerventioRuntimeState.current.chat
     val messages = chat.messages(channel.id)
     val thirdPartyEmotes = rememberThirdPartyEmoteCatalog(channel.id)
+    val cheermoteAssets = chat.cheermoteAssets(channel.id)
     val listState = rememberLazyListState()
     var followTail by remember { mutableStateOf(true) }
 
@@ -120,6 +122,7 @@ fun FerventioChatTimeline(
                     ChatMessageRow(
                         message = message,
                         thirdPartyEmotes = thirdPartyEmotes,
+                        cheermoteAssets = cheermoteAssets,
                         onAuthorClick = onAuthorClick,
                     )
                 }
@@ -172,6 +175,7 @@ private fun ChatConnectionBanner(chat: ChatRuntimeStateHolder) {
 private fun ChatMessageRow(
     message: ChatMessage,
     thirdPartyEmotes: Map<String, ThirdPartyEmoteAsset>,
+    cheermoteAssets: Map<String, List<CheermoteAsset>>,
     onAuthorClick: ((ChatMessage) -> Unit)?,
 ) {
     val chat = LocalFerventioRuntimeState.current.chat
@@ -180,6 +184,7 @@ private fun ChatMessageRow(
         message = message,
         deletedPlaceholder = deletedPlaceholder,
         thirdPartyEmotes = thirdPartyEmotes,
+        cheermoteAssetsByPrefix = cheermoteAssets,
     )
     val renderSegments = groupChatMessageSegments(presentation.segments)
     val uriHandler = LocalUriHandler.current
@@ -358,7 +363,8 @@ private fun ChatMessageRow(
 private fun ChatMessageSegmentKind.isInlineEmote(): Boolean = when (this) {
     ChatMessageSegmentKind.TWITCH_EMOTE,
     ChatMessageSegmentKind.THIRD_PARTY_EMOTE,
-    ChatMessageSegmentKind.GIF -> true
+    ChatMessageSegmentKind.GIF,
+    ChatMessageSegmentKind.CHEERMOTE -> true
     else -> false
 }
 
