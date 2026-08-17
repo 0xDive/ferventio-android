@@ -223,6 +223,7 @@ class ChatRuntimeStateHolder(
         errorMessage: String? = null,
     ) {
         require(attempt >= 0) { "Connection attempt must not be negative" }
+        if (authenticationRequired && status != ConnectionStatus.FAILED) return
         connectionStatus = status
         connectionDetail = detail?.trim()?.takeIf { it.isNotEmpty() }
         connectionAttempt = attempt
