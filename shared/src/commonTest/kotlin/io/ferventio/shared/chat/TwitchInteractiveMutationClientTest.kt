@@ -3,7 +3,6 @@ package io.ferventio.shared.chat
 import io.ferventio.app.domain.BackendSessionCredential
 import io.ferventio.app.domain.PollDraft
 import io.ferventio.app.domain.PollStatus
-import io.ferventio.app.domain.PredictionDraft
 import io.ferventio.app.domain.PredictionStatus
 import io.ferventio.app.domain.StoredAuthentication
 import io.ferventio.app.domain.TwitchAccessLease
@@ -11,14 +10,13 @@ import io.ferventio.app.domain.TwitchSession
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
+import io.ktor.client.engine.mock.toByteArray
 import io.ktor.client.request.HttpRequestData
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
-import io.ktor.http.isSuccess
 import io.ktor.utils.io.ByteReadChannel
-import io.ktor.utils.io.core.readText
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -55,7 +53,7 @@ class TwitchInteractiveMutationClientTest {
         assertEquals("/helix/polls", request.url.encodedPath)
         assertEquals("Bearer twitch-token", request.headers[HttpHeaders.Authorization])
         assertEquals("client-id", request.headers["Client-Id"])
-        val body = request.body.toByteReadPacket().readText()
+        val body = requestBody(request)
         assertTrue(body.contains("\"broadcaster_id\":\"broadcaster\""))
         assertTrue(body.contains("\"channel_points_per_vote\":100"))
         assertEquals("poll-1", poll.id)
@@ -86,7 +84,7 @@ class TwitchInteractiveMutationClientTest {
         val request = requireNotNull(captured)
         assertEquals("PUT", request.method.value)
         assertEquals("/helix/predictions", request.url.encodedPath)
-        val body = request.body.toByteReadPacket().readText()
+        val body = requestBody(request)
         assertTrue(body.contains("\"status\":\"resolved\""))
         assertTrue(body.contains("\"winning_outcome_id\":\"outcome-blue\""))
         assertEquals(PredictionStatus.RESOLVED, prediction.status)
@@ -140,6 +138,9 @@ class TwitchInteractiveMutationClientTest {
         assertEquals(401, error.statusCode)
         assertTrue(error.message.orEmpty().contains("OAuth token is invalid"))
     }
+
+    private suspend fun requestBody(request: HttpRequestData): String =
+        request.body.toByteArray().decodeToString()
 
     private fun authentication(vararg scopes: String) = StoredAuthentication(
         backendCredential = BackendSessionCredential(
