@@ -45,4 +45,18 @@
     <string name="nuke_error_empty_query">Введите текст или шаблон для предпросмотра целей.</string>
     <string name="nuke_error_invalid_query">Шаблон некорректен.</string>
     <string name="nuke_close">Закрыть</string>
+    <string name="user_card_title">Карточка пользователя</string>
+    <string name="user_card_id">ID: %1$s</string>
+    <string name="user_card_badges">Значки</string>
+    <string name="user_card_role_broadcaster">Владелец канала</string>
+    <string name="user_card_role_moderator">Модератор</string>
+    <string name="user_card_role_vip">VIP</string>
+    <string name="user_card_role_subscriber">Подписчик</string>
+    <string name="user_card_role_viewer">Зритель</string>
+    <string name="user_card_moderator_context">Для этого канала доступен контекст модератора. Опасные действия останутся недоступны, пока не будет подключён общий moderation transport.</string>
+    <string name="user_card_selected_message">Выбранное сообщение</string>
+    <string name="user_card_recent_messages">Последние сообщения (%1$d)</string>
+    <string name="user_card_deleted_message">[сообщение удалено]</string>
+    <string name="user_card_open_twitch">Открыть Twitch</string>
+    <string name="user_card_close">Закрыть</string>
 </resources>

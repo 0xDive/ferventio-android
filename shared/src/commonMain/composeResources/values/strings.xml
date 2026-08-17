@@ -45,4 +45,18 @@
     <string name="nuke_error_empty_query">Enter text or a pattern to preview targets.</string>
     <string name="nuke_error_invalid_query">The pattern is invalid.</string>
     <string name="nuke_close">Close</string>
+    <string name="user_card_title">User card</string>
+    <string name="user_card_id">ID: %1$s</string>
+    <string name="user_card_badges">Badges</string>
+    <string name="user_card_role_broadcaster">Broadcaster</string>
+    <string name="user_card_role_moderator">Moderator</string>
+    <string name="user_card_role_vip">VIP</string>
+    <string name="user_card_role_subscriber">Subscriber</string>
+    <string name="user_card_role_viewer">Viewer</string>
+    <string name="user_card_moderator_context">You have moderator context for this channel. Destructive actions stay unavailable until the shared moderation transport is connected.</string>
+    <string name="user_card_selected_message">Selected message</string>
+    <string name="user_card_recent_messages">Recent messages (%1$d)</string>
+    <string name="user_card_deleted_message">[message deleted]</string>
+    <string name="user_card_open_twitch">Open Twitch</string>
+    <string name="user_card_close">Close</string>
 </resources>

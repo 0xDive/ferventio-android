@@ -20,10 +20,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.ferventio.app.domain.ChatChannel
+import io.ferventio.app.domain.ChatMessage
 import io.ferventio.shared.generated.resources.Res
 import io.ferventio.shared.generated.resources.nuke_preview_action
 import io.ferventio.shared.runtime.LocalFerventioRuntimeState
 import io.ferventio.shared.ui.chat.FerventioChatTimeline
+import io.ferventio.shared.ui.user.SharedUserCardSheet
+import io.ferventio.shared.ui.user.projectLocalUserCard
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -33,11 +36,12 @@ fun FerventioModeratedChatScreen(
     modifier: Modifier = Modifier,
 ) {
     val runtime = LocalFerventioRuntimeState.current
-    val canPreview = canPreviewNuke(channel.id, moderatorChannelIds)
+    val canModerateChannel = canPreviewNuke(channel.id, moderatorChannelIds)
     var showNukePreview by remember(channel.id) { mutableStateOf(false) }
+    var selectedUserMessage by remember(channel.id) { mutableStateOf<ChatMessage?>(null) }
 
     Column(modifier = modifier.fillMaxSize()) {
-        if (canPreview) {
+        if (canModerateChannel) {
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -59,13 +63,33 @@ fun FerventioModeratedChatScreen(
         FerventioChatTimeline(
             channel = channel,
             modifier = Modifier.weight(1f),
+            onAuthorClick = { message -> selectedUserMessage = message },
         )
     }
 
-    if (showNukePreview && canPreview) {
+    if (showNukePreview && canModerateChannel) {
         NukePreviewSheet(
             messages = runtime.chat.messages(channel.id),
             onDismiss = { showNukePreview = false },
+        )
+    }
+
+    selectedUserMessage?.let { sourceMessage ->
+        val messages = runtime.chat.messages(channel.id)
+        val data = remember(
+            sourceMessage.id,
+            messages,
+            canModerateChannel,
+        ) {
+            projectLocalUserCard(
+                sourceMessage = sourceMessage,
+                channelMessages = messages,
+                canModerate = canModerateChannel,
+            )
+        }
+        SharedUserCardSheet(
+            data = data,
+            onDismiss = { selectedUserMessage = null },
         )
     }
 }

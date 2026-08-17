@@ -65,11 +65,13 @@ import kotlinx.coroutines.flow.filter
 import org.jetbrains.compose.resources.stringResource
 
 private const val URL_ANNOTATION_TAG = "url"
+private const val AUTHOR_ANNOTATION_TAG = "author"
 
 @Composable
 fun FerventioChatTimeline(
     channel: ChatChannel,
     modifier: Modifier = Modifier,
+    onAuthorClick: ((ChatMessage) -> Unit)? = null,
 ) {
     val chat = LocalFerventioRuntimeState.current.chat
     val messages = chat.messages(channel.id)
@@ -112,7 +114,10 @@ fun FerventioChatTimeline(
                     items = messages,
                     key = ChatMessage::id,
                 ) { message ->
-                    ChatMessageRow(message)
+                    ChatMessageRow(
+                        message = message,
+                        onAuthorClick = onAuthorClick,
+                    )
                 }
             }
         }
@@ -160,7 +165,10 @@ private fun ChatConnectionBanner(chat: ChatRuntimeStateHolder) {
 }
 
 @Composable
-private fun ChatMessageRow(message: ChatMessage) {
+private fun ChatMessageRow(
+    message: ChatMessage,
+    onAuthorClick: ((ChatMessage) -> Unit)?,
+) {
     val chat = LocalFerventioRuntimeState.current.chat
     val deletedPlaceholder = stringResource(Res.string.chat_message_deleted)
     val presentation = projectChatMessage(message, deletedPlaceholder)
@@ -192,8 +200,18 @@ private fun ChatMessageRow(message: ChatMessage) {
                 appendInlineContent(inlineBadgeId(index), "◆")
                 append(" ")
             }
+            val authorStart = length
             withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) {
                 append(message.author.displayName.ifBlank { message.author.login })
+            }
+            val authorEnd = length
+            if (authorEnd > authorStart) {
+                addStringAnnotation(
+                    tag = AUTHOR_ANNOTATION_TAG,
+                    annotation = message.id,
+                    start = authorStart,
+                    end = authorEnd,
+                )
             }
             append(if (message.isAction) " " else ": ")
 
@@ -308,15 +326,28 @@ private fun ChatMessageRow(message: ChatMessage) {
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = 5.dp)
-                .pointerInput(text) {
+                .pointerInput(text, onAuthorClick) {
                     detectTapGestures { position ->
-                        val offset = textLayoutResult?.getOffsetForPosition(position) ?: return@detectTapGestures
-                        text.getStringAnnotations(
+                        val offset = textLayoutResult?.getOffsetForPosition(position)
+                            ?: return@detectTapGestures
+                        val link = text.getStringAnnotations(
                             tag = URL_ANNOTATION_TAG,
                             start = offset,
                             end = offset,
-                        ).firstOrNull()?.let { annotation ->
-                            runCatching { uriHandler.openUri(annotation.item) }
+                        ).firstOrNull()
+                        if (link != null) {
+                            runCatching { uriHandler.openUri(link.item) }
+                            return@detectTapGestures
+                        }
+                        if (onAuthorClick != null) {
+                            val author = text.getStringAnnotations(
+                                tag = AUTHOR_ANNOTATION_TAG,
+                                start = offset,
+                                end = offset,
+                            ).firstOrNull()
+                            if (author != null) {
+                                onAuthorClick(message)
+                            }
                         }
                     }
                 },
@@ -363,7 +394,7 @@ private fun SharedInlineEmote(
 }
 
 @Composable
-private fun SharedBadgeIcon(
+internal fun SharedBadgeIcon(
     badge: ChatBadge,
     asset: ChatBadgeAsset?,
     modifier: Modifier = Modifier,
