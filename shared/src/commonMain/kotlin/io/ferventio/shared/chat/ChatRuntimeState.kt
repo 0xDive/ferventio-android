@@ -3,14 +3,19 @@ package io.ferventio.shared.chat
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import io.ferventio.app.domain.ChatBadge
+import io.ferventio.app.domain.ChatBadgeAsset
 import io.ferventio.app.domain.ChatMessage
 import io.ferventio.app.domain.ConnectionStatus
 import io.ferventio.app.domain.ModerationAction
 import io.ferventio.app.domain.ModerationState
+import io.ferventio.app.domain.chatBadgeAssetKey
 import kotlin.time.Clock
 
 data class ChatRuntimeSnapshot(
     val messagesByChannel: Map<String, List<ChatMessage>> = emptyMap(),
+    val globalBadgeAssets: Map<String, ChatBadgeAsset> = emptyMap(),
+    val badgeAssetsByChannel: Map<String, Map<String, ChatBadgeAsset>> = emptyMap(),
     val connectionStatus: ConnectionStatus = ConnectionStatus.DISCONNECTED,
     val connectionDetail: String? = null,
     val connectionAttempt: Int = 0,
@@ -28,6 +33,12 @@ class ChatRuntimeStateHolder(
     var messagesByChannel by mutableStateOf(emptyMap<String, List<ChatMessage>>())
         private set
 
+    var globalBadgeAssets by mutableStateOf(emptyMap<String, ChatBadgeAsset>())
+        private set
+
+    var badgeAssetsByChannel by mutableStateOf(emptyMap<String, Map<String, ChatBadgeAsset>>())
+        private set
+
     var connectionStatus by mutableStateOf(ConnectionStatus.DISCONNECTED)
         private set
 
@@ -43,6 +54,8 @@ class ChatRuntimeStateHolder(
     val snapshot: ChatRuntimeSnapshot
         get() = ChatRuntimeSnapshot(
             messagesByChannel = messagesByChannel,
+            globalBadgeAssets = globalBadgeAssets,
+            badgeAssetsByChannel = badgeAssetsByChannel,
             connectionStatus = connectionStatus,
             connectionDetail = connectionDetail,
             connectionAttempt = connectionAttempt,
@@ -51,6 +64,10 @@ class ChatRuntimeStateHolder(
 
     init {
         replaceAll(initialSnapshot.messagesByChannel)
+        replaceGlobalBadgeAssets(initialSnapshot.globalBadgeAssets)
+        initialSnapshot.badgeAssetsByChannel.forEach { (channelId, assets) ->
+            replaceChannelBadgeAssets(channelId, assets)
+        }
         updateConnection(
             status = initialSnapshot.connectionStatus,
             detail = initialSnapshot.connectionDetail,
@@ -61,6 +78,32 @@ class ChatRuntimeStateHolder(
 
     fun messages(channelId: String): List<ChatMessage> =
         messagesByChannel[channelId.trim()].orEmpty()
+
+    fun badgeAsset(
+        channelId: String,
+        badge: ChatBadge,
+    ): ChatBadgeAsset? {
+        val key = chatBadgeAssetKey(badge.setId, badge.id)
+        return badgeAssetsByChannel[channelId.trim()]?.get(key)
+            ?: globalBadgeAssets[key]
+    }
+
+    fun replaceGlobalBadgeAssets(value: Map<String, ChatBadgeAsset>) {
+        globalBadgeAssets = normalizeBadgeAssets(value)
+    }
+
+    fun replaceChannelBadgeAssets(
+        channelId: String,
+        value: Map<String, ChatBadgeAsset>,
+    ) {
+        val normalizedChannelId = requireChannelId(channelId)
+        val normalizedAssets = normalizeBadgeAssets(value)
+        badgeAssetsByChannel = if (normalizedAssets.isEmpty()) {
+            badgeAssetsByChannel - normalizedChannelId
+        } else {
+            badgeAssetsByChannel + (normalizedChannelId to normalizedAssets)
+        }
+    }
 
     fun replaceChannelMessages(
         channelId: String,
@@ -168,6 +211,7 @@ class ChatRuntimeStateHolder(
         val normalized = channelId.trim()
         if (normalized.isEmpty()) return
         messagesByChannel = messagesByChannel - normalized
+        badgeAssetsByChannel = badgeAssetsByChannel - normalized
     }
 
     fun retainChannels(channelIds: Iterable<String>) {
@@ -176,6 +220,7 @@ class ChatRuntimeStateHolder(
             .filter { it.isNotEmpty() }
             .toSet()
         messagesByChannel = messagesByChannel.filterKeys(allowed::contains)
+        badgeAssetsByChannel = badgeAssetsByChannel.filterKeys(allowed::contains)
     }
 
     fun updateConnection(
@@ -193,6 +238,8 @@ class ChatRuntimeStateHolder(
 
     fun clear() {
         messagesByChannel = emptyMap()
+        globalBadgeAssets = emptyMap()
+        badgeAssetsByChannel = emptyMap()
         updateConnection(ConnectionStatus.DISCONNECTED)
     }
 
@@ -222,6 +269,11 @@ class ChatRuntimeStateHolder(
             .sortedWith(compareBy(ChatMessage::timestampMillis, ChatMessage::id))
             .takeLast(MAX_MESSAGES_PER_CHANNEL)
     }
+
+    private fun normalizeBadgeAssets(value: Map<String, ChatBadgeAsset>): Map<String, ChatBadgeAsset> =
+        value.values
+            .filter { asset -> asset.setId.isNotBlank() && asset.id.isNotBlank() }
+            .associateBy(ChatBadgeAsset::key)
 
     private fun requireMessage(message: ChatMessage) {
         require(message.id.isNotBlank()) { "Chat message id must not be blank" }
