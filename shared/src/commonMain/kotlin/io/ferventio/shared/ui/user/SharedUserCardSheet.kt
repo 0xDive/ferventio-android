@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -53,7 +52,6 @@ import io.ferventio.shared.generated.resources.user_card_role_subscriber
 import io.ferventio.shared.generated.resources.user_card_role_viewer
 import io.ferventio.shared.generated.resources.user_card_role_vip
 import io.ferventio.shared.generated.resources.user_card_selected_message
-import io.ferventio.shared.generated.resources.user_card_title
 import io.ferventio.shared.runtime.LocalFerventioRuntimeState
 import io.ferventio.shared.ui.chat.SharedBadgeIcon
 import org.jetbrains.compose.resources.stringResource
@@ -64,15 +62,16 @@ internal fun SharedUserCardSheet(
     data: UserCardData,
     onDismiss: () -> Unit,
 ) {
+    val effectiveData = rememberRemoteUserCardData(data)
     val runtime = LocalFerventioRuntimeState.current
     val uriHandler = LocalUriHandler.current
-    val profileBadges = data.recentMessages
+    val profileBadges = effectiveData.recentMessages
         .asReversed()
         .firstOrNull { it.badges.isNotEmpty() }
         ?.badges
         .orEmpty()
-    val sourceMessage = data.sourceMessageId?.let { id ->
-        data.recentMessages.firstOrNull { it.id == id }
+    val sourceMessage = effectiveData.sourceMessageId?.let { id ->
+        effectiveData.recentMessages.firstOrNull { it.id == id }
     }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
@@ -91,36 +90,36 @@ internal fun SharedUserCardSheet(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     UserCardAvatar(
-                        imageUrl = data.user.profileImageUrl,
-                        displayName = data.user.displayName.ifBlank { data.user.login },
+                        imageUrl = effectiveData.user.profileImageUrl,
+                        displayName = effectiveData.user.displayName.ifBlank { effectiveData.user.login },
                     )
                     Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
-                            text = data.user.displayName.ifBlank { data.user.login },
+                            text = effectiveData.user.displayName.ifBlank { effectiveData.user.login },
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                         )
-                        if (data.user.login.isNotBlank()) {
+                        if (effectiveData.user.login.isNotBlank()) {
                             Text(
-                                text = "@${data.user.login}",
+                                text = "@${effectiveData.user.login}",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
                         }
-                        if (data.user.id.isNotBlank()) {
+                        if (effectiveData.user.id.isNotBlank()) {
                             Text(
-                                text = stringResource(Res.string.user_card_id, data.user.id),
+                                text = stringResource(Res.string.user_card_id, effectiveData.user.id),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                         Text(
-                            text = userRoleLabel(data.role),
+                            text = userRoleLabel(effectiveData.role),
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary,
                         )
@@ -143,7 +142,7 @@ internal fun SharedUserCardSheet(
                             ) { badge ->
                                 SharedBadgeIcon(
                                     badge = badge,
-                                    asset = runtime.chat.badgeAsset(data.channelId, badge),
+                                    asset = runtime.chat.badgeAsset(effectiveData.channelId, badge),
                                     modifier = Modifier.size(24.dp),
                                 )
                             }
@@ -152,7 +151,13 @@ internal fun SharedUserCardSheet(
                 }
             }
 
-            if (data.canModerate) {
+            if (hasUserCardRemoteDetails(effectiveData)) {
+                item(key = "remote-details") {
+                    UserCardRemoteDetails(effectiveData)
+                }
+            }
+
+            if (effectiveData.canModerate) {
                 item(key = "moderator-context") {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
@@ -186,7 +191,7 @@ internal fun SharedUserCardSheet(
                 Text(
                     text = stringResource(
                         Res.string.user_card_recent_messages,
-                        data.recentMessages.size,
+                        effectiveData.recentMessages.size,
                     ),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
@@ -194,8 +199,8 @@ internal fun SharedUserCardSheet(
             }
 
             items(
-                items = data.recentMessages
-                    .filterNot { it.id == data.sourceMessageId }
+                items = effectiveData.recentMessages
+                    .filterNot { it.id == effectiveData.sourceMessageId }
                     .takeLast(USER_CARD_VISIBLE_MESSAGE_LIMIT)
                     .asReversed(),
                 key = { message -> "recent:${message.id}" },
@@ -212,11 +217,11 @@ internal fun SharedUserCardSheet(
                     TextButton(onClick = onDismiss) {
                         Text(stringResource(Res.string.user_card_close))
                     }
-                    if (data.user.login.isNotBlank()) {
+                    if (effectiveData.user.login.isNotBlank()) {
                         OutlinedButton(
                             onClick = {
                                 runCatching {
-                                    uriHandler.openUri("https://www.twitch.tv/${data.user.login}")
+                                    uriHandler.openUri("https://www.twitch.tv/${effectiveData.user.login}")
                                 }
                             },
                         ) {
