@@ -44,6 +44,7 @@ internal fun projectChatMessage(
     message: ChatMessage,
     deletedPlaceholder: String,
     thirdPartyEmotes: Map<String, ThirdPartyEmoteAsset> = emptyMap(),
+    animatedMediaSupported: Boolean = false,
 ): ChatMessagePresentation {
     val badges = message.badges.distinctBy { badge -> "${badge.setId}/${badge.id}" }
     val replyAuthor = message.reply?.let { reply ->
@@ -80,7 +81,7 @@ internal fun projectChatMessage(
                 .takeIf(List<ChatFragment>::isNotEmpty)
                 ?: listOf(ChatFragment.Text(message.text))
             enrichThirdPartyEmotes(sourceFragments, thirdPartyEmotes)
-                .flatMap(::projectFragment)
+                .flatMap { fragment -> projectFragment(fragment, animatedMediaSupported) }
                 .takeIf(List<ChatMessageSegment>::isNotEmpty)
                 ?: projectPlainText(message.text)
         },
@@ -88,7 +89,10 @@ internal fun projectChatMessage(
     )
 }
 
-private fun projectFragment(fragment: ChatFragment): List<ChatMessageSegment> = when (fragment) {
+private fun projectFragment(
+    fragment: ChatFragment,
+    animatedMediaSupported: Boolean,
+): List<ChatMessageSegment> = when (fragment) {
     is ChatFragment.Text -> projectPlainText(fragment.text)
     is ChatFragment.Link -> listOf(
         ChatMessageSegment(
@@ -103,7 +107,7 @@ private fun projectFragment(fragment: ChatFragment): List<ChatMessageSegment> = 
             kind = ChatMessageSegmentKind.TWITCH_EMOTE,
             imageUrl = ChatAssetResolver.twitchEmoteUrl(
                 fragment = fragment,
-                animate = false,
+                animate = animatedMediaSupported,
             ),
         ),
     )
