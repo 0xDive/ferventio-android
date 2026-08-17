@@ -79,6 +79,7 @@ class ChatMessagePresentationTest {
                 ),
             ),
             deletedPlaceholder = "[deleted]",
+            animatedMediaSupported = false,
         )
 
         assertEquals(ChatMessageSegmentKind.TWITCH_EMOTE, presentation.segments[0].kind)
@@ -92,6 +93,47 @@ class ChatMessagePresentationTest {
         assertEquals(ChatMessageSegmentKind.CHEERMOTE, presentation.segments[6].kind)
         assertEquals(ChatMessageSegmentKind.LINK, presentation.segments[8].kind)
         assertEquals("https://www.example.com/docs", presentation.segments[8].url)
+    }
+
+    @Test
+    fun usesAnimatedTwitchAssetOnlyWhenEnabledAndAvailable() {
+        val animated = projectChatMessage(
+            message = message(
+                text = "Kappa",
+                fragments = listOf(
+                    ChatFragment.TwitchEmote(
+                        text = "Kappa",
+                        emoteId = "25",
+                        formats = setOf("static", "animated"),
+                    ),
+                ),
+            ),
+            deletedPlaceholder = "[deleted]",
+            animatedMediaSupported = true,
+        )
+        val staticOnly = projectChatMessage(
+            message = message(
+                text = "Kappa",
+                fragments = listOf(
+                    ChatFragment.TwitchEmote(
+                        text = "Kappa",
+                        emoteId = "25",
+                        formats = setOf("static"),
+                    ),
+                ),
+            ),
+            deletedPlaceholder = "[deleted]",
+            animatedMediaSupported = true,
+        )
+
+        assertEquals(
+            "https://static-cdn.jtvnw.net/emoticons/v2/25/animated/dark/2.0",
+            animated.segments.single().imageUrl,
+        )
+        assertEquals(
+            "https://static-cdn.jtvnw.net/emoticons/v2/25/static/dark/2.0",
+            staticOnly.segments.single().imageUrl,
+        )
     }
 
     @Test
