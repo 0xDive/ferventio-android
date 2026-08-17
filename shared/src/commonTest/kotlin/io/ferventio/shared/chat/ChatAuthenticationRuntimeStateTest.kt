@@ -24,6 +24,33 @@ class ChatAuthenticationRuntimeStateTest {
     }
 
     @Test
+    fun staleConnectionUpdatesCannotOverwriteAuthenticationFailure() {
+        val state = ChatRuntimeStateHolder()
+        state.markAuthenticationRequired("Unauthorized")
+
+        state.updateConnection(
+            status = ConnectionStatus.CONNECTED,
+            attempt = 0,
+        )
+        state.updateConnection(
+            status = ConnectionStatus.RECONNECTING,
+            attempt = 2,
+            errorMessage = "stale socket",
+        )
+
+        assertTrue(state.authenticationRequired)
+        assertEquals(ConnectionStatus.FAILED, state.connectionStatus)
+        assertEquals(0, state.connectionAttempt)
+        assertEquals("Unauthorized", state.connectionErrorMessage)
+
+        state.clearAuthenticationRequired()
+        state.updateConnection(ConnectionStatus.CONNECTING)
+
+        assertFalse(state.authenticationRequired)
+        assertEquals(ConnectionStatus.CONNECTING, state.connectionStatus)
+    }
+
+    @Test
     fun clearingRuntimeAlsoClearsAuthenticationFailure() {
         val state = ChatRuntimeStateHolder()
         state.markAuthenticationRequired("Forbidden")
