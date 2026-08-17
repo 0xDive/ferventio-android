@@ -23,4 +23,26 @@
     <string name="chat_status_creating_subscriptions">Subscribing to chat…</string>
     <string name="chat_status_reconnecting">Reconnecting to chat…</string>
     <string name="chat_status_failed">Chat connection failed</string>
+    <string name="nuke_preview_action">Nuke preview</string>
+    <string name="nuke_preview_title">Nuke preview</string>
+    <string name="nuke_preview_read_only">Read-only preview. No moderation action is executed from this screen.</string>
+    <string name="nuke_query_label">Message text or pattern</string>
+    <string name="nuke_plain_text">Plain text</string>
+    <string name="nuke_regex">Regex</string>
+    <string name="nuke_case_sensitive">Case sensitive</string>
+    <string name="nuke_time_window">Time window</string>
+    <string name="nuke_seconds">%1$d s</string>
+    <string name="nuke_exclude_broadcaster">Exclude broadcaster</string>
+    <string name="nuke_exclude_moderators">Exclude moderators</string>
+    <string name="nuke_exclude_vips">Exclude VIPs</string>
+    <string name="nuke_matched_messages">Matched messages</string>
+    <string name="nuke_matched_users">Matched users</string>
+    <string name="nuke_scanned_messages">Scanned messages</string>
+    <string name="nuke_excluded_matches">Excluded matches</string>
+    <string name="nuke_samples">Example messages</string>
+    <string name="nuke_all_target_users">Target users</string>
+    <string name="nuke_no_matches">No matching targets in this window.</string>
+    <string name="nuke_error_empty_query">Enter text or a pattern to preview targets.</string>
+    <string name="nuke_error_invalid_query">The pattern is invalid.</string>
+    <string name="nuke_close">Close</string>
 </resources>
