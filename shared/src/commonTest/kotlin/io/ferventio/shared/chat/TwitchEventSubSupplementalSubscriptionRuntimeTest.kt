@@ -12,6 +12,8 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class TwitchEventSubSupplementalSubscriptionRuntimeTest {
@@ -20,7 +22,11 @@ class TwitchEventSubSupplementalSubscriptionRuntimeTest {
         val state = ChatRuntimeStateHolder()
         state.updateConnection(ConnectionStatus.CONNECTED)
         var calls = 0
-        val runtime = runtime(state) { _, _, _ ->
+        var fatalError: Throwable? = null
+        val runtime = runtime(
+            state = state,
+            onFatalSessionError = { fatalError = it },
+        ) { _, _, _ ->
             calls += 1
             if (calls == 3) {
                 throw TwitchEventSubSubscriptionException(
@@ -37,6 +43,7 @@ class TwitchEventSubSupplementalSubscriptionRuntimeTest {
         assertTrue(state.authenticationRequired)
         assertEquals(ConnectionStatus.FAILED, state.connectionStatus)
         assertTrue(state.connectionErrorMessage.orEmpty().contains("OAuth token is invalid"))
+        assertIs<TwitchEventSubSubscriptionException>(fatalError)
     }
 
     @Test
@@ -44,7 +51,11 @@ class TwitchEventSubSupplementalSubscriptionRuntimeTest {
         val state = ChatRuntimeStateHolder()
         state.updateConnection(ConnectionStatus.CONNECTED)
         var calls = 0
-        val runtime = runtime(state) { _, _, _ ->
+        var fatalError: Throwable? = null
+        val runtime = runtime(
+            state = state,
+            onFatalSessionError = { fatalError = it },
+        ) { _, _, _ ->
             calls += 1
             if (calls == 3) {
                 throw TwitchEventSubSubscriptionException(
@@ -64,10 +75,12 @@ class TwitchEventSubSupplementalSubscriptionRuntimeTest {
             state.connectionErrorMessage.orEmpty().contains("channel.chat.message_delete"),
         )
         assertTrue(state.connectionErrorMessage.orEmpty().contains("temporary Twitch failure"))
+        assertNull(fatalError)
     }
 
     private fun runtime(
         state: ChatRuntimeStateHolder,
+        onFatalSessionError: (Throwable) -> Unit = {},
         createSubscriptionAction: suspend (
             StoredAuthentication,
             String,
@@ -78,6 +91,7 @@ class TwitchEventSubSupplementalSubscriptionRuntimeTest {
         workspace = WorkspaceRuntimeSnapshot(channels = listOf(channel())),
         state = state,
         bootstrapCoordinator = TwitchEventSubBootstrapCoordinator(createSubscriptionAction),
+        onFatalSessionError = onFatalSessionError,
     )
 
     private fun channel() = ChatChannel(
