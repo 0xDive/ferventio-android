@@ -26,11 +26,12 @@ internal class TwitchChatSessionRuntime(
             moderatedChannelIds = workspace.moderatorChannelIds,
         )
         supplementalSubscriptionsJob = CoroutineScope(currentCoroutineContext()).launch {
-            bootstrapCoordinator.createRemaining(
+            val failures = bootstrapCoordinator.createRemaining(
                 authentication = authentication,
                 sessionId = sessionId,
                 bootstrap = bootstrap,
             )
+            reportSupplementalSubscriptionFailures(failures)
         }
         return bootstrap.subscriptionCount
     }
@@ -99,5 +100,27 @@ internal class TwitchChatSessionRuntime(
     fun close() {
         supplementalSubscriptionsJob?.cancel()
         supplementalSubscriptionsJob = null
+    }
+
+    private fun reportSupplementalSubscriptionFailures(
+        failures: List<TwitchEventSubBootstrapFailure>,
+    ) {
+        if (failures.isEmpty()) return
+        val authenticationFailure = failures
+            .asSequence()
+            .mapNotNull(TwitchEventSubBootstrapFailure::cause)
+            .firstOrNull(Throwable::isTwitchAuthenticationFailure)
+        if (authenticationFailure != null) {
+            onSocketError(authenticationFailure)
+            return
+        }
+
+        val first = failures.first()
+        onSocketError(
+            IllegalStateException(
+                "EventSub ${first.type} subscription failed for ${first.channel.login}: ${first.message}",
+                first.cause,
+            ),
+        )
     }
 }
