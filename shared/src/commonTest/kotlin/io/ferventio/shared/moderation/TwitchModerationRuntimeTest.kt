@@ -3,6 +3,7 @@ package io.ferventio.shared.moderation
 import io.ferventio.app.domain.BackendSessionCredential
 import io.ferventio.app.domain.ChatAuthor
 import io.ferventio.app.domain.ChatMessage
+import io.ferventio.app.domain.ConnectionStatus
 import io.ferventio.app.domain.ModerationAction
 import io.ferventio.app.domain.StoredAuthentication
 import io.ferventio.app.domain.TwitchAccessLease
@@ -110,7 +111,7 @@ class TwitchModerationRuntimeTest {
     }
 
     @Test
-    fun failedMutationDoesNotChangeSharedState() = runTest {
+    fun rateLimitedMutationDoesNotChangeSharedOrAuthenticationState() = runTest {
         val state = ChatRuntimeStateHolder().apply {
             append(message("message-1", "user-a"))
             append(message("message-2", "user-a"))
@@ -135,6 +136,35 @@ class TwitchModerationRuntimeTest {
 
         assertTrue(state.messages(CHANNEL_ID).all { message -> !message.isDeleted })
         assertTrue(state.messages(CHANNEL_ID).all { message -> message.moderation.action == null })
+        assertFalse(state.authenticationRequired)
+    }
+
+    @Test
+    fun authenticationRejectionPreservesMessagesAndRequestsReauthentication() = runTest {
+        val state = ChatRuntimeStateHolder().apply {
+            append(message("message-1", "user-a"))
+        }
+        val gateway = FakeModerationGateway(
+            failure = TwitchModerationMutationException(
+                operation = "ban",
+                statusCode = 401,
+                twitchMessage = "OAuth token is invalid",
+            ),
+        )
+        val runtime = TwitchModerationRuntime(state, gateway)
+
+        assertFailsWith<TwitchModerationMutationException> {
+            runtime.banUser(
+                authentication = authentication(),
+                broadcasterId = CHANNEL_ID,
+                targetUserId = "user-a",
+            )
+        }
+
+        assertFalse(state.messages(CHANNEL_ID).single().isDeleted)
+        assertTrue(state.authenticationRequired)
+        assertEquals(ConnectionStatus.FAILED, state.connectionStatus)
+        assertTrue(state.connectionErrorMessage.orEmpty().contains("HTTP 401"))
     }
 
     @Test
