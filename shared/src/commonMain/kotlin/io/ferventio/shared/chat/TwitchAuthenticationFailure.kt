@@ -19,12 +19,10 @@ internal fun Throwable.isTwitchAuthenticationFailure(): Boolean {
         if (current is TwitchEventSubAuthorizationRevokedException) {
             return true
         }
-        if (current is TwitchEventSubSubscriptionException && current.statusCode in AUTH_FAILURE_CODES) {
+        if (current is TwitchEventSubSubscriptionException && current.statusCode == 401) {
             return true
         }
         current = current.cause
     }
     return false
 }
-
-private val AUTH_FAILURE_CODES = setOf(401, 403)
