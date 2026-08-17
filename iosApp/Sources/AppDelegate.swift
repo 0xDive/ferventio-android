@@ -15,6 +15,11 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     private lazy var lifecycleObserver = AppLifecycleObserver(
         stateHolder: runtimeState.lifecycle
     )
+    private lazy var networkRecoveryObserver = NetworkRecoveryObserver(
+        onReachable: { [weak self] in
+            await self?.recoverAfterNetworkAvailable()
+        }
+    )
     private lazy var pushRuntimeBridge = PushNotificationRuntimeBridge(
         stateHolder: runtimeState.pushRegistration
     )
@@ -102,6 +107,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         )
         window.makeKeyAndVisible()
         self.window = window
+        networkRecoveryObserver.start()
         return true
     }
 
@@ -187,6 +193,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
 
     func applicationWillTerminate(_ application: UIApplication) {
         authenticatedChatRuntimeBridge?.stop()
+        networkRecoveryObserver.stop()
         lifecycleObserver.stop()
     }
 
@@ -237,6 +244,25 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
             } else {
                 await restoreWorkspaceAndSynchronizePush()
             }
+        }
+    }
+
+    private func recoverAfterNetworkAvailable() async {
+        guard UIApplication.shared.applicationState == .active else {
+            return
+        }
+        guard runtimeState.authentication.state.authentication != nil else {
+            return
+        }
+        if runtimeState.chat.authenticationRequired {
+            await recoverAuthenticationAfterChatRejection()
+            return
+        }
+        if runtimeState.workspace.isReadyForPushRegistration {
+            await synchronizePushBackendRegistration()
+            synchronizeAuthenticatedChatRuntime()
+        } else {
+            await restoreWorkspaceAndSynchronizePush()
         }
     }
 
