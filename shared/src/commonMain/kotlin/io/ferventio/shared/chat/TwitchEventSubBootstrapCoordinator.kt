@@ -9,6 +9,7 @@ internal data class TwitchEventSubBootstrapFailure(
     val channel: ChatChannel,
     val type: String,
     val message: String,
+    val cause: Throwable? = null,
 )
 
 internal data class TwitchEventSubBootstrapResult(
@@ -160,5 +161,6 @@ internal class TwitchEventSubBootstrapCoordinator(
         channel = channel,
         type = type,
         message = message?.takeIf(String::isNotBlank) ?: "EventSub subscription failed",
+        cause = this,
     )
 }
