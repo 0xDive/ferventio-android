@@ -29,6 +29,7 @@ internal data class ChatMessageSegment(
 
 internal data class ChatReplyPresentation(
     val authorLabel: String,
+    val bodyPreview: String? = null,
 )
 
 internal data class ChatMessagePresentation(
@@ -53,12 +54,20 @@ internal fun projectChatMessage(
                 ?.trim()
                 ?.takeIf(String::isNotEmpty)
     }
+    val replyBodyPreview = message.reply
+        ?.parentMessageBody
+        ?.normalizeReplyPreview()
     return ChatMessagePresentation(
         badges = badges,
         badgeLabels = badges.map { badge ->
             badge.setId.trim().takeIf(String::isNotEmpty) ?: badge.id.trim()
         }.filter(String::isNotEmpty),
-        reply = replyAuthor?.let(::ChatReplyPresentation),
+        reply = replyAuthor?.let { authorLabel ->
+            ChatReplyPresentation(
+                authorLabel = authorLabel,
+                bodyPreview = replyBodyPreview,
+            )
+        },
         segments = if (message.isDeleted) {
             listOf(
                 ChatMessageSegment(
@@ -110,6 +119,7 @@ private fun projectFragment(fragment: ChatFragment): List<ChatMessageSegment> = 
         ChatMessageSegment(
             text = fragment.text,
             kind = ChatMessageSegmentKind.GIF,
+            imageUrl = ChatAssetResolver.absoluteImageUrl(fragment.url),
         ),
     )
     is ChatFragment.Mention -> listOf(
@@ -168,3 +178,8 @@ private fun projectPlainText(value: String): List<ChatMessageSegment> {
         }
     }
 }
+
+private fun String.normalizeReplyPreview(): String? =
+    trim()
+        .replace(Regex("\\s+"), " ")
+        .takeIf(String::isNotEmpty)
