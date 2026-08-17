@@ -46,6 +46,7 @@ kotlin {
             implementation(libs.ktor.client.websockets)
         }
         androidMain.dependencies {
+            implementation(libs.coil.gif)
             implementation(libs.ktor.client.okhttp)
         }
         iosMain.dependencies {
