@@ -31,5 +31,6 @@
 <string name="interactive_confirm_end_poll">End the active poll now?</string>
 <string name="interactive_confirm_lock_prediction">Lock the active prediction now?</string>
 <string name="interactive_confirm_cancel_prediction">Cancel the active prediction?</string>
+<string name="interactive_confirm_resolve_prediction">Resolve the prediction with “%1$s” as the winner?</string>
 <string name="interactive_confirm_action">Confirm</string>
 </resources>
