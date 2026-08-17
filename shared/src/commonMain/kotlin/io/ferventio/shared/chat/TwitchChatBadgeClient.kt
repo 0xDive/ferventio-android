@@ -84,14 +84,14 @@ class TwitchChatBadgeClient(
             throw IllegalStateException("Twitch returned malformed chat-badges JSON", it)
         }
         return buildMap {
-            data.forEach { setElement ->
-                val set = setElement.runCatching { jsonObject }.getOrNull() ?: return@forEach
-                val setId = set.string("set_id") ?: return@forEach
-                val versions = set["versions"]?.runCatching { jsonArray }.getOrNull() ?: return@forEach
-                versions.forEach { versionElement ->
-                    val version = versionElement.runCatching { jsonObject }.getOrNull() ?: return@forEach
-                    val id = version.string("id") ?: return@forEach
-                    val imageUrl1x = version.string("image_url_1x") ?: return@forEach
+            for (setElement in data) {
+                val set = setElement.runCatching { jsonObject }.getOrNull() ?: continue
+                val setId = set.string("set_id") ?: continue
+                val versions = set["versions"]?.runCatching { jsonArray }.getOrNull() ?: continue
+                for (versionElement in versions) {
+                    val version = versionElement.runCatching { jsonObject }.getOrNull() ?: continue
+                    val id = version.string("id") ?: continue
+                    val imageUrl1x = version.string("image_url_1x") ?: continue
                     val imageUrl2x = version.string("image_url_2x") ?: imageUrl1x
                     val imageUrl4x = version.string("image_url_4x") ?: imageUrl2x
                     val asset = ChatBadgeAsset(
