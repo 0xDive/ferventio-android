@@ -84,8 +84,9 @@ internal fun InteractiveMutationControls(
     val authentication = runtime.authentication.state.authentication
     val session = authentication?.accessLease?.session
     val ownsChannel = session?.userId == channelId
-    val canManagePolls = ownsChannel && POLL_SCOPE in session.scopes
-    val canManagePredictions = ownsChannel && PREDICTION_SCOPE in session.scopes
+    val canManagePolls = ownsChannel && session?.scopes?.contains(POLL_SCOPE) == true
+    val canManagePredictions = ownsChannel &&
+        session?.scopes?.contains(PREDICTION_SCOPE) == true
     if (!canManagePolls && !canManagePredictions) return
 
     val mutation = runtime.chat.interactiveState.mutationsByChannel[channelId]
@@ -129,7 +130,8 @@ internal fun InteractiveMutationControls(
                     Text(stringResource(Res.string.interactive_create_poll))
                 }
             }
-            if (canManagePredictions && prediction?.isOpen != true) {
+            val predictionOpen = prediction?.isActive == true || prediction?.isLocked == true
+            if (canManagePredictions && !predictionOpen) {
                 OutlinedButton(
                     onClick = { showPredictionDialog = true },
                     enabled = !mutationInFlight,
@@ -232,10 +234,11 @@ internal fun InteractiveMutationControls(
             busy = mutationInFlight,
             onDismiss = { if (!mutationInFlight) showPollDialog = false },
             onCreate = { draft ->
-                val auth = authentication ?: return@CreatePollDialog
-                launchMutation {
-                    runtime.interactive.createPoll(auth, channelId, draft)
-                    showPollDialog = false
+                authentication?.let { auth ->
+                    launchMutation {
+                        runtime.interactive.createPoll(auth, channelId, draft)
+                        showPollDialog = false
+                    }
                 }
             },
         )
@@ -246,10 +249,11 @@ internal fun InteractiveMutationControls(
             busy = mutationInFlight,
             onDismiss = { if (!mutationInFlight) showPredictionDialog = false },
             onCreate = { draft ->
-                val auth = authentication ?: return@CreatePredictionDialog
-                launchMutation {
-                    runtime.interactive.createPrediction(auth, channelId, draft)
-                    showPredictionDialog = false
+                authentication?.let { auth ->
+                    launchMutation {
+                        runtime.interactive.createPrediction(auth, channelId, draft)
+                        showPredictionDialog = false
+                    }
                 }
             },
         )
