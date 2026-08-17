@@ -4,6 +4,20 @@ import io.ferventio.app.domain.ConnectionStatus
 import io.ferventio.app.domain.StoredAuthentication
 import io.ferventio.shared.workspace.WorkspaceRuntimeSnapshot
 import kotlin.Throws
+import kotlinx.coroutines.sync.Mutex
+
+internal class ChatSessionRunGate {
+    private val mutex = Mutex()
+
+    suspend fun <T> run(block: suspend () -> T): T {
+        mutex.lock()
+        try {
+            return block()
+        } finally {
+            mutex.unlock()
+        }
+    }
+}
 
 /**
  * Public KMP entry point for authenticated Twitch chat transport.
@@ -16,6 +30,7 @@ class AuthenticatedChatRuntimeCoordinator(
 ) {
     constructor() : this(ChatRuntimeStateHolder())
 
+    private val runGate = ChatSessionRunGate()
     private var runningClient: TwitchEventSubSocketClient? = null
     private var sessionRuntime: TwitchChatSessionRuntime? = null
 
@@ -24,37 +39,38 @@ class AuthenticatedChatRuntimeCoordinator(
         authentication: StoredAuthentication,
         workspace: WorkspaceRuntimeSnapshot,
     ) {
-        check(runningClient == null) { "Authenticated chat runtime is already running" }
-        require(workspace.channels.isNotEmpty()) {
-            "Authenticated chat runtime requires at least one workspace channel"
-        }
-
-        val runtime = TwitchChatSessionRuntime(
-            authentication = authentication,
-            workspace = workspace,
-            state = state,
-        )
-        val client = TwitchEventSubSocketClient(
-            onStatusChanged = runtime::onConnectionUpdate,
-            onSessionReady = runtime::onSessionReady,
-            onEnvelope = { envelope -> runtime.onEnvelope(envelope) },
-            onMalformedEnvelope = { _ -> Unit },
-            onError = runtime::onSocketError,
-        )
-        sessionRuntime = runtime
-        runningClient = client
-
-        try {
-            client.run()
-        } finally {
-            runtime.close()
-            client.close()
-            if (runningClient === client) {
-                runningClient = null
-                sessionRuntime = null
+        runGate.run {
+            require(workspace.channels.isNotEmpty()) {
+                "Authenticated chat runtime requires at least one workspace channel"
             }
-            if (state.connectionStatus != ConnectionStatus.FAILED) {
-                state.updateConnection(ConnectionStatus.DISCONNECTED)
+
+            val runtime = TwitchChatSessionRuntime(
+                authentication = authentication,
+                workspace = workspace,
+                state = state,
+            )
+            val client = TwitchEventSubSocketClient(
+                onStatusChanged = runtime::onConnectionUpdate,
+                onSessionReady = runtime::onSessionReady,
+                onEnvelope = { envelope -> runtime.onEnvelope(envelope) },
+                onMalformedEnvelope = { _ -> },
+                onError = runtime::onSocketError,
+            )
+            sessionRuntime = runtime
+            runningClient = client
+
+            try {
+                client.run()
+            } finally {
+                runtime.close()
+                client.close()
+                if (runningClient === client) {
+                    runningClient = null
+                    sessionRuntime = null
+                }
+                if (state.connectionStatus != ConnectionStatus.FAILED) {
+                    state.updateConnection(ConnectionStatus.DISCONNECTED)
+                }
             }
         }
     }
