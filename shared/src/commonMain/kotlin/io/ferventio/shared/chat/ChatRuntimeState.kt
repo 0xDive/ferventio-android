@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import io.ferventio.app.domain.ChatBadge
 import io.ferventio.app.domain.ChatBadgeAsset
 import io.ferventio.app.domain.ChatMessage
+import io.ferventio.app.domain.CheermoteAsset
 import io.ferventio.app.domain.ConnectionStatus
 import io.ferventio.app.domain.InteractiveChatOverlayEvent
 import io.ferventio.app.domain.InteractiveChatOverlayReducer
@@ -19,6 +20,7 @@ data class ChatRuntimeSnapshot(
     val messagesByChannel: Map<String, List<ChatMessage>> = emptyMap(),
     val globalBadgeAssets: Map<String, ChatBadgeAsset> = emptyMap(),
     val badgeAssetsByChannel: Map<String, Map<String, ChatBadgeAsset>> = emptyMap(),
+    val cheermoteAssetsByChannel: Map<String, Map<String, List<CheermoteAsset>>> = emptyMap(),
     val interactiveState: InteractiveChatOverlayState = InteractiveChatOverlayState(),
     val connectionStatus: ConnectionStatus = ConnectionStatus.DISCONNECTED,
     val connectionDetail: String? = null,
@@ -36,6 +38,10 @@ class ChatRuntimeStateHolder(
     var globalBadgeAssets by mutableStateOf(emptyMap<String, ChatBadgeAsset>())
         private set
     var badgeAssetsByChannel by mutableStateOf(emptyMap<String, Map<String, ChatBadgeAsset>>())
+        private set
+    var cheermoteAssetsByChannel by mutableStateOf(
+        emptyMap<String, Map<String, List<CheermoteAsset>>>(),
+    )
         private set
     var interactiveState by mutableStateOf(InteractiveChatOverlayState())
         private set
@@ -55,6 +61,7 @@ class ChatRuntimeStateHolder(
             messagesByChannel = messagesByChannel,
             globalBadgeAssets = globalBadgeAssets,
             badgeAssetsByChannel = badgeAssetsByChannel,
+            cheermoteAssetsByChannel = cheermoteAssetsByChannel,
             interactiveState = interactiveState,
             connectionStatus = connectionStatus,
             connectionDetail = connectionDetail,
@@ -69,6 +76,9 @@ class ChatRuntimeStateHolder(
         initialSnapshot.badgeAssetsByChannel.forEach { (channelId, assets) ->
             replaceChannelBadgeAssets(channelId, assets)
         }
+        initialSnapshot.cheermoteAssetsByChannel.forEach { (channelId, assets) ->
+            replaceChannelCheermoteAssets(channelId, assets)
+        }
         interactiveState = initialSnapshot.interactiveState
         updateConnection(
             status = initialSnapshot.connectionStatus,
@@ -80,6 +90,9 @@ class ChatRuntimeStateHolder(
     }
 
     fun messages(channelId: String): List<ChatMessage> = messagesByChannel[channelId.trim()].orEmpty()
+
+    fun cheermoteAssets(channelId: String): Map<String, List<CheermoteAsset>> =
+        cheermoteAssetsByChannel[channelId.trim()].orEmpty()
 
     fun badgeAsset(channelId: String, badge: ChatBadge): ChatBadgeAsset? {
         val key = chatBadgeAssetKey(badge.setId, badge.id)
@@ -97,6 +110,19 @@ class ChatRuntimeStateHolder(
             badgeAssetsByChannel - normalizedChannelId
         } else {
             badgeAssetsByChannel + (normalizedChannelId to normalizedAssets)
+        }
+    }
+
+    fun replaceChannelCheermoteAssets(
+        channelId: String,
+        value: Map<String, List<CheermoteAsset>>,
+    ) {
+        val normalizedChannelId = requireChannelId(channelId)
+        val normalizedAssets = normalizeCheermoteAssets(value)
+        cheermoteAssetsByChannel = if (normalizedAssets.isEmpty()) {
+            cheermoteAssetsByChannel - normalizedChannelId
+        } else {
+            cheermoteAssetsByChannel + (normalizedChannelId to normalizedAssets)
         }
     }
 
@@ -202,6 +228,7 @@ class ChatRuntimeStateHolder(
         if (normalized.isEmpty()) return
         messagesByChannel = messagesByChannel - normalized
         badgeAssetsByChannel = badgeAssetsByChannel - normalized
+        cheermoteAssetsByChannel = cheermoteAssetsByChannel - normalized
         applyInteractive(InteractiveChatOverlayEvent.ClearChannel(normalized))
     }
 
@@ -209,6 +236,7 @@ class ChatRuntimeStateHolder(
         val allowed = channelIds.map { it.trim() }.filter { it.isNotEmpty() }.toSet()
         messagesByChannel = messagesByChannel.filterKeys(allowed::contains)
         badgeAssetsByChannel = badgeAssetsByChannel.filterKeys(allowed::contains)
+        cheermoteAssetsByChannel = cheermoteAssetsByChannel.filterKeys(allowed::contains)
         val interactiveChannels = interactiveState.pollsByChannel.keys +
             interactiveState.predictionsByChannel.keys + interactiveState.mutationsByChannel.keys
         interactiveChannels.filterNot(allowed::contains).forEach { channelId ->
@@ -247,6 +275,7 @@ class ChatRuntimeStateHolder(
         messagesByChannel = emptyMap()
         globalBadgeAssets = emptyMap()
         badgeAssetsByChannel = emptyMap()
+        cheermoteAssetsByChannel = emptyMap()
         interactiveState = InteractiveChatOverlayState()
         authenticationRequired = false
         updateConnection(ConnectionStatus.DISCONNECTED)
@@ -294,6 +323,23 @@ class ChatRuntimeStateHolder(
         value.values
             .filter { asset -> asset.setId.isNotBlank() && asset.id.isNotBlank() }
             .associateBy(ChatBadgeAsset::key)
+
+    private fun normalizeCheermoteAssets(
+        value: Map<String, List<CheermoteAsset>>,
+    ): Map<String, List<CheermoteAsset>> = value.values
+        .flatten()
+        .asSequence()
+        .filter { asset ->
+            asset.prefix.isNotBlank() &&
+                asset.minBits >= 0 &&
+                (!asset.staticImageUrl.isNullOrBlank() || !asset.animatedImageUrl.isNullOrBlank())
+        }
+        .groupBy { asset -> asset.prefix.trim().lowercase() }
+        .mapValues { (_, assets) ->
+            assets
+                .distinctBy(CheermoteAsset::minBits)
+                .sortedBy(CheermoteAsset::minBits)
+        }
 
     private fun requireMessage(message: ChatMessage) {
         require(message.id.isNotBlank()) { "Chat message id must not be blank" }
