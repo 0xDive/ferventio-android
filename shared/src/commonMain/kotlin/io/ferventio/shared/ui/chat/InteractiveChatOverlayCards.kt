@@ -29,20 +29,34 @@ import io.ferventio.shared.generated.resources.interactive_vote_count_percent
 import io.ferventio.shared.runtime.LocalFerventioRuntimeState
 import org.jetbrains.compose.resources.stringResource
 
+private const val MANAGE_POLLS_SCOPE = "channel:manage:polls"
+private const val MANAGE_PREDICTIONS_SCOPE = "channel:manage:predictions"
+
 @Composable
 internal fun InteractiveChatOverlayCards(
     channelId: String,
     modifier: Modifier = Modifier,
 ) {
-    val interactive = LocalFerventioRuntimeState.current.chat.interactiveState
+    val runtime = LocalFerventioRuntimeState.current
+    val interactive = runtime.chat.interactiveState
     val poll = interactive.pollsByChannel[channelId]
     val prediction = interactive.predictionsByChannel[channelId]
-    if (poll == null && prediction == null) return
+    val session = runtime.authentication.state.authentication?.accessLease?.session
+    val ownsChannel = session?.userId == channelId
+    val canManageInteractive = ownsChannel &&
+        (session?.scopes?.contains(MANAGE_POLLS_SCOPE) == true ||
+            session?.scopes?.contains(MANAGE_PREDICTIONS_SCOPE) == true)
+    if (poll == null && prediction == null && !canManageInteractive) return
 
     Column(
         modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
+        InteractiveMutationControls(
+            channelId = channelId,
+            poll = poll,
+            prediction = prediction,
+        )
         poll?.let { PollCard(it) }
         prediction?.let { PredictionCard(it) }
     }
