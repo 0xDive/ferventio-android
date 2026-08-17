@@ -5,6 +5,8 @@ import io.ferventio.app.domain.ChatBadge
 import io.ferventio.app.domain.ChatFragment
 import io.ferventio.app.domain.ChatLinkParser
 import io.ferventio.app.domain.ChatMessage
+import io.ferventio.app.domain.ThirdPartyEmoteAsset
+import io.ferventio.shared.chat.enrichThirdPartyEmotes
 
 internal enum class ChatMessageSegmentKind {
     TEXT,
@@ -40,6 +42,7 @@ internal data class ChatMessagePresentation(
 internal fun projectChatMessage(
     message: ChatMessage,
     deletedPlaceholder: String,
+    thirdPartyEmotes: Map<String, ThirdPartyEmoteAsset> = emptyMap(),
 ): ChatMessagePresentation {
     val badges = message.badges.distinctBy { badge -> "${badge.setId}/${badge.id}" }
     val replyAuthor = message.reply?.let { reply ->
@@ -64,10 +67,12 @@ internal fun projectChatMessage(
                 ),
             )
         } else {
-            message.fragments
+            val sourceFragments = message.fragments
                 .takeIf(List<ChatFragment>::isNotEmpty)
-                ?.flatMap(::projectFragment)
-                ?.takeIf(List<ChatMessageSegment>::isNotEmpty)
+                ?: listOf(ChatFragment.Text(message.text))
+            enrichThirdPartyEmotes(sourceFragments, thirdPartyEmotes)
+                .flatMap(::projectFragment)
+                .takeIf(List<ChatMessageSegment>::isNotEmpty)
                 ?: projectPlainText(message.text)
         },
         isDeleted = message.isDeleted,

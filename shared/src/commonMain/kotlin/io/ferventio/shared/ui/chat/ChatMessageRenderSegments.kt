@@ -10,9 +10,21 @@ internal fun groupChatMessageSegments(
 ): List<ChatMessageRenderSegment> = buildList {
     segments.forEach { segment ->
         if (segment.canOverlayPrevious()) {
-            val previous = lastOrNull()
-            if (previous != null && previous.base.canHostOverlay()) {
-                this[lastIndex] = previous.copy(overlays = previous.overlays + segment)
+            val directHost = lastOrNull()
+            if (directHost != null && directHost.base.canHostOverlay()) {
+                this[lastIndex] = directHost.copy(overlays = directHost.overlays + segment)
+                return@forEach
+            }
+
+            val separator = lastOrNull()
+            val separatedHost = getOrNull(lastIndex - 1)
+            if (
+                separator?.base?.isOverlaySeparator() == true &&
+                separatedHost != null &&
+                separatedHost.base.canHostOverlay()
+            ) {
+                removeAt(lastIndex)
+                this[lastIndex] = separatedHost.copy(overlays = separatedHost.overlays + segment)
                 return@forEach
             }
         }
@@ -33,3 +45,6 @@ private fun ChatMessageSegment.canHostOverlay(): Boolean =
             ChatMessageSegmentKind.THIRD_PARTY_EMOTE -> true
             else -> false
         }
+
+private fun ChatMessageSegment.isOverlaySeparator(): Boolean =
+    kind == ChatMessageSegmentKind.TEXT && text.isNotEmpty() && text.all(Char::isWhitespace)

@@ -47,6 +47,7 @@ import io.ferventio.app.domain.ChatBadgeAsset
 import io.ferventio.app.domain.ChatChannel
 import io.ferventio.app.domain.ChatMessage
 import io.ferventio.app.domain.ConnectionStatus
+import io.ferventio.app.domain.ThirdPartyEmoteAsset
 import io.ferventio.shared.chat.ChatRuntimeStateHolder
 import io.ferventio.shared.generated.resources.Res
 import io.ferventio.shared.generated.resources.chat_message_deleted
@@ -75,6 +76,7 @@ fun FerventioChatTimeline(
 ) {
     val chat = LocalFerventioRuntimeState.current.chat
     val messages = chat.messages(channel.id)
+    val thirdPartyEmotes = rememberThirdPartyEmoteCatalog(channel.id)
     val listState = rememberLazyListState()
     var followTail by remember { mutableStateOf(true) }
 
@@ -116,6 +118,7 @@ fun FerventioChatTimeline(
                 ) { message ->
                     ChatMessageRow(
                         message = message,
+                        thirdPartyEmotes = thirdPartyEmotes,
                         onAuthorClick = onAuthorClick,
                     )
                 }
@@ -167,11 +170,16 @@ private fun ChatConnectionBanner(chat: ChatRuntimeStateHolder) {
 @Composable
 private fun ChatMessageRow(
     message: ChatMessage,
+    thirdPartyEmotes: Map<String, ThirdPartyEmoteAsset>,
     onAuthorClick: ((ChatMessage) -> Unit)?,
 ) {
     val chat = LocalFerventioRuntimeState.current.chat
     val deletedPlaceholder = stringResource(Res.string.chat_message_deleted)
-    val presentation = projectChatMessage(message, deletedPlaceholder)
+    val presentation = projectChatMessage(
+        message = message,
+        deletedPlaceholder = deletedPlaceholder,
+        thirdPartyEmotes = thirdPartyEmotes,
+    )
     val renderSegments = groupChatMessageSegments(presentation.segments)
     val uriHandler = LocalUriHandler.current
     val linkColor = MaterialTheme.colorScheme.primary
@@ -194,9 +202,7 @@ private fun ChatMessageRow(
             }
 
         val text = buildAnnotatedString {
-            if (message.isAction) {
-                append("* ")
-            }
+            if (message.isAction) append("* ")
             presentation.badges.forEachIndexed { index, _ ->
                 appendInlineContent(inlineBadgeId(index), "◆")
                 append(" ")
@@ -218,11 +224,8 @@ private fun ChatMessageRow(
 
             withStyle(
                 SpanStyle(
-                    fontStyle = if (message.isAction || presentation.isDeleted) {
-                        FontStyle.Italic
-                    } else {
-                        FontStyle.Normal
-                    },
+                    fontStyle = if (message.isAction || presentation.isDeleted) FontStyle.Italic
+                    else FontStyle.Normal,
                 ),
             ) {
                 renderSegments.forEachIndexed { index, renderSegment ->
@@ -235,7 +238,6 @@ private fun ChatMessageRow(
                     append(segment.text)
                     val end = length
                     if (end <= start) return@forEachIndexed
-
                     when (segment.kind) {
                         ChatMessageSegmentKind.LINK -> {
                             addStyle(
@@ -247,19 +249,11 @@ private fun ChatMessageRow(
                                 end,
                             )
                             segment.url?.let { url ->
-                                addStringAnnotation(
-                                    tag = URL_ANNOTATION_TAG,
-                                    annotation = url,
-                                    start = start,
-                                    end = end,
-                                )
+                                addStringAnnotation(URL_ANNOTATION_TAG, url, start, end)
                             }
                         }
                         ChatMessageSegmentKind.MENTION -> addStyle(
-                            SpanStyle(
-                                color = mentionColor,
-                                fontWeight = FontWeight.SemiBold,
-                            ),
+                            SpanStyle(color = mentionColor, fontWeight = FontWeight.SemiBold),
                             start,
                             end,
                         )
@@ -332,24 +326,15 @@ private fun ChatMessageRow(
                     detectTapGestures { position ->
                         val offset = textLayoutResult?.getOffsetForPosition(position)
                             ?: return@detectTapGestures
-                        val link = text.getStringAnnotations(
-                            tag = URL_ANNOTATION_TAG,
-                            start = offset,
-                            end = offset,
-                        ).firstOrNull()
+                        val link = text.getStringAnnotations(URL_ANNOTATION_TAG, offset, offset).firstOrNull()
                         if (link != null) {
                             runCatching { uriHandler.openUri(link.item) }
                             return@detectTapGestures
                         }
                         if (onAuthorClick != null) {
-                            val author = text.getStringAnnotations(
-                                tag = AUTHOR_ANNOTATION_TAG,
-                                start = offset,
-                                end = offset,
-                            ).firstOrNull()
-                            if (author != null) {
-                                onAuthorClick(message)
-                            }
+                            val author = text.getStringAnnotations(AUTHOR_ANNOTATION_TAG, offset, offset)
+                                .firstOrNull()
+                            if (author != null) onAuthorClick(message)
                         }
                     }
                 },
