@@ -24,6 +24,7 @@ import io.ferventio.shared.generated.resources.Res
 import io.ferventio.shared.generated.resources.nuke_preview_action
 import io.ferventio.shared.runtime.LocalFerventioRuntimeState
 import io.ferventio.shared.ui.chat.FerventioChatTimeline
+import io.ferventio.shared.ui.chat.InteractiveChatOverlayCards
 import io.ferventio.shared.ui.user.SharedUserCardSheet
 import io.ferventio.shared.ui.user.projectLocalUserCard
 import org.jetbrains.compose.resources.stringResource
@@ -46,9 +47,7 @@ fun FerventioModeratedChatScreen(
                 color = MaterialTheme.colorScheme.surfaceContainerLow,
             ) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -58,6 +57,8 @@ fun FerventioModeratedChatScreen(
                 }
             }
         }
+
+        InteractiveChatOverlayCards(channelId = channel.id)
 
         FerventioChatTimeline(
             channel = channel,
@@ -75,11 +76,7 @@ fun FerventioModeratedChatScreen(
 
     selectedUserMessage?.let { sourceMessage ->
         val messages = runtime.chat.messages(channel.id)
-        val data = remember(
-            sourceMessage.id,
-            messages,
-            canModerateChannel,
-        ) {
+        val data = remember(sourceMessage.id, messages, canModerateChannel) {
             projectLocalUserCard(
                 sourceMessage = sourceMessage,
                 channelMessages = messages,

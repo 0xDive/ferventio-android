@@ -1,0 +1,11 @@
+<resources>
+<string name="interactive_poll_title">Poll</string>
+<string name="interactive_poll_status_active">Live</string>
+<string name="interactive_poll_status_ended">Ended</string>
+<string name="interactive_vote_count_percent">%1$d votes · %2$d%%</string>
+<string name="interactive_prediction_title">Prediction</string>
+<string name="interactive_prediction_status_active">Open</string>
+<string name="interactive_prediction_locked">Locked</string>
+<string name="interactive_prediction_resolved">Resolved</string>
+<string name="interactive_prediction_users_points">%1$d users · %2$d pts</string>
+</resources>
