@@ -44,7 +44,7 @@ internal fun projectChatMessage(
     message: ChatMessage,
     deletedPlaceholder: String,
     thirdPartyEmotes: Map<String, ThirdPartyEmoteAsset> = emptyMap(),
-    animatedMediaSupported: Boolean = false,
+    animatedMediaSupported: Boolean = supportsAnimatedChatMedia,
 ): ChatMessagePresentation {
     val badges = message.badges.distinctBy { badge -> "${badge.setId}/${badge.id}" }
     val replyAuthor = message.reply?.let { reply ->
