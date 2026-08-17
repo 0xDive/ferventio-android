@@ -36,6 +36,7 @@ class AuthenticatedChatRuntimeCoordinator(
 
     private val runGate = ChatSessionRunGate()
     private val badgeClient = TwitchChatBadgeClient()
+    private val cheermoteClient = TwitchCheermoteClient()
     private var runningClient: TwitchEventSubSocketClient? = null
     private var sessionRuntime: TwitchChatSessionRuntime? = null
 
@@ -70,16 +71,26 @@ class AuthenticatedChatRuntimeCoordinator(
 
             try {
                 coroutineScope {
-                    val badgeJob = launch {
-                        refreshBadgeAssets(
-                            authentication = authentication,
-                            workspace = workspace,
-                        )
+                    val presentationAssetsJob = launch {
+                        coroutineScope {
+                            launch {
+                                refreshBadgeAssets(
+                                    authentication = authentication,
+                                    workspace = workspace,
+                                )
+                            }
+                            launch {
+                                refreshCheermoteAssets(
+                                    authentication = authentication,
+                                    workspace = workspace,
+                                )
+                            }
+                        }
                     }
                     try {
                         client.run()
                     } finally {
-                        badgeJob.cancelAndJoin()
+                        presentationAssetsJob.cancelAndJoin()
                     }
                 }
             } finally {
@@ -128,13 +139,35 @@ class AuthenticatedChatRuntimeCoordinator(
             }
     }
 
+    private suspend fun refreshCheermoteAssets(
+        authentication: StoredAuthentication,
+        workspace: WorkspaceRuntimeSnapshot,
+    ) {
+        workspace.channelIds
+            .asSequence()
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .distinct()
+            .forEach { channelId ->
+                bestEffort {
+                    state.replaceChannelCheermoteAssets(
+                        channelId = channelId,
+                        value = cheermoteClient.load(
+                            authentication = authentication,
+                            broadcasterId = channelId,
+                        ),
+                    )
+                }
+            }
+    }
+
     private suspend fun bestEffort(block: suspend () -> Unit) {
         try {
             block()
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
-            // Badge metadata is optional presentation data; live chat must continue without it.
+            // Presentation metadata is optional; live chat must continue without it.
         }
     }
 }
