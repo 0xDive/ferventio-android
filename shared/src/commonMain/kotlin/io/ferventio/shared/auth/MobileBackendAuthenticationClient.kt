@@ -7,6 +7,7 @@ import io.ferventio.app.domain.StoredAuthentication
 import io.ferventio.app.domain.TwitchAccessLease
 import io.ferventio.app.domain.TwitchSession
 import io.ktor.client.HttpClient
+import io.ktor.client.request.delete
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -148,6 +149,28 @@ class MobileBackendAuthenticationClient(
         return lease
     }
 
+    suspend fun revokeDevice(
+        storedAuthentication: StoredAuthentication,
+        installationId: String,
+        deviceSecret: String,
+    ) {
+        AuthenticationPersistenceValidation.requireValidBackendCredential(
+            storedAuthentication.backendCredential,
+        )
+        require(installationId.isNotBlank()) { "Installation ID must not be blank" }
+        require(deviceSecret.isNotBlank()) { "Device secret must not be blank" }
+        val credential = storedAuthentication.backendCredential
+        val response = client.delete(
+            "${validateServerUrl(credential.serverUrl)}/v1/auth/device",
+        ) {
+            header(HttpHeaders.Authorization, "Bearer ${credential.token}")
+            header(INSTALLATION_ID_HEADER, installationId)
+            header(DEVICE_SECRET_HEADER, deviceSecret)
+            header(HttpHeaders.Accept, ContentType.Application.Json.toString())
+        }
+        requireSuccessful(response.status.value, response.bodyAsText())
+    }
+
     private fun JsonObject.toAccessLease(): TwitchAccessLease {
         val now = nowEpochMillis()
         val serverTime = requiredString("serverTime")
@@ -227,21 +250,24 @@ class MobileBackendAuthenticationClient(
     }
 
     private fun decodeSuccessfulObject(status: Int, body: String): JsonObject {
-        if (status !in 200..299) {
-            val message = runCatching {
-                json.parseToJsonElement(body)
-                    .jsonObject["error"]
-                    ?.jsonPrimitive
-                    ?.contentOrNull
-            }.getOrNull().orEmpty().ifBlank {
-                body.take(300).ifBlank { "unknown backend error" }
-            }
-            throw MobileBackendAuthenticationException(status, message)
-        }
+        requireSuccessful(status, body)
         return runCatching { json.parseToJsonElement(body).jsonObject }
             .getOrElse { error ->
                 throw IllegalStateException("Backend returned malformed JSON", error)
             }
+    }
+
+    private fun requireSuccessful(status: Int, body: String) {
+        if (status in 200..299) return
+        val message = runCatching {
+            json.parseToJsonElement(body)
+                .jsonObject["error"]
+                ?.jsonPrimitive
+                ?.contentOrNull
+        }.getOrNull().orEmpty().ifBlank {
+            body.take(300).ifBlank { "unknown backend error" }
+        }
+        throw MobileBackendAuthenticationException(status, message)
     }
 
     private fun JsonObject.requiredString(name: String): String =

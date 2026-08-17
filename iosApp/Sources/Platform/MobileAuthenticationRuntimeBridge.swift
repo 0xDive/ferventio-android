@@ -86,7 +86,21 @@ final class MobileAuthenticationRuntimeBridge {
     }
 
     @discardableResult
-    func signOut() -> Bool {
+    func signOut() async -> Bool {
+        // Server-side revocation is best-effort. Local sign-out must still succeed offline; the
+        // push bridge performs a secret-bound DELETE afterwards as an independent fallback.
+        do {
+            if let authentication = try sessionStore.load(),
+               let identity = try identityStore.loadExisting() {
+                try await coordinator.revokeDevice(
+                    identity: identity,
+                    authentication: authentication
+                )
+            }
+        } catch {
+            // Intentionally continue with local credential removal.
+        }
+
         do {
             try sessionStore.clear()
             stateHolder.signOut()

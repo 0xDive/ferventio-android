@@ -1,5 +1,6 @@
 package io.ferventio.shared.auth
 
+import io.ferventio.app.domain.BackendSessionCredential
 import io.ferventio.app.domain.StoredAuthentication
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
@@ -114,6 +115,34 @@ class MobileBackendAuthenticationClientTest {
         )
 
         assertStoredAuthentication(stored)
+    }
+
+    @Test
+    fun revokeDeviceUsesBoundSessionCredentials() = runTest {
+        val client = clientResponding(
+            body = "",
+            status = HttpStatusCode.NoContent,
+        ) { request ->
+            assertEquals(HttpMethod.Delete, request.method)
+            assertEquals("/v1/auth/device", request.url.encodedPath)
+            assertEquals("Bearer backend-session", request.headers[HttpHeaders.Authorization])
+            assertEquals("installation", request.headers["X-Installation-ID"])
+            assertEquals("secret", request.headers["X-Device-Secret"])
+        }
+        val api = MobileBackendAuthenticationClient(client) { 1_000L }
+
+        api.revokeDevice(
+            storedAuthentication = StoredAuthentication(
+                backendCredential = BackendSessionCredential(
+                    serverUrl = "https://example.test",
+                    token = "backend-session",
+                    expiresAtEpochMillis = 4_600_000L,
+                ),
+                accessLease = null,
+            ),
+            installationId = "installation",
+            deviceSecret = "secret",
+        )
     }
 
     @Test

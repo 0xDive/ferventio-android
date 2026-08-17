@@ -153,7 +153,10 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     }
 
     private func signOutAndCleanup() async {
-        guard authenticationRuntimeBridge?.signOut() == true else {
+        guard let authenticationRuntimeBridge else {
+            return
+        }
+        guard await authenticationRuntimeBridge.signOut() else {
             return
         }
         authenticatedChatRuntimeBridge?.stop(clearState: true)

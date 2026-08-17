@@ -138,6 +138,22 @@ class MobileAuthenticationCoordinator(
         )
     }
 
+    @Throws(Exception::class)
+    suspend fun revokeDevice(
+        identity: MobileDeviceIdentity,
+        authentication: StoredAuthentication,
+    ) {
+        MobileDeviceIdentityValidation.requireValid(identity)
+        AuthenticationPersistenceValidation.requireValidBackendCredential(
+            authentication.backendCredential,
+        )
+        backend.revokeDevice(
+            storedAuthentication = authentication,
+            installationId = identity.installationId,
+            deviceSecret = identity.deviceSecret,
+        )
+    }
+
     private fun BackendAuthorizationCallbackStatus.toFailureReason(): MobileAuthenticationFailureReason =
         when (this) {
             BackendAuthorizationCallbackStatus.NOT_CALLBACK -> MobileAuthenticationFailureReason.NOT_CALLBACK
