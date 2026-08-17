@@ -5,6 +5,8 @@ import io.ferventio.app.domain.ChatBadge
 import io.ferventio.app.domain.ChatFragment
 import io.ferventio.app.domain.ChatLinkParser
 import io.ferventio.app.domain.ChatMessage
+import io.ferventio.app.domain.CheermoteAsset
+import io.ferventio.app.domain.CheermoteResolver
 import io.ferventio.app.domain.ThirdPartyEmoteAsset
 import io.ferventio.shared.chat.enrichThirdPartyEmotes
 
@@ -44,6 +46,7 @@ internal fun projectChatMessage(
     message: ChatMessage,
     deletedPlaceholder: String,
     thirdPartyEmotes: Map<String, ThirdPartyEmoteAsset> = emptyMap(),
+    cheermoteAssetsByPrefix: Map<String, List<CheermoteAsset>> = emptyMap(),
     animatedMediaSupported: Boolean = supportsAnimatedChatMedia,
 ): ChatMessagePresentation {
     val badges = message.badges.distinctBy { badge -> "${badge.setId}/${badge.id}" }
@@ -81,7 +84,13 @@ internal fun projectChatMessage(
                 .takeIf(List<ChatFragment>::isNotEmpty)
                 ?: listOf(ChatFragment.Text(message.text))
             enrichThirdPartyEmotes(sourceFragments, thirdPartyEmotes)
-                .flatMap { fragment -> projectFragment(fragment, animatedMediaSupported) }
+                .flatMap { fragment ->
+                    projectFragment(
+                        fragment = fragment,
+                        cheermoteAssetsByPrefix = cheermoteAssetsByPrefix,
+                        animatedMediaSupported = animatedMediaSupported,
+                    )
+                }
                 .takeIf(List<ChatMessageSegment>::isNotEmpty)
                 ?: projectPlainText(message.text)
         },
@@ -91,6 +100,7 @@ internal fun projectChatMessage(
 
 private fun projectFragment(
     fragment: ChatFragment,
+    cheermoteAssetsByPrefix: Map<String, List<CheermoteAsset>>,
     animatedMediaSupported: Boolean,
 ): List<ChatMessageSegment> = when (fragment) {
     is ChatFragment.Text -> projectPlainText(fragment.text)
@@ -132,12 +142,21 @@ private fun projectFragment(
             kind = ChatMessageSegmentKind.MENTION,
         ),
     )
-    is ChatFragment.Cheermote -> listOf(
-        ChatMessageSegment(
-            text = fragment.text,
-            kind = ChatMessageSegmentKind.CHEERMOTE,
-        ),
-    )
+    is ChatFragment.Cheermote -> {
+        val asset = CheermoteResolver.resolve(
+            prefix = fragment.prefix,
+            bits = fragment.bits,
+            animate = animatedMediaSupported,
+            assetsByPrefix = cheermoteAssetsByPrefix,
+        )
+        listOf(
+            ChatMessageSegment(
+                text = fragment.text,
+                kind = ChatMessageSegmentKind.CHEERMOTE,
+                imageUrl = asset?.imageUrl(animatedMediaSupported),
+            ),
+        )
+    }
     is ChatFragment.Unknown -> listOf(
         ChatMessageSegment(
             text = fragment.text,
