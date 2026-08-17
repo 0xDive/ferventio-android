@@ -187,6 +187,58 @@ class MobileAuthenticationCoordinator(
         )
     }
 
+    /**
+     * Forces a fresh backend lease after Twitch has explicitly rejected the cached credential.
+     * A rejected Twitch token must never use the stale-if-error fallback, even when its local
+     * expiry metadata still says that it is reusable.
+     */
+    @Throws(Exception::class)
+    suspend fun refreshAuthenticationAfterRejection(
+        identity: MobileDeviceIdentity,
+        authentication: StoredAuthentication,
+    ): MobileAuthenticationRefreshResult {
+        try {
+            MobileDeviceIdentityValidation.requireValid(identity)
+            AuthenticationPersistenceValidation.requireValid(
+                authentication.backendCredential,
+                authentication.accessLease,
+            )
+        } catch (_: IllegalArgumentException) {
+            return signedOutRefresh()
+        }
+
+        if (authentication.backendCredential.expiresAtEpochMillis <= nowEpochMillis()) {
+            return signedOutRefresh()
+        }
+
+        val refreshedLease = try {
+            backend.leaseAccessToken(
+                storedAuthentication = authentication,
+                installationId = identity.installationId,
+                deviceSecret = identity.deviceSecret,
+                forceRefresh = true,
+            )
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: MobileBackendAuthenticationException) {
+            return if (error.statusCode == 401 || error.statusCode == 403) {
+                signedOutRefresh()
+            } else {
+                unavailableRefresh()
+            }
+        } catch (_: Exception) {
+            return unavailableRefresh()
+        }
+
+        return readyRefresh(
+            authentication = StoredAuthentication(
+                backendCredential = authentication.backendCredential,
+                accessLease = refreshedLease,
+            ),
+            shouldPersist = true,
+        )
+    }
+
     @Throws(Exception::class)
     suspend fun completeAuthorization(
         identity: MobileDeviceIdentity,

@@ -20,6 +20,7 @@ data class ChatRuntimeSnapshot(
     val connectionDetail: String? = null,
     val connectionAttempt: Int = 0,
     val connectionErrorMessage: String? = null,
+    val authenticationRequired: Boolean = false,
 )
 
 /**
@@ -51,6 +52,9 @@ class ChatRuntimeStateHolder(
     var connectionErrorMessage by mutableStateOf<String?>(null)
         private set
 
+    var authenticationRequired by mutableStateOf(false)
+        private set
+
     val snapshot: ChatRuntimeSnapshot
         get() = ChatRuntimeSnapshot(
             messagesByChannel = messagesByChannel,
@@ -60,6 +64,7 @@ class ChatRuntimeStateHolder(
             connectionDetail = connectionDetail,
             connectionAttempt = connectionAttempt,
             connectionErrorMessage = connectionErrorMessage,
+            authenticationRequired = authenticationRequired,
         )
 
     init {
@@ -74,6 +79,7 @@ class ChatRuntimeStateHolder(
             attempt = initialSnapshot.connectionAttempt,
             errorMessage = initialSnapshot.connectionErrorMessage,
         )
+        authenticationRequired = initialSnapshot.authenticationRequired
     }
 
     fun messages(channelId: String): List<ChatMessage> =
@@ -236,10 +242,24 @@ class ChatRuntimeStateHolder(
         connectionErrorMessage = errorMessage?.trim()?.takeIf { it.isNotEmpty() }
     }
 
+    fun markAuthenticationRequired(errorMessage: String? = null) {
+        authenticationRequired = true
+        updateConnection(
+            status = ConnectionStatus.FAILED,
+            attempt = connectionAttempt,
+            errorMessage = errorMessage ?: "Twitch authentication must be refreshed",
+        )
+    }
+
+    fun clearAuthenticationRequired() {
+        authenticationRequired = false
+    }
+
     fun clear() {
         messagesByChannel = emptyMap()
         globalBadgeAssets = emptyMap()
         badgeAssetsByChannel = emptyMap()
+        authenticationRequired = false
         updateConnection(ConnectionStatus.DISCONNECTED)
     }
 

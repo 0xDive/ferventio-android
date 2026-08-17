@@ -5,14 +5,19 @@ import Foundation
 final class AuthenticatedChatRuntimeBridge {
     private let stateHolder: ChatRuntimeStateHolder
     private let coordinator: AuthenticatedChatRuntimeCoordinator
+    private let onAuthenticationRequired: () -> Void
 
     private var task: Task<Void, Never>?
     private var generation = 0
     private var runningFingerprint: String?
 
-    init(stateHolder: ChatRuntimeStateHolder) {
+    init(
+        stateHolder: ChatRuntimeStateHolder,
+        onAuthenticationRequired: @escaping () -> Void = {}
+    ) {
         self.stateHolder = stateHolder
         self.coordinator = AuthenticatedChatRuntimeCoordinator(state: stateHolder)
+        self.onAuthenticationRequired = onAuthenticationRequired
     }
 
     func synchronize(
@@ -57,8 +62,12 @@ final class AuthenticatedChatRuntimeBridge {
             guard generation == currentGeneration else {
                 return
             }
+            let authenticationRequired = stateHolder.authenticationRequired
             task = nil
             runningFingerprint = nil
+            if authenticationRequired {
+                onAuthenticationRequired()
+            }
         }
     }
 

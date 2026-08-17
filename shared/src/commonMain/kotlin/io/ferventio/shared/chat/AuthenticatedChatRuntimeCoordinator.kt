@@ -48,6 +48,7 @@ class AuthenticatedChatRuntimeCoordinator(
             require(workspace.channels.isNotEmpty()) {
                 "Authenticated chat runtime requires at least one workspace channel"
             }
+            state.clearAuthenticationRequired()
 
             val runtime = TwitchChatSessionRuntime(
                 authentication = authentication,

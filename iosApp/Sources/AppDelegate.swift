@@ -29,7 +29,12 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         UNUserNotificationCenter.current().delegate = self
         lifecycleObserver.start(applicationState: application.applicationState)
         authenticatedChatRuntimeBridge = AuthenticatedChatRuntimeBridge(
-            stateHolder: runtimeState.chat
+            stateHolder: runtimeState.chat,
+            onAuthenticationRequired: { [weak self] in
+                Task { @MainActor [weak self] in
+                    await self?.recoverAuthenticationAfterChatRejection()
+                }
+            }
         )
         Task {
             await pushRuntimeBridge.refreshAuthorizationAndRestoreRemoteRegistration()
@@ -109,7 +114,13 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
             guard let authenticationRuntimeBridge else {
                 return
             }
-            switch await authenticationRuntimeBridge.refreshForForeground() {
+            let disposition: ForegroundAuthenticationRefreshDisposition
+            if runtimeState.chat.authenticationRequired {
+                disposition = await authenticationRuntimeBridge.refreshAfterAuthenticationRejection()
+            } else {
+                disposition = await authenticationRuntimeBridge.refreshForForeground()
+            }
+            switch disposition {
             case .deferred:
                 return
             case .signedOut:
@@ -204,6 +215,29 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         authenticatedChatRuntimeBridge?.stop(clearState: true)
         runtimeState.workspace.clear()
         await synchronizePushBackendRegistration()
+    }
+
+    private func recoverAuthenticationAfterChatRejection() async {
+        guard let authenticationRuntimeBridge else {
+            return
+        }
+        switch await authenticationRuntimeBridge.refreshAfterAuthenticationRejection() {
+        case .deferred:
+            return
+        case .signedOut:
+            authenticatedChatRuntimeBridge?.stop(clearState: true)
+            runtimeState.workspace.clear()
+            await synchronizePushBackendRegistration()
+        case .unavailable:
+            authenticatedChatRuntimeBridge?.stop()
+        case .ready:
+            if runtimeState.workspace.isReadyForPushRegistration {
+                await synchronizePushBackendRegistration()
+                synchronizeAuthenticatedChatRuntime()
+            } else {
+                await restoreWorkspaceAndSynchronizePush()
+            }
+        }
     }
 
     private func restoreWorkspaceAndSynchronizePush() async {

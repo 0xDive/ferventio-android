@@ -81,19 +81,27 @@ final class MobileAuthenticationRuntimeBridge {
                 identity: identity,
                 authentication: authentication
             )
-            if result.shouldSignOut {
-                try? sessionStore.clear()
-                stateHolder.signOut()
-                return .signedOut
-            }
-            guard let refreshed = result.authentication else {
-                return .unavailable
-            }
-            if result.shouldPersist {
-                try sessionStore.save(refreshed)
-            }
-            stateHolder.markSignedIn(authentication: refreshed)
-            return .ready
+            return try applyRefreshResult(result)
+        } catch {
+            return .unavailable
+        }
+    }
+
+    func refreshAfterAuthenticationRejection() async -> ForegroundAuthenticationRefreshDisposition {
+        guard !initialRestorePending, !authorizationInFlight else {
+            return .deferred
+        }
+        guard let authentication = stateHolder.state.authentication else {
+            return .signedOut
+        }
+
+        do {
+            let identity = try identityStore.loadOrCreate()
+            let result = try await coordinator.refreshAuthenticationAfterRejection(
+                identity: identity,
+                authentication: authentication
+            )
+            return try applyRefreshResult(result)
         } catch {
             return .unavailable
         }
@@ -150,5 +158,23 @@ final class MobileAuthenticationRuntimeBridge {
             stateHolder.markFailed(errorMessage: String(describing: error))
             return false
         }
+    }
+
+    private func applyRefreshResult(
+        _ result: MobileAuthenticationRefreshResult
+    ) throws -> ForegroundAuthenticationRefreshDisposition {
+        if result.shouldSignOut {
+            try? sessionStore.clear()
+            stateHolder.signOut()
+            return .signedOut
+        }
+        guard let refreshed = result.authentication else {
+            return .unavailable
+        }
+        if result.shouldPersist {
+            try sessionStore.save(refreshed)
+        }
+        stateHolder.markSignedIn(authentication: refreshed)
+        return .ready
     }
 }

@@ -76,6 +76,10 @@ internal class TwitchChatSessionRuntime(
     }
 
     fun onSocketError(error: Throwable) {
+        if (error.isTwitchAuthenticationFailure()) {
+            state.markAuthenticationRequired(error.message)
+            return
+        }
         val snapshot = state.snapshot
         state.updateConnection(
             status = snapshot.connectionStatus,
