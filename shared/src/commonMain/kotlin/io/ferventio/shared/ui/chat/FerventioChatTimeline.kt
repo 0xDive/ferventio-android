@@ -37,6 +37,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -189,17 +190,26 @@ private fun ChatMessageRow(
     var textLayoutResult by remember(message.id) { mutableStateOf<TextLayoutResult?>(null) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        presentation.reply
-            ?.authorLabel
-            ?.takeIf(String::isNotBlank)
-            ?.let { authorLabel ->
+        presentation.reply?.let { reply ->
+            Column(
+                modifier = Modifier.padding(start = 12.dp, top = 4.dp, end = 12.dp),
+            ) {
                 Text(
-                    text = stringResource(Res.string.chat_replying_to, authorLabel),
-                    modifier = Modifier.padding(start = 12.dp, top = 4.dp, end = 12.dp),
+                    text = stringResource(Res.string.chat_replying_to, reply.authorLabel),
                     style = MaterialTheme.typography.labelSmall,
                     color = metadataColor,
                 )
+                reply.bodyPreview?.let { preview ->
+                    Text(
+                        text = preview,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = metadataColor,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
+        }
 
         val text = buildAnnotatedString {
             if (message.isAction) append("* ")
@@ -347,7 +357,8 @@ private fun ChatMessageRow(
 
 private fun ChatMessageSegmentKind.isInlineEmote(): Boolean = when (this) {
     ChatMessageSegmentKind.TWITCH_EMOTE,
-    ChatMessageSegmentKind.THIRD_PARTY_EMOTE -> true
+    ChatMessageSegmentKind.THIRD_PARTY_EMOTE,
+    ChatMessageSegmentKind.GIF -> true
     else -> false
 }
 
