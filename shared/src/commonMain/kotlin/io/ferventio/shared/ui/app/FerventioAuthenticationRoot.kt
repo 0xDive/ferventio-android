@@ -18,7 +18,7 @@ import io.ferventio.shared.auth.MobileAuthenticationStatus
 import io.ferventio.shared.generated.resources.Res
 import io.ferventio.shared.generated.resources.auth_sign_in_with_twitch
 import io.ferventio.shared.push.PushAuthorizationStatus
-import io.ferventio.shared.ui.chat.FerventioChatTimeline
+import io.ferventio.shared.ui.moderation.FerventioModeratedChatScreen
 import io.ferventio.shared.workspace.WorkspaceRuntimeStateHolder
 import org.jetbrains.compose.resources.stringResource
 
@@ -55,7 +55,10 @@ fun FerventioAuthenticationRoot(
             modifier = modifier,
         ) { channel ->
             key(channel.id) {
-                FerventioChatTimeline(channel = channel)
+                FerventioModeratedChatScreen(
+                    channel = channel,
+                    moderatorChannelIds = workspace.moderatorChannelIds,
+                )
             }
         }
     }
