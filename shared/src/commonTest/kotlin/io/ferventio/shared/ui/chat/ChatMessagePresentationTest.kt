@@ -43,12 +43,23 @@ class ChatMessagePresentationTest {
     }
 
     @Test
-    fun preservesFragmentKindsAndNormalizesExplicitLinks() {
+    fun preservesFragmentKindsAssetsAndNormalizesExplicitLinks() {
         val presentation = projectChatMessage(
             message = message(
-                text = "Kappa @bob Cheer100 docs",
+                text = "Kappa party @bob Cheer100 docs",
                 fragments = listOf(
-                    ChatFragment.TwitchEmote(text = "Kappa", emoteId = "25"),
+                    ChatFragment.TwitchEmote(
+                        text = "Kappa",
+                        emoteId = "25",
+                        formats = setOf("static", "animated"),
+                    ),
+                    ChatFragment.Text(" "),
+                    ChatFragment.ThirdPartyEmote(
+                        text = "party",
+                        emoteId = "third-party-id",
+                        provider = "7tv",
+                        imageUrl = "//cdn.example.test/party.webp",
+                    ),
                     ChatFragment.Text(" "),
                     ChatFragment.Mention(
                         text = "@bob",
@@ -71,10 +82,37 @@ class ChatMessagePresentationTest {
         )
 
         assertEquals(ChatMessageSegmentKind.TWITCH_EMOTE, presentation.segments[0].kind)
-        assertEquals(ChatMessageSegmentKind.MENTION, presentation.segments[2].kind)
-        assertEquals(ChatMessageSegmentKind.CHEERMOTE, presentation.segments[4].kind)
-        assertEquals(ChatMessageSegmentKind.LINK, presentation.segments[6].kind)
-        assertEquals("https://www.example.com/docs", presentation.segments[6].url)
+        assertEquals(
+            "https://static-cdn.jtvnw.net/emoticons/v2/25/static/dark/2.0",
+            presentation.segments[0].imageUrl,
+        )
+        assertEquals(ChatMessageSegmentKind.THIRD_PARTY_EMOTE, presentation.segments[2].kind)
+        assertEquals("https://cdn.example.test/party.webp", presentation.segments[2].imageUrl)
+        assertEquals(ChatMessageSegmentKind.MENTION, presentation.segments[4].kind)
+        assertEquals(ChatMessageSegmentKind.CHEERMOTE, presentation.segments[6].kind)
+        assertEquals(ChatMessageSegmentKind.LINK, presentation.segments[8].kind)
+        assertEquals("https://www.example.com/docs", presentation.segments[8].url)
+    }
+
+    @Test
+    fun invalidThirdPartyAssetKeepsTextFallback() {
+        val presentation = projectChatMessage(
+            message = message(
+                text = "party",
+                fragments = listOf(
+                    ChatFragment.ThirdPartyEmote(
+                        text = "party",
+                        emoteId = "third-party-id",
+                        provider = "7tv",
+                        imageUrl = "not-a-url",
+                    ),
+                ),
+            ),
+            deletedPlaceholder = "[deleted]",
+        )
+
+        assertEquals(ChatMessageSegmentKind.THIRD_PARTY_EMOTE, presentation.segments.single().kind)
+        assertNull(presentation.segments.single().imageUrl)
     }
 
     @Test
@@ -101,6 +139,7 @@ class ChatMessagePresentationTest {
         assertEquals(listOf("[deleted]"), presentation.segments.map(ChatMessageSegment::text))
         assertEquals("alice", presentation.reply?.authorLabel)
         assertEquals(listOf("moderator", "subscriber"), presentation.badgeLabels)
+        assertEquals(listOf("moderator", "subscriber"), presentation.badges.map(ChatBadge::setId))
         assertFalse(presentation.segments.any { "secret" in it.text })
     }
 

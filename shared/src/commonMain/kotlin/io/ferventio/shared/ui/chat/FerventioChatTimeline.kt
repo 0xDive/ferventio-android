@@ -1,5 +1,7 @@
 package io.ferventio.shared.ui.chat
 
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -8,12 +10,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.text.ClickableText
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -21,14 +26,23 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
+import coil3.compose.AsyncImagePainter
+import coil3.compose.rememberAsyncImagePainter
+import io.ferventio.app.domain.ChatBadge
 import io.ferventio.app.domain.ChatChannel
 import io.ferventio.app.domain.ChatMessage
 import io.ferventio.app.domain.ConnectionStatus
@@ -153,6 +167,7 @@ private fun ChatMessageRow(message: ChatMessage) {
     val mentionColor = MaterialTheme.colorScheme.tertiary
     val metadataColor = MaterialTheme.colorScheme.onSurfaceVariant
     val bodyColor = MaterialTheme.colorScheme.onSurface
+    var textLayoutResult by remember(message.id) { mutableStateOf<TextLayoutResult?>(null) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         presentation.reply
@@ -171,16 +186,9 @@ private fun ChatMessageRow(message: ChatMessage) {
             if (message.isAction) {
                 append("* ")
             }
-            if (presentation.badgeLabels.isNotEmpty()) {
-                withStyle(
-                    SpanStyle(
-                        color = metadataColor,
-                        fontWeight = FontWeight.Medium,
-                    ),
-                ) {
-                    append(presentation.badgeLabels.joinToString(" ") { badge -> "[$badge]" })
-                    append(" ")
-                }
+            presentation.badges.forEachIndexed { index, _ ->
+                appendInlineContent(inlineBadgeId(index), "◆")
+                append(" ")
             }
             withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) {
                 append(message.author.displayName.ifBlank { message.author.login })
@@ -196,11 +204,15 @@ private fun ChatMessageRow(message: ChatMessage) {
                     },
                 ),
             ) {
-                presentation.segments.forEach { segment ->
+                presentation.segments.forEachIndexed { index, segment ->
+                    if (segment.imageUrl != null && segment.kind.isInlineEmote()) {
+                        appendInlineContent(inlineSegmentId(index), segment.text.ifBlank { "emote" })
+                        return@forEachIndexed
+                    }
                     val start = length
                     append(segment.text)
                     val end = length
-                    if (end <= start) return@forEach
+                    if (end <= start) return@forEachIndexed
 
                     when (segment.kind) {
                         ChatMessageSegmentKind.LINK -> {
@@ -248,21 +260,130 @@ private fun ChatMessageRow(message: ChatMessage) {
             }
         }
 
-        ClickableText(
+        val inlineContent = buildMap<String, InlineTextContent> {
+            presentation.badges.forEachIndexed { index, badge ->
+                put(
+                    inlineBadgeId(index),
+                    InlineTextContent(
+                        placeholder = Placeholder(
+                            width = 1.05.em,
+                            height = 1.05.em,
+                            placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
+                        ),
+                    ) {
+                        SharedBadgeIcon(
+                            badge = badge,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    },
+                )
+            }
+            presentation.segments.forEachIndexed { index, segment ->
+                val imageUrl = segment.imageUrl ?: return@forEachIndexed
+                if (!segment.kind.isInlineEmote()) return@forEachIndexed
+                put(
+                    inlineSegmentId(index),
+                    InlineTextContent(
+                        placeholder = Placeholder(
+                            width = 1.35.em,
+                            height = 1.35.em,
+                            placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
+                        ),
+                    ) {
+                        SharedInlineEmote(
+                            imageUrl = imageUrl,
+                            code = segment.text,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    },
+                )
+            }
+        }
+
+        BasicText(
             text = text,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 5.dp),
+                .padding(horizontal = 12.dp, vertical = 5.dp)
+                .pointerInput(text) {
+                    detectTapGestures { position ->
+                        val offset = textLayoutResult?.getOffsetForPosition(position) ?: return@detectTapGestures
+                        text.getStringAnnotations(
+                            tag = URL_ANNOTATION_TAG,
+                            start = offset,
+                            end = offset,
+                        ).firstOrNull()?.let { annotation ->
+                            runCatching { uriHandler.openUri(annotation.item) }
+                        }
+                    }
+                },
             style = MaterialTheme.typography.bodyMedium.copy(color = bodyColor),
-            onClick = { offset ->
-                text.getStringAnnotations(
-                    tag = URL_ANNOTATION_TAG,
-                    start = offset,
-                    end = offset,
-                ).firstOrNull()?.let { annotation ->
-                    runCatching { uriHandler.openUri(annotation.item) }
-                }
-            },
+            inlineContent = inlineContent,
+            onTextLayout = { textLayoutResult = it },
+        )
+    }
+}
+
+private fun ChatMessageSegmentKind.isInlineEmote(): Boolean = when (this) {
+    ChatMessageSegmentKind.TWITCH_EMOTE,
+    ChatMessageSegmentKind.THIRD_PARTY_EMOTE -> true
+    else -> false
+}
+
+private fun inlineBadgeId(index: Int): String = "badge_$index"
+private fun inlineSegmentId(index: Int): String = "segment_$index"
+
+@Composable
+private fun SharedInlineEmote(
+    imageUrl: String,
+    code: String,
+    modifier: Modifier = Modifier,
+) {
+    val painter = rememberAsyncImagePainter(model = imageUrl)
+    val state by painter.state.collectAsState()
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        if (state is AsyncImagePainter.State.Success) {
+            Image(
+                painter = painter,
+                contentDescription = code,
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Text(
+                text = "•",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SharedBadgeIcon(
+    badge: ChatBadge,
+    modifier: Modifier = Modifier,
+) {
+    val symbol = when (badge.setId) {
+        "broadcaster" -> "♛"
+        "moderator", "vip" -> "◆"
+        "subscriber" -> "★"
+        "founder" -> "F"
+        "partner" -> "✓"
+        "staff" -> "S"
+        "admin" -> "A"
+        "global_mod" -> "G"
+        "premium" -> "P"
+        "turbo" -> "⚡"
+        "bits" -> "B"
+        else -> badge.setId.firstOrNull()?.uppercase() ?: "•"
+    }
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        Text(
+            text = symbol,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold,
         )
     }
 }

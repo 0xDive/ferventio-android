@@ -1,5 +1,7 @@
 package io.ferventio.shared.ui.chat
 
+import io.ferventio.app.domain.ChatAssetResolver
+import io.ferventio.app.domain.ChatBadge
 import io.ferventio.app.domain.ChatFragment
 import io.ferventio.app.domain.ChatLinkParser
 import io.ferventio.app.domain.ChatMessage
@@ -19,16 +21,18 @@ internal data class ChatMessageSegment(
     val text: String,
     val kind: ChatMessageSegmentKind,
     val url: String? = null,
+    val imageUrl: String? = null,
 )
 
 internal data class ChatReplyPresentation(
-    val authorLabel: String?,
+    val authorLabel: String,
 )
 
 internal data class ChatMessagePresentation(
-    val segments: List<ChatMessageSegment>,
-    val reply: ChatReplyPresentation?,
+    val badges: List<ChatBadge>,
     val badgeLabels: List<String>,
+    val reply: ChatReplyPresentation?,
+    val segments: List<ChatMessageSegment>,
     val isDeleted: Boolean,
 )
 
@@ -36,112 +40,124 @@ internal fun projectChatMessage(
     message: ChatMessage,
     deletedPlaceholder: String,
 ): ChatMessagePresentation {
-    val reply = message.reply?.let { context ->
-        ChatReplyPresentation(
-            authorLabel = context.parentUserName
-                ?.takeIf(String::isNotBlank)
-                ?: context.parentUserLogin?.takeIf(String::isNotBlank),
-        )
+    val badges = message.badges.distinctBy { badge -> "${badge.setId}/${badge.id}" }
+    val replyAuthor = message.reply?.let { reply ->
+        reply.parentUserName
+            ?.trim()
+            ?.takeIf(String::isNotEmpty)
+            ?: reply.parentUserLogin
+                ?.trim()
+                ?.takeIf(String::isNotEmpty)
     }
-    val badgeLabels = message.badges
-        .mapNotNull { badge ->
-            badge.setId.takeIf(String::isNotBlank)
-                ?: badge.id.takeIf(String::isNotBlank)
-        }
-        .distinct()
-
-    if (message.isDeleted) {
-        return ChatMessagePresentation(
-            segments = listOf(
+    return ChatMessagePresentation(
+        badges = badges,
+        badgeLabels = badges.map { badge ->
+            badge.setId.trim().takeIf(String::isNotEmpty) ?: badge.id.trim()
+        }.filter(String::isNotEmpty),
+        reply = replyAuthor?.let(::ChatReplyPresentation),
+        segments = if (message.isDeleted) {
+            listOf(
                 ChatMessageSegment(
                     text = deletedPlaceholder,
                     kind = ChatMessageSegmentKind.TEXT,
                 ),
-            ),
-            reply = reply,
-            badgeLabels = badgeLabels,
-            isDeleted = true,
-        )
-    }
-
-    val sourceFragments = message.fragments.ifEmpty {
-        listOf(ChatFragment.Text(message.text))
-    }
-    val segments = sourceFragments.flatMap(::projectFragment)
-
-    return ChatMessagePresentation(
-        segments = segments,
-        reply = reply,
-        badgeLabels = badgeLabels,
-        isDeleted = false,
+            )
+        } else {
+            message.fragments
+                .takeIf(List<ChatFragment>::isNotEmpty)
+                ?.flatMap(::projectFragment)
+                ?.takeIf(List<ChatMessageSegment>::isNotEmpty)
+                ?: projectPlainText(message.text)
+        },
+        isDeleted = message.isDeleted,
     )
 }
 
 private fun projectFragment(fragment: ChatFragment): List<ChatMessageSegment> = when (fragment) {
-    is ChatFragment.Text -> projectTextFragment(fragment.text)
-    is ChatFragment.Link -> {
-        val safeUrl = ChatLinkParser.normalize(fragment.url)
-        listOf(
-            ChatMessageSegment(
-                text = fragment.text,
-                kind = if (safeUrl == null) {
-                    ChatMessageSegmentKind.TEXT
-                } else {
-                    ChatMessageSegmentKind.LINK
-                },
-                url = safeUrl,
-            ),
-        )
-    }
+    is ChatFragment.Text -> projectPlainText(fragment.text)
+    is ChatFragment.Link -> listOf(
+        ChatMessageSegment(
+            text = fragment.text,
+            kind = ChatMessageSegmentKind.LINK,
+            url = ChatLinkParser.normalize(fragment.url),
+        ),
+    )
     is ChatFragment.TwitchEmote -> listOf(
-        ChatMessageSegment(fragment.text, ChatMessageSegmentKind.TWITCH_EMOTE),
+        ChatMessageSegment(
+            text = fragment.text,
+            kind = ChatMessageSegmentKind.TWITCH_EMOTE,
+            imageUrl = ChatAssetResolver.twitchEmoteUrl(
+                fragment = fragment,
+                animate = false,
+            ),
+        ),
     )
     is ChatFragment.ThirdPartyEmote -> listOf(
-        ChatMessageSegment(fragment.text, ChatMessageSegmentKind.THIRD_PARTY_EMOTE),
+        ChatMessageSegment(
+            text = fragment.text,
+            kind = ChatMessageSegmentKind.THIRD_PARTY_EMOTE,
+            imageUrl = ChatAssetResolver.absoluteImageUrl(fragment.imageUrl),
+        ),
     )
     is ChatFragment.Gif -> listOf(
-        ChatMessageSegment(fragment.text, ChatMessageSegmentKind.GIF),
+        ChatMessageSegment(
+            text = fragment.text,
+            kind = ChatMessageSegmentKind.GIF,
+        ),
     )
     is ChatFragment.Mention -> listOf(
-        ChatMessageSegment(fragment.text, ChatMessageSegmentKind.MENTION),
+        ChatMessageSegment(
+            text = fragment.text,
+            kind = ChatMessageSegmentKind.MENTION,
+        ),
     )
     is ChatFragment.Cheermote -> listOf(
-        ChatMessageSegment(fragment.text, ChatMessageSegmentKind.CHEERMOTE),
+        ChatMessageSegment(
+            text = fragment.text,
+            kind = ChatMessageSegmentKind.CHEERMOTE,
+        ),
     )
     is ChatFragment.Unknown -> listOf(
-        ChatMessageSegment(fragment.text, ChatMessageSegmentKind.UNKNOWN),
+        ChatMessageSegment(
+            text = fragment.text,
+            kind = ChatMessageSegmentKind.UNKNOWN,
+        ),
     )
 }
 
-private fun projectTextFragment(text: String): List<ChatMessageSegment> {
-    if (text.isEmpty()) return emptyList()
-
-    val links = ChatLinkParser.findAll(text)
+private fun projectPlainText(value: String): List<ChatMessageSegment> {
+    if (value.isEmpty()) return emptyList()
+    val links = ChatLinkParser.findAll(value)
     if (links.isEmpty()) {
-        return listOf(ChatMessageSegment(text, ChatMessageSegmentKind.TEXT))
+        return listOf(ChatMessageSegment(value, ChatMessageSegmentKind.TEXT))
     }
-
-    val segments = mutableListOf<ChatMessageSegment>()
-    var cursor = 0
-    links.forEach { link ->
-        if (link.start > cursor) {
-            segments += ChatMessageSegment(
-                text = text.substring(cursor, link.start),
-                kind = ChatMessageSegmentKind.TEXT,
+    return buildList {
+        var cursor = 0
+        links.forEach { link ->
+            if (link.start > cursor) {
+                add(
+                    ChatMessageSegment(
+                        text = value.substring(cursor, link.start),
+                        kind = ChatMessageSegmentKind.TEXT,
+                    ),
+                )
+            }
+            add(
+                ChatMessageSegment(
+                    text = value.substring(link.start, link.endExclusive),
+                    kind = ChatMessageSegmentKind.LINK,
+                    url = link.url,
+                ),
+            )
+            cursor = link.endExclusive
+        }
+        if (cursor < value.length) {
+            add(
+                ChatMessageSegment(
+                    text = value.substring(cursor),
+                    kind = ChatMessageSegmentKind.TEXT,
+                ),
             )
         }
-        segments += ChatMessageSegment(
-            text = text.substring(link.start, link.endExclusive),
-            kind = ChatMessageSegmentKind.LINK,
-            url = link.url,
-        )
-        cursor = link.endExclusive
     }
-    if (cursor < text.length) {
-        segments += ChatMessageSegment(
-            text = text.substring(cursor),
-            kind = ChatMessageSegmentKind.TEXT,
-        )
-    }
-    return segments
 }
