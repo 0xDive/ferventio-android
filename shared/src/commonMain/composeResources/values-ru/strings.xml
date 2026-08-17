@@ -25,7 +25,7 @@
     <string name="chat_status_failed">Не удалось подключить чат</string>
     <string name="nuke_preview_action">Предпросмотр nuke</string>
     <string name="nuke_preview_title">Предпросмотр nuke</string>
-    <string name="nuke_preview_read_only">Только предпросмотр. На этом экране moderation-действия не выполняются.</string>
+    <string name="nuke_preview_read_only">Проверьте точный список целей перед массовой модерацией.</string>
     <string name="nuke_query_label">Текст сообщения или шаблон</string>
     <string name="nuke_plain_text">Обычный текст</string>
     <string name="nuke_regex">Regex</string>
@@ -44,6 +44,17 @@
     <string name="nuke_no_matches">В этом окне нет подходящих целей.</string>
     <string name="nuke_error_empty_query">Введите текст или шаблон для предпросмотра целей.</string>
     <string name="nuke_error_invalid_query">Шаблон некорректен.</string>
+    <string name="nuke_execute">Выдать таймаут пользователям из предпросмотра</string>
+    <string name="nuke_execute_confirm_title">Подтвердить массовую модерацию</string>
+    <string name="nuke_execute_confirm_body">Выдать %1$d пользователям из предпросмотра таймаут на 10 минут? Будет использован зафиксированный список, новые сообщения в него не попадут.</string>
+    <string name="nuke_execute_confirm">Запустить nuke</string>
+    <string name="nuke_execute_cancel">Отмена</string>
+    <string name="nuke_execute_running">Выполняется модерация…</string>
+    <string name="nuke_execute_too_many">Слишком много целей. Сузьте предпросмотр максимум до %1$d пользователей.</string>
+    <string name="nuke_execute_auth_required">Авторизация Twitch недоступна.</string>
+    <string name="nuke_execute_failed">Ошибка nuke: %1$s</string>
+    <string name="nuke_execute_result">Попыток: %1$d · успешно: %2$d · ошибок: %3$d</string>
+    <string name="nuke_execute_stopped_early">Выполнение остановлено после ошибки Twitch, которую не следует повторять для остальных целей.</string>
     <string name="nuke_close">Закрыть</string>
     <string name="user_card_title">Карточка пользователя</string>
     <string name="user_card_id">ID: %1$s</string>
