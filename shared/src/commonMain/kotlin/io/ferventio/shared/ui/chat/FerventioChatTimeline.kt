@@ -161,7 +161,7 @@ private fun ChatMessageRow(message: ChatMessage) {
             ?.let { authorLabel ->
                 Text(
                     text = stringResource(Res.string.chat_replying_to, authorLabel),
-                    modifier = Modifier.padding(horizontal = 12.dp, top = 4.dp),
+                    modifier = Modifier.padding(start = 12.dp, top = 4.dp, end = 12.dp),
                     style = MaterialTheme.typography.labelSmall,
                     color = metadataColor,
                 )
