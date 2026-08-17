@@ -94,6 +94,12 @@ internal class TwitchEventSubBootstrapCoordinator(
             if (primaryError != null) {
                 if (firstPrimaryError == null) firstPrimaryError = primaryError
                 failures += primaryError.toFailure(channel, primary.type)
+                if (primaryError.isTwitchAuthenticationFailure()) {
+                    throw TwitchEventSubBootstrapException(
+                        failures = failures.toList(),
+                        cause = primaryError,
+                    )
+                }
                 continue
             }
 
@@ -109,6 +115,12 @@ internal class TwitchEventSubBootstrapCoordinator(
                 created += notice
             } else {
                 failures += noticeError.toFailure(channel, notice.type)
+                if (noticeError.isTwitchAuthenticationFailure()) {
+                    throw TwitchEventSubBootstrapException(
+                        failures = failures.toList(),
+                        cause = noticeError,
+                    )
+                }
             }
             break
         }
