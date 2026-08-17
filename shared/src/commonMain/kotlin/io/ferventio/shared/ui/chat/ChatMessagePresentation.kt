@@ -27,6 +27,7 @@ internal data class ChatMessageSegment(
     val url: String? = null,
     val imageUrl: String? = null,
     val zeroWidth: Boolean = false,
+    val bttvModifiers: Set<BttvEmoteModifier> = emptySet(),
 )
 
 internal data class ChatReplyPresentation(
@@ -83,7 +84,7 @@ internal fun projectChatMessage(
             val sourceFragments = message.fragments
                 .takeIf(List<ChatFragment>::isNotEmpty)
                 ?: listOf(ChatFragment.Text(message.text))
-            enrichThirdPartyEmotes(sourceFragments, thirdPartyEmotes)
+            val projected = enrichThirdPartyEmotes(sourceFragments, thirdPartyEmotes)
                 .flatMap { fragment ->
                     projectFragment(
                         fragment = fragment,
@@ -93,6 +94,7 @@ internal fun projectChatMessage(
                 }
                 .takeIf(List<ChatMessageSegment>::isNotEmpty)
                 ?: projectPlainText(message.text)
+            applyBttvEmoteModifiers(projected)
         },
         isDeleted = message.isDeleted,
     )
