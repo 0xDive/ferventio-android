@@ -49,20 +49,13 @@ class TwitchModerationScopeException(
     val requiredScope: String,
 ) : IllegalStateException("Twitch moderation requires OAuth scope $requiredScope")
 
-class TwitchModerationClient(
-    private val client: HttpClient,
-    private val json: Json = Json { ignoreUnknownKeys = true },
-) {
-    constructor() : this(createPlatformMobileAuthenticationHttpClient())
-
+interface TwitchModerationGateway {
     suspend fun banUser(
         authentication: StoredAuthentication,
         broadcasterId: String,
         targetUserId: String,
         reason: String? = null,
-    ) {
-        updateBanState(authentication, broadcasterId, targetUserId, null, reason, "ban")
-    }
+    )
 
     suspend fun timeoutUser(
         authentication: StoredAuthentication,
@@ -70,6 +63,47 @@ class TwitchModerationClient(
         targetUserId: String,
         durationSeconds: Int,
         reason: String? = null,
+    )
+
+    suspend fun unbanUser(
+        authentication: StoredAuthentication,
+        broadcasterId: String,
+        targetUserId: String,
+    )
+
+    suspend fun deleteChatMessage(
+        authentication: StoredAuthentication,
+        broadcasterId: String,
+        messageId: String,
+    )
+
+    suspend fun clearChatMessages(
+        authentication: StoredAuthentication,
+        broadcasterId: String,
+    )
+}
+
+class TwitchModerationClient(
+    private val client: HttpClient,
+    private val json: Json = Json { ignoreUnknownKeys = true },
+) : TwitchModerationGateway {
+    constructor() : this(createPlatformMobileAuthenticationHttpClient())
+
+    override suspend fun banUser(
+        authentication: StoredAuthentication,
+        broadcasterId: String,
+        targetUserId: String,
+        reason: String?,
+    ) {
+        updateBanState(authentication, broadcasterId, targetUserId, null, reason, "ban")
+    }
+
+    override suspend fun timeoutUser(
+        authentication: StoredAuthentication,
+        broadcasterId: String,
+        targetUserId: String,
+        durationSeconds: Int,
+        reason: String?,
     ) {
         require(durationSeconds in MIN_TIMEOUT_SECONDS..MAX_TIMEOUT_SECONDS) {
             "Twitch timeout duration must be between $MIN_TIMEOUT_SECONDS and $MAX_TIMEOUT_SECONDS seconds"
@@ -77,7 +111,7 @@ class TwitchModerationClient(
         updateBanState(authentication, broadcasterId, targetUserId, durationSeconds, reason, "timeout")
     }
 
-    suspend fun unbanUser(
+    override suspend fun unbanUser(
         authentication: StoredAuthentication,
         broadcasterId: String,
         targetUserId: String,
@@ -97,7 +131,7 @@ class TwitchModerationClient(
         requireSuccess(response, "unban")
     }
 
-    suspend fun deleteChatMessage(
+    override suspend fun deleteChatMessage(
         authentication: StoredAuthentication,
         broadcasterId: String,
         messageId: String,
@@ -107,7 +141,7 @@ class TwitchModerationClient(
         deleteChatMessages(authentication, broadcasterId, normalizedMessageId, "delete chat message")
     }
 
-    suspend fun clearChatMessages(
+    override suspend fun clearChatMessages(
         authentication: StoredAuthentication,
         broadcasterId: String,
     ) {
