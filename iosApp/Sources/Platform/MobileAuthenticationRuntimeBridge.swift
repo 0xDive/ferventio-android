@@ -29,6 +29,7 @@ final class MobileAuthenticationRuntimeBridge {
     private let browser: BackendAuthorizationSessionAdapter
     private var initialRestorePending = true
     private var authorizationInFlight = false
+    private var signOutInFlight = false
     private var refreshFlight: AuthenticationRefreshFlight?
     private var refreshFlightGeneration = 0
     private var sessionGeneration = 0
@@ -90,7 +91,7 @@ final class MobileAuthenticationRuntimeBridge {
     }
 
     func signIn() async {
-        guard !authorizationInFlight else {
+        guard !authorizationInFlight, !signOutInFlight else {
             return
         }
         invalidateRefreshFlight()
@@ -119,6 +120,12 @@ final class MobileAuthenticationRuntimeBridge {
 
     @discardableResult
     func signOut() async -> Bool {
+        guard !signOutInFlight else {
+            return false
+        }
+        signOutInFlight = true
+        defer { signOutInFlight = false }
+
         // Prevent an in-flight foreground/rejection refresh from restoring credentials after
         // the user has explicitly started signing out.
         invalidateRefreshFlight()
@@ -150,7 +157,7 @@ final class MobileAuthenticationRuntimeBridge {
     private func refreshAuthentication(
         reason: AuthenticationRefreshReason
     ) async -> ForegroundAuthenticationRefreshDisposition {
-        guard !initialRestorePending, !authorizationInFlight else {
+        guard !initialRestorePending, !authorizationInFlight, !signOutInFlight else {
             return .deferred
         }
 
