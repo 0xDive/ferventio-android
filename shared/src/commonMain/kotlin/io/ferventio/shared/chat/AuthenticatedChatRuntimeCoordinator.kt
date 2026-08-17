@@ -4,6 +4,10 @@ import io.ferventio.app.domain.ConnectionStatus
 import io.ferventio.app.domain.StoredAuthentication
 import io.ferventio.shared.workspace.WorkspaceRuntimeSnapshot
 import kotlin.Throws
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 
 internal class ChatSessionRunGate {
@@ -31,6 +35,7 @@ class AuthenticatedChatRuntimeCoordinator(
     constructor() : this(ChatRuntimeStateHolder())
 
     private val runGate = ChatSessionRunGate()
+    private val badgeClient = TwitchChatBadgeClient()
     private var runningClient: TwitchEventSubSocketClient? = null
     private var sessionRuntime: TwitchChatSessionRuntime? = null
 
@@ -58,9 +63,22 @@ class AuthenticatedChatRuntimeCoordinator(
             )
             sessionRuntime = runtime
             runningClient = client
+            state.retainChannels(workspace.channelIds)
 
             try {
-                client.run()
+                coroutineScope {
+                    val badgeJob = launch {
+                        refreshBadgeAssets(
+                            authentication = authentication,
+                            workspace = workspace,
+                        )
+                    }
+                    try {
+                        client.run()
+                    } finally {
+                        badgeJob.cancelAndJoin()
+                    }
+                }
             } finally {
                 runtime.close()
                 client.close()
@@ -78,5 +96,42 @@ class AuthenticatedChatRuntimeCoordinator(
     fun close() {
         sessionRuntime?.close()
         runningClient?.close()
+    }
+
+    private suspend fun refreshBadgeAssets(
+        authentication: StoredAuthentication,
+        workspace: WorkspaceRuntimeSnapshot,
+    ) {
+        bestEffort {
+            state.replaceGlobalBadgeAssets(
+                badgeClient.loadGlobal(authentication),
+            )
+        }
+        workspace.channelIds
+            .asSequence()
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .distinct()
+            .forEach { channelId ->
+                bestEffort {
+                    state.replaceChannelBadgeAssets(
+                        channelId = channelId,
+                        value = badgeClient.loadChannel(
+                            authentication = authentication,
+                            broadcasterId = channelId,
+                        ),
+                    )
+                }
+            }
+    }
+
+    private suspend fun bestEffort(block: suspend () -> Unit) {
+        try {
+            block()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            // Badge metadata is optional presentation data; live chat must continue without it.
+        }
     }
 }
