@@ -56,22 +56,38 @@ import io.ferventio.shared.generated.resources.nuke_samples
 import io.ferventio.shared.generated.resources.nuke_scanned_messages
 import io.ferventio.shared.generated.resources.nuke_seconds
 import io.ferventio.shared.generated.resources.nuke_time_window
+import io.ferventio.shared.runtime.LocalFerventioRuntimeState
 import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun NukePreviewSheet(
+    channelId: String,
     messages: List<ChatMessage>,
     onDismiss: () -> Unit,
 ) {
-    var config by remember {
+    val runtime = LocalFerventioRuntimeState.current
+    val moderatorUserId = runtime.authentication.state.authentication
+        ?.accessLease
+        ?.session
+        ?.userId
+        ?.trim()
+        .orEmpty()
+    val hardExcludedUserIds = remember(channelId, moderatorUserId) {
+        setOf(channelId.trim(), moderatorUserId)
+            .filter(String::isNotEmpty)
+            .toSet()
+    }
+    var config by remember(channelId, hardExcludedUserIds) {
         mutableStateOf(
             NukePreviewConfig(
                 query = "",
+                excludedUserIds = hardExcludedUserIds,
                 maxSamples = 20,
             ),
         )
     }
+    var executionInFlight by remember(channelId) { mutableStateOf(false) }
     val previewedAtMillis = remember(messages, config) { currentEpochMillis() }
     val previewResult = remember(messages, config, previewedAtMillis) {
         NukePreviewPlanner.build(
@@ -82,7 +98,11 @@ internal fun NukePreviewSheet(
     }
     val preview = (previewResult as? NukePreviewResult.Success)?.preview
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    ModalBottomSheet(
+        onDismissRequest = {
+            if (!executionInFlight) onDismiss()
+        },
+    ) {
         LazyColumn(
             modifier = Modifier.fillMaxWidth(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 28.dp),
@@ -109,6 +129,7 @@ internal fun NukePreviewSheet(
                     onValueChange = { value ->
                         config = config.copy(query = value.take(MAX_QUERY_LENGTH))
                     },
+                    enabled = !executionInFlight,
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text(stringResource(Res.string.nuke_query_label)) },
                     minLines = 1,
@@ -121,11 +142,13 @@ internal fun NukePreviewSheet(
                     FilterChip(
                         selected = config.matchMode == NukeMatchMode.PLAIN_TEXT,
                         onClick = { config = config.copy(matchMode = NukeMatchMode.PLAIN_TEXT) },
+                        enabled = !executionInFlight,
                         label = { Text(stringResource(Res.string.nuke_plain_text)) },
                     )
                     FilterChip(
                         selected = config.matchMode == NukeMatchMode.REGEX,
                         onClick = { config = config.copy(matchMode = NukeMatchMode.REGEX) },
+                        enabled = !executionInFlight,
                         label = { Text(stringResource(Res.string.nuke_regex)) },
                     )
                 }
@@ -135,6 +158,7 @@ internal fun NukePreviewSheet(
                 NukeToggleRow(
                     title = stringResource(Res.string.nuke_case_sensitive),
                     checked = config.caseSensitive,
+                    enabled = !executionInFlight,
                     onCheckedChange = { config = config.copy(caseSensitive = it) },
                 )
             }
@@ -151,6 +175,7 @@ internal fun NukePreviewSheet(
                             FilterChip(
                                 selected = config.windowMillis == windowMillis,
                                 onClick = { config = config.copy(windowMillis = windowMillis) },
+                                enabled = !executionInFlight,
                                 label = {
                                     Text(
                                         stringResource(
@@ -178,16 +203,19 @@ internal fun NukePreviewSheet(
                         NukeToggleRow(
                             title = stringResource(Res.string.nuke_exclude_broadcaster),
                             checked = config.excludeBroadcaster,
+                            enabled = !executionInFlight,
                             onCheckedChange = { config = config.copy(excludeBroadcaster = it) },
                         )
                         NukeToggleRow(
                             title = stringResource(Res.string.nuke_exclude_moderators),
                             checked = config.excludeModerators,
+                            enabled = !executionInFlight,
                             onCheckedChange = { config = config.copy(excludeModerators = it) },
                         )
                         NukeToggleRow(
                             title = stringResource(Res.string.nuke_exclude_vips),
                             checked = config.excludeVips,
+                            enabled = !executionInFlight,
                             onCheckedChange = { config = config.copy(excludeVips = it) },
                         )
                     }
@@ -283,12 +311,27 @@ internal fun NukePreviewSheet(
                 }
             }
 
+            if (preview != null && preview.matchedUserCount > 0) {
+                item(key = "execute") {
+                    NukeExecutionControls(
+                        channelId = channelId,
+                        config = config,
+                        preview = preview,
+                        previewedAtMillis = previewedAtMillis,
+                        onExecutionInFlightChanged = { executionInFlight = it },
+                    )
+                }
+            }
+
             item(key = "close") {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
                 ) {
-                    TextButton(onClick = onDismiss) {
+                    TextButton(
+                        onClick = onDismiss,
+                        enabled = !executionInFlight,
+                    ) {
                         Text(stringResource(Res.string.nuke_close))
                     }
                 }
@@ -301,6 +344,7 @@ internal fun NukePreviewSheet(
 private fun NukeToggleRow(
     title: String,
     checked: Boolean,
+    enabled: Boolean,
     onCheckedChange: (Boolean) -> Unit,
 ) {
     Row(
@@ -313,7 +357,11 @@ private fun NukeToggleRow(
             modifier = Modifier.weight(1f),
             style = MaterialTheme.typography.bodyMedium,
         )
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(
+            checked = checked,
+            enabled = enabled,
+            onCheckedChange = onCheckedChange,
+        )
     }
 }
 
