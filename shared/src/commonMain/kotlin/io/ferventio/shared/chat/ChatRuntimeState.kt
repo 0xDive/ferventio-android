@@ -7,6 +7,9 @@ import io.ferventio.app.domain.ChatBadge
 import io.ferventio.app.domain.ChatBadgeAsset
 import io.ferventio.app.domain.ChatMessage
 import io.ferventio.app.domain.ConnectionStatus
+import io.ferventio.app.domain.InteractiveChatOverlayEvent
+import io.ferventio.app.domain.InteractiveChatOverlayReducer
+import io.ferventio.app.domain.InteractiveChatOverlayState
 import io.ferventio.app.domain.ModerationAction
 import io.ferventio.app.domain.ModerationState
 import io.ferventio.app.domain.chatBadgeAssetKey
@@ -16,6 +19,7 @@ data class ChatRuntimeSnapshot(
     val messagesByChannel: Map<String, List<ChatMessage>> = emptyMap(),
     val globalBadgeAssets: Map<String, ChatBadgeAsset> = emptyMap(),
     val badgeAssetsByChannel: Map<String, Map<String, ChatBadgeAsset>> = emptyMap(),
+    val interactiveState: InteractiveChatOverlayState = InteractiveChatOverlayState(),
     val connectionStatus: ConnectionStatus = ConnectionStatus.DISCONNECTED,
     val connectionDetail: String? = null,
     val connectionAttempt: Int = 0,
@@ -23,35 +27,26 @@ data class ChatRuntimeSnapshot(
     val authenticationRequired: Boolean = false,
 )
 
-/**
- * Platform-neutral live-chat state shared by Android/iOS UI and future KMP EventSub transport.
- *
- * Message ordering and the 5k per-channel memory window match the current Android controller.
- */
+/** Platform-neutral live-chat state shared by Android/iOS UI and common EventSub transport. */
 class ChatRuntimeStateHolder(
     initialSnapshot: ChatRuntimeSnapshot = ChatRuntimeSnapshot(),
 ) {
     var messagesByChannel by mutableStateOf(emptyMap<String, List<ChatMessage>>())
         private set
-
     var globalBadgeAssets by mutableStateOf(emptyMap<String, ChatBadgeAsset>())
         private set
-
     var badgeAssetsByChannel by mutableStateOf(emptyMap<String, Map<String, ChatBadgeAsset>>())
         private set
-
+    var interactiveState by mutableStateOf(InteractiveChatOverlayState())
+        private set
     var connectionStatus by mutableStateOf(ConnectionStatus.DISCONNECTED)
         private set
-
     var connectionDetail by mutableStateOf<String?>(null)
         private set
-
     var connectionAttempt by mutableStateOf(0)
         private set
-
     var connectionErrorMessage by mutableStateOf<String?>(null)
         private set
-
     var authenticationRequired by mutableStateOf(false)
         private set
 
@@ -60,6 +55,7 @@ class ChatRuntimeStateHolder(
             messagesByChannel = messagesByChannel,
             globalBadgeAssets = globalBadgeAssets,
             badgeAssetsByChannel = badgeAssetsByChannel,
+            interactiveState = interactiveState,
             connectionStatus = connectionStatus,
             connectionDetail = connectionDetail,
             connectionAttempt = connectionAttempt,
@@ -73,6 +69,7 @@ class ChatRuntimeStateHolder(
         initialSnapshot.badgeAssetsByChannel.forEach { (channelId, assets) ->
             replaceChannelBadgeAssets(channelId, assets)
         }
+        interactiveState = initialSnapshot.interactiveState
         updateConnection(
             status = initialSnapshot.connectionStatus,
             detail = initialSnapshot.connectionDetail,
@@ -82,26 +79,18 @@ class ChatRuntimeStateHolder(
         authenticationRequired = initialSnapshot.authenticationRequired
     }
 
-    fun messages(channelId: String): List<ChatMessage> =
-        messagesByChannel[channelId.trim()].orEmpty()
+    fun messages(channelId: String): List<ChatMessage> = messagesByChannel[channelId.trim()].orEmpty()
 
-    fun badgeAsset(
-        channelId: String,
-        badge: ChatBadge,
-    ): ChatBadgeAsset? {
+    fun badgeAsset(channelId: String, badge: ChatBadge): ChatBadgeAsset? {
         val key = chatBadgeAssetKey(badge.setId, badge.id)
-        return badgeAssetsByChannel[channelId.trim()]?.get(key)
-            ?: globalBadgeAssets[key]
+        return badgeAssetsByChannel[channelId.trim()]?.get(key) ?: globalBadgeAssets[key]
     }
 
     fun replaceGlobalBadgeAssets(value: Map<String, ChatBadgeAsset>) {
         globalBadgeAssets = normalizeBadgeAssets(value)
     }
 
-    fun replaceChannelBadgeAssets(
-        channelId: String,
-        value: Map<String, ChatBadgeAsset>,
-    ) {
+    fun replaceChannelBadgeAssets(channelId: String, value: Map<String, ChatBadgeAsset>) {
         val normalizedChannelId = requireChannelId(channelId)
         val normalizedAssets = normalizeBadgeAssets(value)
         badgeAssetsByChannel = if (normalizedAssets.isEmpty()) {
@@ -111,10 +100,7 @@ class ChatRuntimeStateHolder(
         }
     }
 
-    fun replaceChannelMessages(
-        channelId: String,
-        messages: List<ChatMessage>,
-    ) {
+    fun replaceChannelMessages(channelId: String, messages: List<ChatMessage>) {
         val normalizedChannelId = requireChannelId(channelId)
         val normalized = normalizeMessages(normalizedChannelId, messages)
         messagesByChannel = if (normalized.isEmpty()) {
@@ -122,6 +108,10 @@ class ChatRuntimeStateHolder(
         } else {
             messagesByChannel + (normalizedChannelId to normalized)
         }
+    }
+
+    fun applyInteractive(event: InteractiveChatOverlayEvent) {
+        interactiveState = InteractiveChatOverlayReducer.reduce(interactiveState, event)
     }
 
     fun append(message: ChatMessage) {
@@ -136,16 +126,10 @@ class ChatRuntimeStateHolder(
         messagesByChannel = messagesByChannel + (message.channelId to updated)
     }
 
-    fun prependHistory(
-        channelId: String,
-        messages: List<ChatMessage>,
-    ) {
+    fun prependHistory(channelId: String, messages: List<ChatMessage>) {
         val normalizedChannelId = requireChannelId(channelId)
         val existing = messagesByChannel[normalizedChannelId].orEmpty()
-        replaceChannelMessages(
-            channelId = normalizedChannelId,
-            messages = messages + existing,
-        )
+        replaceChannelMessages(normalizedChannelId, messages + existing)
     }
 
     fun markMessageDeleted(
@@ -158,22 +142,15 @@ class ChatRuntimeStateHolder(
             ?: throw IllegalArgumentException("Chat message id must not be blank")
         var changed = false
         val updated = messagesByChannel[normalizedChannelId].orEmpty().map { message ->
-            if (message.id != normalizedMessageId) {
-                message
-            } else {
+            if (message.id != normalizedMessageId) message else {
                 changed = true
                 message.copy(
                     flags = message.flags.copy(isDeleted = true),
-                    moderation = ModerationState(
-                        action = ModerationAction.DELETE,
-                        atMillis = atMillis,
-                    ),
+                    moderation = ModerationState(ModerationAction.DELETE, atMillis = atMillis),
                 )
             }
         }
-        if (changed) {
-            messagesByChannel = messagesByChannel + (normalizedChannelId to updated)
-        }
+        if (changed) messagesByChannel = messagesByChannel + (normalizedChannelId to updated)
         return changed
     }
 
@@ -187,22 +164,15 @@ class ChatRuntimeStateHolder(
             ?: throw IllegalArgumentException("Chat user id must not be blank")
         var changed = 0
         val updated = messagesByChannel[normalizedChannelId].orEmpty().map { message ->
-            if (message.userId != normalizedUserId) {
-                message
-            } else {
+            if (message.userId != normalizedUserId) message else {
                 changed += 1
                 message.copy(
                     flags = message.flags.copy(isDeleted = true),
-                    moderation = ModerationState(
-                        action = ModerationAction.TIMEOUT,
-                        atMillis = atMillis,
-                    ),
+                    moderation = ModerationState(ModerationAction.TIMEOUT, atMillis = atMillis),
                 )
             }
         }
-        if (changed > 0) {
-            messagesByChannel = messagesByChannel + (normalizedChannelId to updated)
-        }
+        if (changed > 0) messagesByChannel = messagesByChannel + (normalizedChannelId to updated)
         return changed
     }
 
@@ -218,15 +188,18 @@ class ChatRuntimeStateHolder(
         if (normalized.isEmpty()) return
         messagesByChannel = messagesByChannel - normalized
         badgeAssetsByChannel = badgeAssetsByChannel - normalized
+        applyInteractive(InteractiveChatOverlayEvent.ClearChannel(normalized))
     }
 
     fun retainChannels(channelIds: Iterable<String>) {
-        val allowed = channelIds
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .toSet()
+        val allowed = channelIds.map { it.trim() }.filter { it.isNotEmpty() }.toSet()
         messagesByChannel = messagesByChannel.filterKeys(allowed::contains)
         badgeAssetsByChannel = badgeAssetsByChannel.filterKeys(allowed::contains)
+        val interactiveChannels = interactiveState.pollsByChannel.keys +
+            interactiveState.predictionsByChannel.keys + interactiveState.mutationsByChannel.keys
+        interactiveChannels.filterNot(allowed::contains).forEach { channelId ->
+            applyInteractive(InteractiveChatOverlayEvent.ClearChannel(channelId))
+        }
     }
 
     fun updateConnection(
@@ -259,6 +232,7 @@ class ChatRuntimeStateHolder(
         messagesByChannel = emptyMap()
         globalBadgeAssets = emptyMap()
         badgeAssetsByChannel = emptyMap()
+        interactiveState = InteractiveChatOverlayState()
         authenticationRequired = false
         updateConnection(ConnectionStatus.DISCONNECTED)
     }
@@ -273,10 +247,7 @@ class ChatRuntimeStateHolder(
         messagesByChannel = normalized
     }
 
-    private fun normalizeMessages(
-        channelId: String,
-        messages: List<ChatMessage>,
-    ): List<ChatMessage> {
+    private fun normalizeMessages(channelId: String, messages: List<ChatMessage>): List<ChatMessage> {
         val byId = linkedMapOf<String, ChatMessage>()
         messages.forEach { message ->
             requireMessage(message)

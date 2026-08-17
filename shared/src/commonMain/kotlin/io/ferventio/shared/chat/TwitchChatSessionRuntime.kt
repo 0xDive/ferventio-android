@@ -7,16 +7,12 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.launch
 
-/**
- * Binds EventSub lifecycle callbacks to the shared chat state without owning platform UI.
- * Socket transport remains separate so this session behavior is deterministic in common tests.
- */
+/** Binds EventSub lifecycle callbacks to shared chat state without owning platform UI. */
 internal class TwitchChatSessionRuntime(
     private val authentication: StoredAuthentication,
     private val workspace: WorkspaceRuntimeSnapshot,
     private val state: ChatRuntimeStateHolder,
-    private val bootstrapCoordinator: TwitchEventSubBootstrapCoordinator =
-        TwitchEventSubBootstrapCoordinator(),
+    private val bootstrapCoordinator: TwitchEventSubBootstrapCoordinator = TwitchEventSubBootstrapCoordinator(),
 ) {
     private var supplementalSubscriptionsJob: Job? = null
 
@@ -40,29 +36,30 @@ internal class TwitchChatSessionRuntime(
     }
 
     fun onEnvelope(envelope: TwitchEventSubProtocolEnvelope): Boolean {
-        val mutation = runCatching {
-            TwitchChatMutationEventParser.parse(envelope)
-        }.getOrNull()
+        val mutation = runCatching { TwitchChatMutationEventParser.parse(envelope) }.getOrNull()
         if (mutation != null) {
             when (mutation) {
                 is TwitchChatMutationEvent.MessageDeleted -> state.markMessageDeleted(
                     channelId = mutation.channelId,
                     messageId = mutation.messageId,
                 )
-
                 is TwitchChatMutationEvent.UserMessagesCleared -> state.markUserMessagesDeleted(
                     channelId = mutation.channelId,
                     userId = mutation.userId,
                 )
-
                 is TwitchChatMutationEvent.ChatCleared -> state.clearChannelMessages(mutation.channelId)
             }
             return true
         }
 
-        val message = runCatching {
-            TwitchChatMessageEventParser.parse(envelope)
-        }.getOrNull() ?: return false
+        val interactive = runCatching { TwitchInteractiveEventParser.parse(envelope) }.getOrNull()
+        if (interactive != null) {
+            state.applyInteractive(interactive)
+            return true
+        }
+
+        val message = runCatching { TwitchChatMessageEventParser.parse(envelope) }.getOrNull()
+            ?: return false
         state.append(message)
         return true
     }
