@@ -87,7 +87,7 @@ class TwitchChatBadgeClient(
             for (setElement in data) {
                 val set = setElement.runCatching { jsonObject }.getOrNull() ?: continue
                 val setId = set.string("set_id") ?: continue
-                val versions = set["versions"]?.runCatching { jsonArray }.getOrNull() ?: continue
+                val versions = set["versions"]?.runCatching { jsonArray }?.getOrNull() ?: continue
                 for (versionElement in versions) {
                     val version = versionElement.runCatching { jsonObject }.getOrNull() ?: continue
                     val id = version.string("id") ?: continue
