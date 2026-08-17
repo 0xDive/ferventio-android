@@ -29,6 +29,15 @@ class TwitchAuthenticationFailureTest {
     }
 
     @Test
+    fun recognizesAuthorizationRevocation() {
+        assertTrue(
+            TwitchEventSubAuthorizationRevokedException(
+                subscriptionType = "channel.chat.message",
+            ).isTwitchAuthenticationFailure(),
+        )
+    }
+
+    @Test
     fun doesNotTreatRateLimitAsAuthenticationFailure() {
         assertFalse(
             TwitchEventSubSubscriptionException(
