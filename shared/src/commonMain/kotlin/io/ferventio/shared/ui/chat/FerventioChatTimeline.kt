@@ -21,6 +21,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -94,6 +95,7 @@ fun FerventioChatTimeline(
 ) {
     val runtime = LocalFerventioRuntimeState.current
     val chat = runtime.chat
+    val attention = runtime.attention
     val preferences = runtime.settings.preferences
     val canonicalMessages = chat.messages(channel.id)
     val sourceMessages = remember(canonicalMessages, preferences.showSystemMessages) {
@@ -122,6 +124,31 @@ fun FerventioChatTimeline(
     val listState = rememberLazyListState()
     var followTail by remember(channel.id) { mutableStateOf(preferences.autoScrollEnabled) }
 
+    DisposableEffect(channel.id, attention) {
+        attention.updateViewport(
+            channelId = channel.id,
+            visible = true,
+            isAtLiveTail = !listState.canScrollForward,
+        )
+        onDispose {
+            attention.updateViewport(
+                channelId = channel.id,
+                visible = false,
+                isAtLiveTail = false,
+            )
+        }
+    }
+    LaunchedEffect(channel.id, listState, attention) {
+        snapshotFlow { !listState.canScrollForward }
+            .distinctUntilChanged()
+            .collect { isAtLiveTail ->
+                attention.updateViewport(
+                    channelId = channel.id,
+                    visible = true,
+                    isAtLiveTail = isAtLiveTail,
+                )
+            }
+    }
     LaunchedEffect(preferences.autoScrollEnabled) {
         followTail = preferences.autoScrollEnabled && !listState.canScrollForward
     }
