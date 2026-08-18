@@ -46,6 +46,14 @@
     <string name="chat_waiting_for_messages">Ждём сообщения…</string>
     <string name="chat_message_deleted">[сообщение удалено]</string>
     <string name="chat_replying_to">Ответ для %1$s</string>
+    <string name="chat_composer_placeholder">Сообщение #%1$s</string>
+    <string name="chat_send">Отправить</string>
+    <string name="chat_sending">Отправляется…</string>
+    <string name="chat_reply_cancel">Отменить ответ</string>
+    <string name="chat_send_failed">Не удалось отправить: %1$s</string>
+    <string name="chat_retry">Повторить</string>
+    <string name="chat_write_scope_required">Чтобы отправлять сообщения, нужно войти заново.</string>
+    <string name="chat_message_too_long">Сообщение слишком длинное (%1$d/500).</string>
     <string name="chat_status_disconnected">Чат отключён</string>
     <string name="chat_status_connecting">Подключаемся к чату…</string>
     <string name="chat_status_waiting_welcome">Ждём Twitch…</string>
