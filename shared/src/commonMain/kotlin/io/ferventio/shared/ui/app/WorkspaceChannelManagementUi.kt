@@ -51,6 +51,7 @@ import io.ferventio.shared.generated.resources.workspace_remove_channel_title
 import io.ferventio.shared.generated.resources.workspace_rename_channel
 import io.ferventio.shared.generated.resources.workspace_save
 import io.ferventio.shared.generated.resources.workspace_unpin_channel
+import io.ferventio.shared.runtime.LocalFerventioRuntimeState
 import io.ferventio.shared.workspace.WorkspaceRuntimeStateHolder
 import org.jetbrains.compose.resources.stringResource
 
@@ -66,6 +67,7 @@ internal fun WorkspaceChannelManagement(
     onMoveChannel: (String, Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val attentionState = LocalFerventioRuntimeState.current.attention
     var addDialogVisible by remember { mutableStateOf(false) }
     var addLogin by remember { mutableStateOf("") }
     var managedChannelId by remember { mutableStateOf<String?>(null) }
@@ -147,6 +149,7 @@ internal fun WorkspaceChannelManagement(
                 val title = state.channelTabTitles[channel.id]
                     ?.takeIf(String::isNotBlank)
                     ?: "#${channel.displayName}"
+                val attention = attentionState.attention(channel.id)
                 NavigationDrawerItem(
                     label = {
                         Column {
@@ -182,11 +185,31 @@ internal fun WorkspaceChannelManagement(
                     selected = channel.id == selectedChannel?.id,
                     onClick = { onSelectChannel(channel.id) },
                     badge = {
-                        TextButton(
-                            onClick = { managedChannelId = channel.id },
-                            enabled = !busy,
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(2.dp),
                         ) {
-                            Text("⋮")
+                            if (attention.mentionCount > 0) {
+                                Text(
+                                    text = "@${compactAttentionCount(attention.mentionCount)}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.tertiary,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            } else if (attention.unreadCount > 0) {
+                                Text(
+                                    text = compactAttentionCount(attention.unreadCount),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+                            TextButton(
+                                onClick = { managedChannelId = channel.id },
+                                enabled = !busy,
+                            ) {
+                                Text("⋮")
+                            }
                         }
                     },
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 2.dp),
@@ -391,5 +414,7 @@ internal fun WorkspaceChannelManagement(
         }
     }
 }
+
+private fun compactAttentionCount(value: Int): String = if (value > 99) "99+" else value.toString()
 
 private const val MAX_CHANNELS = 20
