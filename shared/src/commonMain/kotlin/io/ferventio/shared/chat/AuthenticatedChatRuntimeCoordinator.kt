@@ -31,8 +31,10 @@ internal class ChatSessionRunGate {
  */
 class AuthenticatedChatRuntimeCoordinator(
     val state: ChatRuntimeStateHolder,
+    val attention: ChatAttentionStateHolder,
 ) {
-    constructor() : this(ChatRuntimeStateHolder())
+    constructor() : this(ChatRuntimeStateHolder(), ChatAttentionStateHolder())
+    constructor(state: ChatRuntimeStateHolder) : this(state, ChatAttentionStateHolder())
 
     private val runGate = ChatSessionRunGate()
     private val badgeClient = TwitchChatBadgeClient()
@@ -56,6 +58,7 @@ class AuthenticatedChatRuntimeCoordinator(
                 authentication = authentication,
                 workspace = workspace,
                 state = state,
+                attention = attention,
                 onFatalSessionError = { client.close() },
             )
             client = TwitchEventSubSocketClient(
@@ -68,6 +71,7 @@ class AuthenticatedChatRuntimeCoordinator(
             sessionRuntime = runtime
             runningClient = client
             state.retainChannels(workspace.channelIds)
+            attention.retainChannels(workspace.channelIds)
 
             try {
                 coroutineScope {
