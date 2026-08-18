@@ -77,4 +77,120 @@ final class WorkspaceRuntimeBridge {
             // The shared coordinator already records a user-visible save failure.
         }
     }
+
+    func addChannel(
+        authentication: StoredAuthentication?,
+        login: String
+    ) async -> Bool {
+        await performMutation(authentication: authentication) { identity, authentication in
+            _ = try await coordinator.addChannel(
+                identity: identity,
+                authentication: authentication,
+                loginInput: login,
+                state: stateHolder,
+                settingsState: settingsState
+            )
+        }
+    }
+
+    func removeChannel(
+        authentication: StoredAuthentication?,
+        channelId: String
+    ) async -> Bool {
+        await performMutation(authentication: authentication) { identity, authentication in
+            _ = try await coordinator.removeChannel(
+                identity: identity,
+                authentication: authentication,
+                channelId: channelId,
+                state: stateHolder,
+                settingsState: settingsState
+            )
+        }
+    }
+
+    func moveChannel(
+        authentication: StoredAuthentication?,
+        channelId: String,
+        targetIndex: Int32
+    ) async -> Bool {
+        await performMutation(authentication: authentication) { identity, authentication in
+            _ = try await coordinator.moveChannel(
+                identity: identity,
+                authentication: authentication,
+                channelId: channelId,
+                targetIndex: targetIndex,
+                state: stateHolder,
+                settingsState: settingsState
+            )
+        }
+    }
+
+    func setChannelPinned(
+        authentication: StoredAuthentication?,
+        channelId: String,
+        pinned: Bool
+    ) async -> Bool {
+        await performMutation(authentication: authentication) { identity, authentication in
+            _ = try await coordinator.setChannelPinned(
+                identity: identity,
+                authentication: authentication,
+                channelId: channelId,
+                pinned: pinned,
+                state: stateHolder,
+                settingsState: settingsState
+            )
+        }
+    }
+
+    func renameChannel(
+        authentication: StoredAuthentication?,
+        channelId: String,
+        title: String?
+    ) async -> Bool {
+        await performMutation(authentication: authentication) { identity, authentication in
+            _ = try await coordinator.renameChannelTab(
+                identity: identity,
+                authentication: authentication,
+                channelId: channelId,
+                title: title,
+                state: stateHolder,
+                settingsState: settingsState
+            )
+        }
+    }
+
+    func persistSelectedChannel(
+        authentication: StoredAuthentication?,
+        channelId: String
+    ) async -> Bool {
+        await performMutation(authentication: authentication) { identity, authentication in
+            _ = try await coordinator.selectChannel(
+                identity: identity,
+                authentication: authentication,
+                channelId: channelId,
+                state: stateHolder,
+                settingsState: settingsState
+            )
+        }
+    }
+
+    private func performMutation(
+        authentication: StoredAuthentication?,
+        operation: (MobileDeviceIdentity, StoredAuthentication) async throws -> Void
+    ) async -> Bool {
+        guard let authentication else {
+            stateHolder.markMutationFailed(errorMessage: "Authentication is unavailable")
+            return false
+        }
+        stateHolder.markMutationStarted()
+        do {
+            let identity = try identityStore.loadOrCreate()
+            try await operation(identity, authentication)
+            stateHolder.markMutationSucceeded()
+            return true
+        } catch {
+            stateHolder.markMutationFailed(errorMessage: String(describing: error))
+            return false
+        }
+    }
 }
