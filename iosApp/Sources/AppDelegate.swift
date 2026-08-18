@@ -5,16 +5,12 @@ import UserNotifications
 @main
 @MainActor
 final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterDelegate {
-    var window: UIWindow?
-
     private let runtimeState = MainViewControllerKt.IosRuntimeState()
     private var authenticationRuntimeBridge: MobileAuthenticationRuntimeBridge?
     private var workspaceRuntimeBridge: WorkspaceRuntimeBridge?
     private var pushBackendRegistrationRuntimeBridge: PushBackendRegistrationRuntimeBridge?
     private var authenticatedChatRuntimeBridge: AuthenticatedChatRuntimeBridge?
-    private lazy var lifecycleObserver = AppLifecycleObserver(
-        stateHolder: runtimeState.lifecycle
-    )
+    private var isPrimarySceneActive = false
     private lazy var networkRecoveryObserver = NetworkRecoveryObserver(
         onReachable: { [weak self] in
             await self?.recoverAfterNetworkAvailable()
@@ -32,7 +28,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
-        lifecycleObserver.start(applicationState: application.applicationState)
+        runtimeState.lifecycle.markInactive()
         authenticatedChatRuntimeBridge = AuthenticatedChatRuntimeBridge(
             stateHolder: runtimeState.chat,
             onAuthenticationRequired: { [weak self] in
@@ -82,59 +78,21 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
             )
         }
 
-        let window = UIWindow(frame: UIScreen.main.bounds)
-        window.rootViewController = MainViewControllerKt.MainViewController(
-            onAuthenticate: { [weak self] in
-                Task { @MainActor [weak self] in
-                    await self?.authenticationRuntimeBridge?.signIn()
-                    await self?.restoreWorkspaceAndSynchronizePush()
-                }
-            },
-            onSignOut: { [weak self] in
-                Task { @MainActor [weak self] in
-                    await self?.signOutAndCleanup()
-                }
-            },
-            onRequestNotificationPermission: { [weak self] in
-                Task { @MainActor [weak self] in
-                    await self?.requestNotificationPermission()
-                }
-            },
-            onOpenNotificationSettings: { [weak self] in
-                Task { @MainActor [weak self] in
-                    self?.openNotificationSettings()
-                }
-            },
-            onSaveSettings: { [weak self] preferences in
-                Task { @MainActor [weak self] in
-                    guard let self else {
-                        return
-                    }
-                    await workspaceRuntimeBridge?.savePreferences(
-                        authentication: runtimeState.authentication.state.authentication,
-                        preferences: preferences
-                    )
-                }
-            }
-        )
-        window.makeKeyAndVisible()
-        self.window = window
         networkRecoveryObserver.start()
         return true
     }
 
-    func applicationDidBecomeActive(_ application: UIApplication) {
-        Task { @MainActor [weak self] in
-            guard let self else {
-                return
-            }
-            await pushRuntimeBridge.refreshAuthorizationAndRestoreRemoteRegistration()
-            await refreshAuthenticationAndSynchronizeRuntime()
-        }
-    }
-
-    func applicationDidEnterBackground(_ application: UIApplication) {
-        authenticatedChatRuntimeBridge?.stop()
+    func application(
+        _ application: UIApplication,
+        configurationForConnecting connectingSceneSession: UISceneSession,
+        options: UIScene.ConnectionOptions
+    ) -> UISceneConfiguration {
+        let configuration = UISceneConfiguration(
+            name: "Default Configuration",
+            sessionRole: connectingSceneSession.role
+        )
+        configuration.delegateClass = SceneDelegate.self
+        return configuration
     }
 
     func application(
@@ -178,7 +136,75 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     func applicationWillTerminate(_ application: UIApplication) {
         authenticatedChatRuntimeBridge?.stop()
         networkRecoveryObserver.stop()
-        lifecycleObserver.stop()
+    }
+
+    func makeRootViewController() -> UIViewController {
+        MainViewControllerKt.MainViewController(
+            onAuthenticate: { [weak self] in
+                Task { @MainActor [weak self] in
+                    await self?.authenticationRuntimeBridge?.signIn()
+                    await self?.restoreWorkspaceAndSynchronizePush()
+                }
+            },
+            onSignOut: { [weak self] in
+                Task { @MainActor [weak self] in
+                    await self?.signOutAndCleanup()
+                }
+            },
+            onRequestNotificationPermission: { [weak self] in
+                Task { @MainActor [weak self] in
+                    await self?.requestNotificationPermission()
+                }
+            },
+            onOpenNotificationSettings: { [weak self] in
+                Task { @MainActor [weak self] in
+                    self?.openNotificationSettings()
+                }
+            },
+            onSaveSettings: { [weak self] preferences in
+                Task { @MainActor [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    await workspaceRuntimeBridge?.savePreferences(
+                        authentication: runtimeState.authentication.state.authentication,
+                        preferences: preferences
+                    )
+                }
+            }
+        )
+    }
+
+    func sceneDidBecomeActive() {
+        isPrimarySceneActive = true
+        runtimeState.lifecycle.markActive()
+        Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+            await pushRuntimeBridge.refreshAuthorizationAndRestoreRemoteRegistration()
+            await refreshAuthenticationAndSynchronizeRuntime()
+        }
+    }
+
+    func sceneWillResignActive() {
+        isPrimarySceneActive = false
+        runtimeState.lifecycle.markInactive()
+    }
+
+    func sceneWillEnterForeground() {
+        runtimeState.lifecycle.markInactive()
+    }
+
+    func sceneDidEnterBackground() {
+        isPrimarySceneActive = false
+        runtimeState.lifecycle.markBackground()
+        authenticatedChatRuntimeBridge?.stop()
+    }
+
+    func sceneDidDisconnect() {
+        isPrimarySceneActive = false
+        authenticatedChatRuntimeBridge?.stop()
     }
 
     private func requestNotificationPermission() async {
@@ -227,7 +253,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     }
 
     private func recoverAfterNetworkAvailable() async {
-        guard UIApplication.shared.applicationState == .active else {
+        guard isPrimarySceneActive else {
             return
         }
         await pushRuntimeBridge.refreshAuthorizationAndRestoreRemoteRegistration()
@@ -259,9 +285,9 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     }
 
     private func synchronizeReadyAuthenticatedRuntime() async {
-        // A refresh may have started while active and completed after the app transitioned to
+        // A refresh may have started while active and completed after the scene transitioned to
         // background. Never recreate the EventSub session from that stale foreground callback.
-        guard UIApplication.shared.applicationState == .active else {
+        guard isPrimarySceneActive else {
             authenticatedChatRuntimeBridge?.stop()
             return
         }
