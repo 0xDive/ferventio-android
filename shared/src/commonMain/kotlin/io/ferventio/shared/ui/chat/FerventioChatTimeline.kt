@@ -90,7 +90,11 @@ fun FerventioChatTimeline(
     val preferences = runtime.settings.preferences
     val canonicalMessages = chat.messages(channel.id)
     val sourceMessages = remember(canonicalMessages, preferences.showSystemMessages) {
-        if (preferences.showSystemMessages) canonicalMessages else canonicalMessages.filterNot(ChatMessage::isSystem)
+        if (preferences.showSystemMessages) {
+            canonicalMessages
+        } else {
+            canonicalMessages.filterNot { message -> message.isSystem }
+        }
     }
     val collapsePlan = remember(sourceMessages, preferences.repeatCollapseEnabled) {
         ChatRepeatCollapser.build(
@@ -198,7 +202,8 @@ private fun ChatConnectionBanner(chat: ChatRuntimeStateHolder) {
             color = if (chat.connectionStatus == ConnectionStatus.FAILED) {
                 MaterialTheme.colorScheme.onErrorContainer
             } else {
-                MaterialTheme.colorScheme.onSurfaceVariant,
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
         )
     }
 }
