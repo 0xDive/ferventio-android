@@ -49,6 +49,7 @@ internal fun projectChatMessage(
     thirdPartyEmotes: Map<String, ThirdPartyEmoteAsset> = emptyMap(),
     cheermoteAssetsByPrefix: Map<String, List<CheermoteAsset>> = emptyMap(),
     animatedMediaSupported: Boolean = supportsAnimatedChatMedia,
+    showDeletedMessageContent: Boolean = false,
 ): ChatMessagePresentation {
     val badges = message.badges.distinctBy { badge -> "${badge.setId}/${badge.id}" }
     val replyAuthor = message.reply?.let { reply ->
@@ -73,7 +74,7 @@ internal fun projectChatMessage(
                 bodyPreview = replyBodyPreview,
             )
         },
-        segments = if (message.isDeleted) {
+        segments = if (message.isDeleted && !showDeletedMessageContent) {
             listOf(
                 ChatMessageSegment(
                     text = deletedPlaceholder,
