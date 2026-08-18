@@ -46,6 +46,14 @@
     <string name="chat_waiting_for_messages">Waiting for messages…</string>
     <string name="chat_message_deleted">[message deleted]</string>
     <string name="chat_replying_to">Replying to %1$s</string>
+    <string name="chat_composer_placeholder">Message #%1$s</string>
+    <string name="chat_send">Send</string>
+    <string name="chat_sending">Sending…</string>
+    <string name="chat_reply_cancel">Cancel reply</string>
+    <string name="chat_send_failed">Couldn’t send: %1$s</string>
+    <string name="chat_retry">Retry</string>
+    <string name="chat_write_scope_required">Signing in again is required to send messages.</string>
+    <string name="chat_message_too_long">Message is too long (%1$d/500).</string>
     <string name="chat_status_disconnected">Chat disconnected</string>
     <string name="chat_status_connecting">Connecting to chat…</string>
     <string name="chat_status_waiting_welcome">Waiting for Twitch…</string>
