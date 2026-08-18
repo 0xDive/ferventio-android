@@ -4,6 +4,7 @@ import Foundation
 @MainActor
 final class AuthenticatedChatRuntimeBridge {
     private let stateHolder: ChatRuntimeStateHolder
+    private let attentionHolder: ChatAttentionStateHolder
     private let coordinator: AuthenticatedChatRuntimeCoordinator
     private let onAuthenticationRequired: () -> Void
 
@@ -13,10 +14,15 @@ final class AuthenticatedChatRuntimeBridge {
 
     init(
         stateHolder: ChatRuntimeStateHolder,
+        attentionHolder: ChatAttentionStateHolder,
         onAuthenticationRequired: @escaping () -> Void = {}
     ) {
         self.stateHolder = stateHolder
-        self.coordinator = AuthenticatedChatRuntimeCoordinator(state: stateHolder)
+        self.attentionHolder = attentionHolder
+        self.coordinator = AuthenticatedChatRuntimeCoordinator(
+            state: stateHolder,
+            attention: attentionHolder
+        )
         self.onAuthenticationRequired = onAuthenticationRequired
     }
 
@@ -79,6 +85,7 @@ final class AuthenticatedChatRuntimeBridge {
         runningFingerprint = nil
         if clearState {
             stateHolder.clear()
+            attentionHolder.clear()
         }
     }
 
