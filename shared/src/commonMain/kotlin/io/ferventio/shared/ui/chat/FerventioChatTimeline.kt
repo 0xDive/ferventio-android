@@ -19,6 +19,7 @@ import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -57,11 +58,15 @@ import io.ferventio.app.domain.ChatRepeatSummary
 import io.ferventio.app.domain.CheermoteAsset
 import io.ferventio.app.domain.ConnectionStatus
 import io.ferventio.app.domain.MessageDensity
+import io.ferventio.app.domain.OutgoingMessageState
 import io.ferventio.app.domain.ThirdPartyEmoteAsset
 import io.ferventio.shared.chat.ChatRuntimeStateHolder
 import io.ferventio.shared.generated.resources.Res
 import io.ferventio.shared.generated.resources.chat_message_deleted
 import io.ferventio.shared.generated.resources.chat_replying_to
+import io.ferventio.shared.generated.resources.chat_retry
+import io.ferventio.shared.generated.resources.chat_send_failed
+import io.ferventio.shared.generated.resources.chat_sending
 import io.ferventio.shared.generated.resources.chat_status_connecting
 import io.ferventio.shared.generated.resources.chat_status_creating_subscriptions
 import io.ferventio.shared.generated.resources.chat_status_disconnected
@@ -84,6 +89,8 @@ fun FerventioChatTimeline(
     channel: ChatChannel,
     modifier: Modifier = Modifier,
     onAuthorClick: ((ChatMessage) -> Unit)? = null,
+    onReplyRequest: ((ChatMessage) -> Unit)? = null,
+    onRetryMessage: ((ChatMessage) -> Unit)? = null,
 ) {
     val runtime = LocalFerventioRuntimeState.current
     val chat = runtime.chat
@@ -161,6 +168,8 @@ fun FerventioChatTimeline(
                         thirdPartyEmotes = thirdPartyEmotes,
                         cheermoteAssets = cheermoteAssets,
                         onAuthorClick = onAuthorClick,
+                        onReplyRequest = onReplyRequest,
+                        onRetryMessage = onRetryMessage,
                     )
                 }
             }
@@ -216,6 +225,8 @@ private fun ChatMessageRow(
     thirdPartyEmotes: Map<String, ThirdPartyEmoteAsset>,
     cheermoteAssets: Map<String, List<CheermoteAsset>>,
     onAuthorClick: ((ChatMessage) -> Unit)?,
+    onReplyRequest: ((ChatMessage) -> Unit)?,
+    onRetryMessage: ((ChatMessage) -> Unit)?,
 ) {
     val chat = LocalFerventioRuntimeState.current.chat
     val deletedPlaceholder = stringResource(Res.string.chat_message_deleted)
@@ -245,6 +256,11 @@ private fun ChatMessageRow(
         ?.trim()
         ?.takeIf(String::isNotEmpty)
         .takeIf { preferences.showAvatars }
+    val replyMessageId = message.serverMessageId?.trim()?.takeIf(String::isNotEmpty) ?: message.id
+    val canReply = onReplyRequest != null &&
+        !message.isSystem &&
+        !message.isDeleted &&
+        !replyMessageId.startsWith("local-")
     var textLayoutResult by remember(message.id) { mutableStateOf<TextLayoutResult?>(null) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -393,7 +409,7 @@ private fun ChatMessageRow(
                 )
             }
             renderSegments.forEachIndexed { index, renderSegment ->
-                val imageUrl = renderSegment.base.imageUrl ?: return@forEachIndexed
+                if (renderSegment.base.imageUrl == null) return@forEachIndexed
                 if (!renderSegment.base.kind.isInlineEmote()) return@forEachIndexed
                 val bttvVisualState = BttvEmoteVisualState(renderSegment.base.bttvModifiers)
                 put(
@@ -421,21 +437,26 @@ private fun ChatMessageRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = rowVerticalPadding)
-                .pointerInput(text, onAuthorClick) {
-                    detectTapGestures { position ->
-                        val offset = textLayoutResult?.getOffsetForPosition(position)
-                            ?: return@detectTapGestures
-                        val link = text.getStringAnnotations(URL_ANNOTATION_TAG, offset, offset).firstOrNull()
-                        if (link != null) {
-                            runCatching { uriHandler.openUri(link.item) }
-                            return@detectTapGestures
-                        }
-                        if (onAuthorClick != null) {
-                            val author = text.getStringAnnotations(AUTHOR_ANNOTATION_TAG, offset, offset)
-                                .firstOrNull()
-                            if (author != null) onAuthorClick(message)
-                        }
-                    }
+                .pointerInput(text, onAuthorClick, onReplyRequest, canReply) {
+                    detectTapGestures(
+                        onLongPress = {
+                            if (canReply) onReplyRequest?.invoke(message)
+                        },
+                        onTap = { position ->
+                            val offset = textLayoutResult?.getOffsetForPosition(position)
+                                ?: return@detectTapGestures
+                            val link = text.getStringAnnotations(URL_ANNOTATION_TAG, offset, offset).firstOrNull()
+                            if (link != null) {
+                                runCatching { uriHandler.openUri(link.item) }
+                                return@detectTapGestures
+                            }
+                            if (onAuthorClick != null) {
+                                val author = text.getStringAnnotations(AUTHOR_ANNOTATION_TAG, offset, offset)
+                                    .firstOrNull()
+                                if (author != null) onAuthorClick(message)
+                            }
+                        },
+                    )
                 },
             style = MaterialTheme.typography.bodyMedium.copy(color = bodyColor),
             inlineContent = inlineContent,
@@ -443,6 +464,37 @@ private fun ChatMessageRow(
             overflow = TextOverflow.Ellipsis,
             onTextLayout = { textLayoutResult = it },
         )
+
+        when (message.outgoingState) {
+            OutgoingMessageState.SENDING -> Text(
+                text = stringResource(Res.string.chat_sending),
+                modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 2.dp),
+                style = MaterialTheme.typography.labelSmall,
+                color = metadataColor,
+            )
+            OutgoingMessageState.FAILED -> Row(
+                modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                Text(
+                    text = stringResource(
+                        Res.string.chat_send_failed,
+                        message.outgoingError.orEmpty().ifBlank { "Twitch error" },
+                    ),
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+                if (onRetryMessage != null) {
+                    TextButton(onClick = { onRetryMessage(message) }) {
+                        Text(stringResource(Res.string.chat_retry))
+                    }
+                }
+            }
+            OutgoingMessageState.NONE,
+            OutgoingMessageState.SENT -> Unit
+        }
 
         repeatSummary?.let { summary ->
             Row(
