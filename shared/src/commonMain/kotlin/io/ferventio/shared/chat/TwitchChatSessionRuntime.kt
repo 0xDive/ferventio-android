@@ -1,5 +1,6 @@
 package io.ferventio.shared.chat
 
+import io.ferventio.app.domain.MessageRuleEvaluator
 import io.ferventio.app.domain.StoredAuthentication
 import io.ferventio.shared.workspace.WorkspaceRuntimeSnapshot
 import kotlinx.coroutines.CoroutineScope
@@ -7,19 +8,27 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.launch
 
-/** Binds EventSub lifecycle callbacks to shared chat state without owning platform UI. */
+/** Binds EventSub lifecycle callbacks to shared chat and attention state without owning platform UI. */
 internal class TwitchChatSessionRuntime(
     private val authentication: StoredAuthentication,
     private val workspace: WorkspaceRuntimeSnapshot,
     private val state: ChatRuntimeStateHolder,
+    private val attention: ChatAttentionStateHolder = ChatAttentionStateHolder(),
     private val bootstrapCoordinator: TwitchEventSubBootstrapCoordinator = TwitchEventSubBootstrapCoordinator(),
     private val onFatalSessionError: (Throwable) -> Unit = {},
 ) {
     private var supplementalSubscriptionsJob: Job? = null
+    private val session = authentication.accessLease?.session
+    private val messageRuleEvaluator = MessageRuleEvaluator.compile(
+        highlights = emptyList(),
+        ignores = emptyList(),
+        session = session,
+    )
 
     suspend fun onSessionReady(sessionId: String): Int {
         supplementalSubscriptionsJob?.cancel()
         state.retainChannels(workspace.channelIds)
+        attention.retainChannels(workspace.channelIds)
         val bootstrap = bootstrapCoordinator.bootstrap(
             authentication = authentication,
             sessionId = sessionId,
@@ -73,6 +82,11 @@ internal class TwitchChatSessionRuntime(
         val message = runCatching { TwitchChatMessageEventParser.parse(envelope) }.getOrNull()
             ?: return false
         state.append(message)
+        attention.recordIncoming(
+            message = message,
+            session = session,
+            evaluator = messageRuleEvaluator,
+        )
         return true
     }
 
