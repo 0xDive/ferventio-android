@@ -1,10 +1,13 @@
 package io.ferventio.shared
 
 import androidx.compose.ui.window.ComposeUIViewController
+import io.ferventio.app.domain.AppThemeMode
 import io.ferventio.shared.runtime.FerventioRuntimeState
 import io.ferventio.shared.runtime.ProvideFerventioRuntimeState
+import io.ferventio.shared.settings.SharedAppPreferences
 import io.ferventio.shared.ui.app.FerventioAuthenticationRoot
 import io.ferventio.shared.ui.theme.FerventioTheme
+import io.ferventio.shared.ui.theme.FerventioThemeMode
 import platform.UIKit.UIViewController
 
 private val iosRuntimeState = FerventioRuntimeState()
@@ -16,9 +19,18 @@ fun MainViewController(
     onSignOut: () -> Unit = {},
     onRequestNotificationPermission: () -> Unit = {},
     onOpenNotificationSettings: () -> Unit = {},
+    onSaveSettings: (SharedAppPreferences) -> Unit = {},
 ): UIViewController = ComposeUIViewController {
+    val preferences = iosRuntimeState.settings.preferences
     ProvideFerventioRuntimeState(iosRuntimeState) {
-        FerventioTheme {
+        FerventioTheme(
+            themeMode = when (preferences.themeMode) {
+                AppThemeMode.LIGHT -> FerventioThemeMode.LIGHT
+                AppThemeMode.DARK -> FerventioThemeMode.DARK
+                AppThemeMode.AMOLED -> FerventioThemeMode.AMOLED
+            },
+            fontScalePercent = preferences.fontScalePercent,
+        ) {
             FerventioAuthenticationRoot(
                 state = iosRuntimeState.authentication.state,
                 workspace = iosRuntimeState.workspace,
@@ -27,6 +39,7 @@ fun MainViewController(
                 pushAuthorizationStatus = iosRuntimeState.pushRegistration.authorizationStatus,
                 onRequestNotificationPermission = onRequestNotificationPermission,
                 onOpenNotificationSettings = onOpenNotificationSettings,
+                onSaveSettings = onSaveSettings,
             )
         }
     }
