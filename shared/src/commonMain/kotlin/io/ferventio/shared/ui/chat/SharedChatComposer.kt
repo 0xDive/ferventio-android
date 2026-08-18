@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -21,8 +23,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import io.ferventio.app.domain.ChatChannel
 import io.ferventio.app.domain.ChatMessage
@@ -72,6 +72,11 @@ fun SharedChatComposer(
         val auth = authentication ?: return
         if (!canSend) return
         val outgoingText = trimmed
+        val replyParentMessageId = replyTarget
+            ?.serverMessageId
+            ?.trim()
+            ?.takeIf(String::isNotEmpty)
+            ?: replyTarget?.id
         sending = true
         errorMessage = null
         scope.launch {
@@ -80,7 +85,7 @@ fun SharedChatComposer(
                     authentication = auth,
                     channel = channel,
                     message = outgoingText,
-                    replyParentMessageId = replyTarget?.id,
+                    replyParentMessageId = replyParentMessageId,
                 )
                 draft = ""
                 onSent()
