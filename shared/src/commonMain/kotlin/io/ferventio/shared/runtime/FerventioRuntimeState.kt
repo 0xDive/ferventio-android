@@ -9,12 +9,14 @@ import io.ferventio.shared.chat.TwitchInteractiveRuntime
 import io.ferventio.shared.moderation.TwitchModerationRuntime
 import io.ferventio.shared.push.PushNavigationInbox
 import io.ferventio.shared.push.PushRegistrationStateHolder
+import io.ferventio.shared.settings.SharedAppSettingsStateHolder
 import io.ferventio.shared.workspace.WorkspaceRuntimeStateHolder
 
 class FerventioRuntimeState(
     val lifecycle: AppLifecycleStateHolder,
     val authentication: MobileAuthenticationStateHolder,
     val workspace: WorkspaceRuntimeStateHolder,
+    val settings: SharedAppSettingsStateHolder,
     val chat: ChatRuntimeStateHolder,
     val pushRegistration: PushRegistrationStateHolder,
     val pushNavigation: PushNavigationInbox,
@@ -26,6 +28,7 @@ class FerventioRuntimeState(
         lifecycle = AppLifecycleStateHolder(),
         authentication = MobileAuthenticationStateHolder(),
         workspace = WorkspaceRuntimeStateHolder(),
+        settings = SharedAppSettingsStateHolder(),
         chat = ChatRuntimeStateHolder(),
         pushRegistration = PushRegistrationStateHolder(),
         pushNavigation = PushNavigationInbox(),
