@@ -13,6 +13,7 @@ import io.ferventio.app.domain.InteractiveChatOverlayReducer
 import io.ferventio.app.domain.InteractiveChatOverlayState
 import io.ferventio.app.domain.ModerationAction
 import io.ferventio.app.domain.ModerationState
+import io.ferventio.app.domain.OutgoingMessageState
 import io.ferventio.app.domain.chatBadgeAssetKey
 import kotlin.time.Clock
 
@@ -143,13 +144,113 @@ class ChatRuntimeStateHolder(
     fun append(message: ChatMessage) {
         requireMessage(message)
         val existing = messagesByChannel[message.channelId].orEmpty()
+        val serverEchoIndex = existing.indexOfFirst { pending ->
+            pending.id != message.id &&
+                pending.serverMessageId != null &&
+                pending.serverMessageId == message.id
+        }
         val existingIndex = existing.indexOfFirst { it.id == message.id }
-        val updated = if (existingIndex >= 0) {
-            existing.toMutableList().apply { this[existingIndex] = message }
-        } else {
-            (existing + message).takeLast(MAX_MESSAGES_PER_CHANNEL).toMutableList()
+        val updated = when {
+            serverEchoIndex >= 0 -> {
+                val pending = existing[serverEchoIndex]
+                existing.toMutableList().apply {
+                    this[serverEchoIndex] = message.copy(
+                        outgoingState = OutgoingMessageState.SENT,
+                        clientNonce = pending.clientNonce,
+                        serverMessageId = message.id,
+                    )
+                }
+            }
+            existingIndex >= 0 -> existing.toMutableList().apply {
+                this[existingIndex] = message
+            }
+            else -> (existing + message).takeLast(MAX_MESSAGES_PER_CHANNEL).toMutableList()
         }
         messagesByChannel = messagesByChannel + (message.channelId to updated)
+    }
+
+    fun markOutgoingSending(channelId: String, localMessageId: String): Boolean =
+        updateOutgoingMessage(channelId, localMessageId) { message ->
+            message.copy(
+                outgoingState = OutgoingMessageState.SENDING,
+                outgoingError = null,
+                serverMessageId = null,
+            )
+        }
+
+    fun markOutgoingSent(
+        channelId: String,
+        localMessageId: String,
+        serverMessageId: String,
+    ): Boolean {
+        val normalizedChannelId = requireChannelId(channelId)
+        val normalizedLocalMessageId = requireMessageId(localMessageId)
+        val normalizedServerMessageId = requireMessageId(serverMessageId)
+        val existing = messagesByChannel[normalizedChannelId].orEmpty()
+        val local = existing.firstOrNull { it.id == normalizedLocalMessageId } ?: return false
+        val serverEcho = existing.firstOrNull {
+            it.id == normalizedServerMessageId && it.id != normalizedLocalMessageId
+        }
+        val updated = if (serverEcho != null) {
+            existing.mapNotNull { message ->
+                when (message.id) {
+                    normalizedLocalMessageId -> null
+                    normalizedServerMessageId -> message.copy(
+                        outgoingState = OutgoingMessageState.SENT,
+                        outgoingError = null,
+                        clientNonce = local.clientNonce,
+                        serverMessageId = normalizedServerMessageId,
+                    )
+                    else -> message
+                }
+            }
+        } else {
+            existing.map { message ->
+                if (message.id == normalizedLocalMessageId) {
+                    message.copy(
+                        outgoingState = OutgoingMessageState.SENT,
+                        outgoingError = null,
+                        serverMessageId = normalizedServerMessageId,
+                    )
+                } else {
+                    message
+                }
+            }
+        }
+        messagesByChannel = messagesByChannel + (normalizedChannelId to updated)
+        return true
+    }
+
+    fun markOutgoingFailed(
+        channelId: String,
+        localMessageId: String,
+        errorMessage: String?,
+    ): Boolean = updateOutgoingMessage(channelId, localMessageId) { message ->
+        message.copy(
+            outgoingState = OutgoingMessageState.FAILED,
+            outgoingError = errorMessage?.trim()?.takeIf(String::isNotEmpty),
+            serverMessageId = null,
+        )
+    }
+
+    private fun updateOutgoingMessage(
+        channelId: String,
+        localMessageId: String,
+        transform: (ChatMessage) -> ChatMessage,
+    ): Boolean {
+        val normalizedChannelId = requireChannelId(channelId)
+        val normalizedLocalMessageId = requireMessageId(localMessageId)
+        var changed = false
+        val updated = messagesByChannel[normalizedChannelId].orEmpty().map { message ->
+            if (message.id == normalizedLocalMessageId) {
+                changed = true
+                transform(message)
+            } else {
+                message
+            }
+        }
+        if (changed) messagesByChannel = messagesByChannel + (normalizedChannelId to updated)
+        return changed
     }
 
     fun prependHistory(channelId: String, messages: List<ChatMessage>) {
@@ -164,8 +265,7 @@ class ChatRuntimeStateHolder(
         atMillis: Long = Clock.System.now().toEpochMilliseconds(),
     ): Boolean {
         val normalizedChannelId = requireChannelId(channelId)
-        val normalizedMessageId = messageId.trim().takeIf(String::isNotEmpty)
-            ?: throw IllegalArgumentException("Chat message id must not be blank")
+        val normalizedMessageId = requireMessageId(messageId)
         var changed = false
         val updated = messagesByChannel[normalizedChannelId].orEmpty().map { message ->
             if (
@@ -345,6 +445,10 @@ class ChatRuntimeStateHolder(
         require(message.id.isNotBlank()) { "Chat message id must not be blank" }
         require(message.channelId.isNotBlank()) { "Chat message channel id must not be blank" }
     }
+
+    private fun requireMessageId(value: String): String =
+        value.trim().takeIf(String::isNotEmpty)
+            ?: throw IllegalArgumentException("Chat message id must not be blank")
 
     private fun requireChannelId(value: String): String =
         value.trim().takeIf { it.isNotEmpty() }
