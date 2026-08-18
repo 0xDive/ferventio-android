@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,8 +26,11 @@ import io.ferventio.shared.generated.resources.nuke_preview_action
 import io.ferventio.shared.runtime.LocalFerventioRuntimeState
 import io.ferventio.shared.ui.chat.FerventioChatTimeline
 import io.ferventio.shared.ui.chat.InteractiveChatOverlayCards
+import io.ferventio.shared.ui.chat.SharedChatComposer
 import io.ferventio.shared.ui.user.SharedUserCardSheet
 import io.ferventio.shared.ui.user.projectLocalUserCard
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -36,9 +40,11 @@ fun FerventioModeratedChatScreen(
     modifier: Modifier = Modifier,
 ) {
     val runtime = LocalFerventioRuntimeState.current
+    val scope = rememberCoroutineScope()
     val canModerateChannel = canPreviewNuke(channel.id, moderatorChannelIds)
     var showNukePreview by remember(channel.id) { mutableStateOf(false) }
     var selectedUserMessage by remember(channel.id) { mutableStateOf<ChatMessage?>(null) }
+    var replyTarget by remember(channel.id) { mutableStateOf<ChatMessage?>(null) }
 
     Column(modifier = modifier.fillMaxSize()) {
         if (canModerateChannel) {
@@ -64,6 +70,31 @@ fun FerventioModeratedChatScreen(
             channel = channel,
             modifier = Modifier.weight(1f),
             onAuthorClick = { message -> selectedUserMessage = message },
+            onReplyRequest = { message -> replyTarget = message },
+            onRetryMessage = { message ->
+                runtime.authentication.state.authentication?.let { authentication ->
+                    scope.launch {
+                        try {
+                            runtime.chatMessages.retry(
+                                authentication = authentication,
+                                channel = channel,
+                                failedMessage = message,
+                            )
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (_: Throwable) {
+                            // The optimistic row owns and displays the retry error state.
+                        }
+                    }
+                }
+            },
+        )
+
+        SharedChatComposer(
+            channel = channel,
+            replyTarget = replyTarget,
+            onCancelReply = { replyTarget = null },
+            onSent = { replyTarget = null },
         )
     }
 
