@@ -20,6 +20,7 @@ targets:
             CFBundleURLName: Ferventio OAuth
             CFBundleURLSchemes:
               - $(PRODUCT_BUNDLE_IDENTIFIER)
+        CADisableMinimumFrameDurationOnPhone: true
         FerventioServerURL: $(FERVENTIO_SERVER_URL)
         ITSAppUsesNonExemptEncryption: false
         UIApplicationSceneManifest:
