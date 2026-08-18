@@ -4,8 +4,10 @@ import io.ferventio.app.domain.AppThemeMode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -69,7 +71,83 @@ class SharedSettingsPayloadCodecTest {
         )
     }
 
-    private fun backupPayload(settingsOverride: String? = null): String {
+    @Test
+    fun replacingChannelsPreservesSettingsAndOtherBackupSections() {
+        val original = backupPayload(
+            channelsOverride = """
+                "logins":["alpha","beta"],
+                "selectedLogin":"beta",
+                "favouriteChannelIds":["fav-id"],
+                "pinnedChannelIds":["beta-id"],
+                "recentChannelIds":["recent-id"],
+                "tabTitles":{"alpha-id":"Alpha local","beta-id":"Beta local"}
+            """.trimIndent(),
+        )
+        val originalPreferences = SharedSettingsPayloadCodec.parsePreferences(original)
+
+        val updated = SharedSettingsPayloadCodec.replaceChannels(
+            payload = original,
+            logins = listOf(" #Gamma ", "alpha", "gamma"),
+            selectedLogin = "gamma",
+            pinnedChannelIds = listOf("gamma-id", "gamma-id"),
+        )
+
+        val root = Json.parseToJsonElement(updated).jsonObject
+        val content = root.getValue("content").jsonObject
+        val channels = content.getValue("channels").jsonObject
+        assertEquals(
+            listOf("gamma", "alpha"),
+            channels.getValue("logins").jsonArray.map { it.jsonPrimitive.content },
+        )
+        assertEquals("gamma", channels.getValue("selectedLogin").jsonPrimitive.content)
+        assertEquals(
+            listOf("fav-id"),
+            channels.getValue("favouriteChannelIds").jsonArray.map { it.jsonPrimitive.content },
+        )
+        assertEquals(
+            listOf("recent-id"),
+            channels.getValue("recentChannelIds").jsonArray.map { it.jsonPrimitive.content },
+        )
+        assertEquals(
+            listOf("gamma-id"),
+            channels.getValue("pinnedChannelIds").jsonArray.map { it.jsonPrimitive.content },
+        )
+        assertEquals(
+            "Alpha local",
+            channels.getValue("tabTitles").jsonObject.getValue("alpha-id").jsonPrimitive.content,
+        )
+        assertEquals(originalPreferences, SharedSettingsPayloadCodec.parsePreferences(updated))
+        assertEquals("future-value", root.getValue("futureDocumentField").jsonPrimitive.content)
+        assertEquals(
+            sha256Hex(content.toString()),
+            root.getValue("contentHash").jsonPrimitive.content,
+        )
+    }
+
+    @Test
+    fun replacingChannelsDropsInvalidSelectionAndSupportsRenaming() {
+        val updated = SharedSettingsPayloadCodec.replaceChannels(
+            payload = backupPayload(),
+            logins = listOf("alpha"),
+            selectedLogin = "beta",
+            pinnedChannelIds = emptyList(),
+            tabTitles = mapOf("1" to "  Custom Alpha  ", "2" to "   "),
+        )
+        val channels = Json.parseToJsonElement(updated)
+            .jsonObject.getValue("content").jsonObject
+            .getValue("channels").jsonObject
+
+        assertNull(channels["selectedLogin"])
+        assertEquals(
+            mapOf("1" to "Custom Alpha"),
+            channels.getValue("tabTitles").jsonObject.mapValues { it.value.jsonPrimitive.content },
+        )
+    }
+
+    private fun backupPayload(
+        settingsOverride: String? = null,
+        channelsOverride: String? = null,
+    ): String {
         val settings = settingsOverride ?: """
             "appLanguage":"RUSSIAN",
             "themeMode":"DARK",
@@ -103,6 +181,14 @@ class SharedSettingsPayloadCodecTest {
             "userCardShowBanAction":true,
             "userCardModerationActionOrder":["timeout:10","timeout:60","timeout:600","timeout:3600","timeout:86400","warn","ban","unban"]
         """.trimIndent()
+        val channels = channelsOverride ?: """
+            "logins":["alpha","beta"],
+            "selectedLogin":"beta",
+            "favouriteChannelIds":[],
+            "pinnedChannelIds":["2"],
+            "recentChannelIds":[],
+            "tabTitles":{}
+        """.trimIndent()
         return """
             {
               "format":"ferventio-settings-backup",
@@ -112,14 +198,7 @@ class SharedSettingsPayloadCodecTest {
               "contentHash":"ignored-for-update",
               "content":{
                 "settings":{$settings},
-                "channels":{
-                  "logins":["alpha","beta"],
-                  "selectedLogin":"beta",
-                  "favouriteChannelIds":[],
-                  "pinnedChannelIds":["2"],
-                  "recentChannelIds":[],
-                  "tabTitles":{}
-                },
+                "channels":{$channels},
                 "workspaces":null,
                 "filters":{},
                 "highlights":[],
