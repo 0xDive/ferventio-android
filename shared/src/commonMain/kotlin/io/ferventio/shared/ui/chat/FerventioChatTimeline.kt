@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -313,11 +314,12 @@ private fun ChatMessageRow(
             renderSegments.forEachIndexed { index, renderSegment ->
                 val imageUrl = renderSegment.base.imageUrl ?: return@forEachIndexed
                 if (!renderSegment.base.kind.isInlineEmote()) return@forEachIndexed
+                val bttvVisualState = BttvEmoteVisualState(renderSegment.base.bttvModifiers)
                 put(
                     inlineSegmentId(index),
                     InlineTextContent(
                         placeholder = Placeholder(
-                            width = 1.35.em,
+                            width = (1.35f * bttvVisualState.widthMultiplier).em,
                             height = 1.35.em,
                             placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
                         ),
@@ -377,19 +379,33 @@ private fun SharedInlineEmoteStack(
     overlays: List<ChatMessageSegment>,
     modifier: Modifier = Modifier,
 ) {
-    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+    val baseVisualState = BttvEmoteVisualState(base.bttvModifiers)
+    val baseAnimatedEffects = rememberBttvAnimatedEffects(baseVisualState)
+    Box(
+        modifier = modifier
+            .applyBttvStaticEffects(baseVisualState)
+            .offset(x = baseAnimatedEffects.shakeOffsetDp.dp),
+        contentAlignment = Alignment.Center,
+    ) {
         SharedInlineEmote(
             imageUrl = requireNotNull(base.imageUrl),
             code = base.text,
+            animatedEffects = baseAnimatedEffects,
             modifier = Modifier.fillMaxSize(),
             showFallback = true,
         )
         overlays.forEach { overlay ->
             val imageUrl = overlay.imageUrl ?: return@forEach
+            val overlayVisualState = BttvEmoteVisualState(overlay.bttvModifiers)
+            val overlayAnimatedEffects = rememberBttvAnimatedEffects(overlayVisualState)
             SharedInlineEmote(
                 imageUrl = imageUrl,
                 code = overlay.text,
-                modifier = Modifier.fillMaxSize(),
+                animatedEffects = overlayAnimatedEffects,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .applyBttvStaticEffects(overlayVisualState)
+                    .offset(x = overlayAnimatedEffects.shakeOffsetDp.dp),
                 showFallback = false,
             )
         }
@@ -400,6 +416,7 @@ private fun SharedInlineEmoteStack(
 private fun SharedInlineEmote(
     imageUrl: String,
     code: String,
+    animatedEffects: BttvAnimatedEffects = BttvAnimatedEffects(),
     modifier: Modifier = Modifier,
     showFallback: Boolean = true,
 ) {
@@ -411,6 +428,7 @@ private fun SharedInlineEmote(
                 painter = painter,
                 contentDescription = code,
                 contentScale = ContentScale.Fit,
+                colorFilter = animatedEffects.colorFilter,
                 modifier = Modifier.fillMaxSize(),
             )
         } else if (showFallback) {
