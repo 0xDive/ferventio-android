@@ -58,7 +58,8 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
 
         do {
             workspaceRuntimeBridge = try WorkspaceRuntimeBridge.live(
-                stateHolder: runtimeState.workspace
+                stateHolder: runtimeState.workspace,
+                settingsState: runtimeState.settings
             )
         } catch {
             runtimeState.workspace.markLoadFailed(
@@ -102,6 +103,17 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
             onOpenNotificationSettings: { [weak self] in
                 Task { @MainActor [weak self] in
                     self?.openNotificationSettings()
+                }
+            },
+            onSaveSettings: { [weak self] preferences in
+                Task { @MainActor [weak self] in
+                    guard let self else {
+                        return
+                    }
+                    await workspaceRuntimeBridge?.savePreferences(
+                        authentication: runtimeState.authentication.state.authentication,
+                        preferences: preferences
+                    )
                 }
             }
         )
@@ -192,7 +204,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
             return
         }
         authenticatedChatRuntimeBridge?.stop(clearState: true)
-        runtimeState.workspace.clear()
+        clearAuthenticatedWorkspaceState()
         await synchronizePushBackendRegistration()
     }
 
@@ -205,7 +217,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
             return
         case .signedOut:
             authenticatedChatRuntimeBridge?.stop(clearState: true)
-            runtimeState.workspace.clear()
+            clearAuthenticatedWorkspaceState()
             await synchronizePushBackendRegistration()
         case .unavailable:
             authenticatedChatRuntimeBridge?.stop()
@@ -237,7 +249,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
             return
         case .signedOut:
             authenticatedChatRuntimeBridge?.stop(clearState: true)
-            runtimeState.workspace.clear()
+            clearAuthenticatedWorkspaceState()
             await synchronizePushBackendRegistration()
         case .unavailable:
             authenticatedChatRuntimeBridge?.stop()
@@ -265,7 +277,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         let authentication = runtimeState.authentication.state.authentication
         guard let authentication else {
             authenticatedChatRuntimeBridge?.stop(clearState: true)
-            runtimeState.workspace.clear()
+            clearAuthenticatedWorkspaceState()
             await synchronizePushBackendRegistration()
             return
         }
@@ -279,6 +291,11 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         } else {
             authenticatedChatRuntimeBridge?.stop()
         }
+    }
+
+    private func clearAuthenticatedWorkspaceState() {
+        runtimeState.workspace.clear()
+        runtimeState.settings.clear()
     }
 
     private func synchronizePushBackendRegistration() async {
