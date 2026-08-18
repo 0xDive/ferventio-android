@@ -17,6 +17,7 @@ data class WorkspaceRuntimeSnapshot(
     val channels: List<ChatChannel> = emptyList(),
     val selectedChannelId: String? = null,
     val pinnedChannelIds: List<String> = emptyList(),
+    val channelTabTitles: Map<String, String> = emptyMap(),
     val moderatorChannelIds: Set<String> = emptySet(),
     val pushContextRevision: Long = 0L,
 ) {
@@ -24,13 +25,7 @@ data class WorkspaceRuntimeSnapshot(
         get() = channels.map { it.id }
 }
 
-/**
- * Shared channel/workspace state used by Compose navigation and platform integrations.
- *
- * The holder intentionally owns only platform-neutral channel identity, order, selection, and
- * role metadata. Android/iOS loaders remain responsible for networking and persistence while the
- * migration is incremental.
- */
+/** Shared platform-neutral channel/workspace state used by Compose and platform integrations. */
 class WorkspaceRuntimeStateHolder(
     initialSnapshot: WorkspaceRuntimeSnapshot = WorkspaceRuntimeSnapshot(),
 ) {
@@ -41,6 +36,9 @@ class WorkspaceRuntimeStateHolder(
         private set
 
     var pinnedChannelIds by mutableStateOf(emptyList<String>())
+        private set
+
+    var channelTabTitles by mutableStateOf(emptyMap<String, String>())
         private set
 
     var moderatorChannelIds by mutableStateOf(emptySet<String>())
@@ -69,6 +67,7 @@ class WorkspaceRuntimeStateHolder(
             channels = channels,
             selectedChannelId = selectedChannelId,
             pinnedChannelIds = pinnedChannelIds,
+            channelTabTitles = channelTabTitles,
             moderatorChannelIds = moderatorChannelIds,
             pushContextRevision = pushContextRevision,
         )
@@ -77,6 +76,7 @@ class WorkspaceRuntimeStateHolder(
         replaceChannels(initialSnapshot.channels)
         selectInitialChannel(initialSnapshot.selectedChannelId)
         updatePinnedChannelIds(initialSnapshot.pinnedChannelIds)
+        updateChannelTabTitles(initialSnapshot.channelTabTitles)
         updateModeratorChannelIds(initialSnapshot.moderatorChannelIds)
         pushContextRevision = maxOf(pushContextRevision, initialSnapshot.pushContextRevision)
     }
@@ -101,8 +101,7 @@ class WorkspaceRuntimeStateHolder(
     fun replaceChannels(value: List<ChatChannel>) {
         val previousIds = channels.mapTo(linkedSetOf()) { it.id }
         val previousModerators = moderatorChannelIds
-        val normalized = normalizeChannels(value)
-        channels = normalized
+        channels = normalizeChannels(value)
         reconcileMembership()
         val currentIds = channels.mapTo(linkedSetOf()) { it.id }
         if (previousIds != currentIds || previousModerators != moderatorChannelIds) {
@@ -113,17 +112,9 @@ class WorkspaceRuntimeStateHolder(
     fun addOrReplaceChannel(channel: ChatChannel) {
         requireValidChannel(channel)
         val index = channels.indexOfFirst { it.id == channel.id }
-        channels = if (index < 0) {
-            channels + channel
-        } else {
-            channels.toMutableList().apply { this[index] = channel }
-        }
-        if (selectedChannelId == null) {
-            selectedChannelId = channel.id
-        }
-        if (index < 0) {
-            bumpPushContextRevision()
-        }
+        channels = if (index < 0) channels + channel else channels.toMutableList().apply { this[index] = channel }
+        if (selectedChannelId == null) selectedChannelId = channel.id
+        if (index < 0) bumpPushContextRevision()
     }
 
     fun removeChannel(channelId: String) {
@@ -152,14 +143,36 @@ class WorkspaceRuntimeStateHolder(
 
     fun updatePinnedChannelIds(channelIds: Iterable<String>) {
         val available = channels.mapTo(hashSetOf()) { it.id }
-        pinnedChannelIds = normalizeIds(channelIds)
-            .filter(available::contains)
+        pinnedChannelIds = normalizeIds(channelIds).filter(available::contains)
+    }
+
+    fun updateChannelTabTitles(titles: Map<String, String>) {
+        val available = channels.mapTo(hashSetOf()) { it.id }
+        channelTabTitles = buildMap {
+            titles.forEach { (rawChannelId, rawTitle) ->
+                val channelId = rawChannelId.trim()
+                val title = rawTitle.trim().take(MAX_TAB_TITLE_LENGTH)
+                if (channelId in available && title.isNotEmpty()) put(channelId, title)
+            }
+        }
+    }
+
+    fun setChannelTabTitle(channelId: String, title: String?) {
+        val normalizedId = channelId.trim()
+        require(channels.any { it.id == normalizedId }) {
+            "Cannot rename a channel that is not in the workspace"
+        }
+        val normalizedTitle = title?.trim()?.take(MAX_TAB_TITLE_LENGTH).orEmpty()
+        channelTabTitles = if (normalizedTitle.isEmpty()) {
+            channelTabTitles - normalizedId
+        } else {
+            channelTabTitles + (normalizedId to normalizedTitle)
+        }
     }
 
     fun updateModeratorChannelIds(channelIds: Iterable<String>) {
         val available = channels.mapTo(hashSetOf()) { it.id }
-        val normalized = normalizeIds(channelIds)
-            .filterTo(linkedSetOf(), available::contains)
+        val normalized = normalizeIds(channelIds).filterTo(linkedSetOf(), available::contains)
         if (moderatorChannelIds != normalized) {
             moderatorChannelIds = normalized
             bumpPushContextRevision()
@@ -171,13 +184,12 @@ class WorkspaceRuntimeStateHolder(
         channels = emptyList()
         selectedChannelId = null
         pinnedChannelIds = emptyList()
+        channelTabTitles = emptyMap()
         moderatorChannelIds = emptySet()
         loadStatus = WorkspaceLoadStatus.IDLE
         loadErrorMessage = null
         settingsRevision = 0L
-        if (affectedPushContext) {
-            bumpPushContextRevision()
-        }
+        if (affectedPushContext) bumpPushContextRevision()
     }
 
     private fun selectInitialChannel(requestedChannelId: String?) {
@@ -189,10 +201,9 @@ class WorkspaceRuntimeStateHolder(
 
     private fun reconcileMembership() {
         val available = channels.mapTo(hashSetOf()) { it.id }
-        selectedChannelId = selectedChannelId
-            ?.takeIf(available::contains)
-            ?: channels.firstOrNull()?.id
+        selectedChannelId = selectedChannelId?.takeIf(available::contains) ?: channels.firstOrNull()?.id
         pinnedChannelIds = pinnedChannelIds.filter(available::contains)
+        channelTabTitles = channelTabTitles.filterKeys(available::contains)
         moderatorChannelIds = moderatorChannelIds.filterTo(linkedSetOf(), available::contains)
     }
 
@@ -223,5 +234,9 @@ class WorkspaceRuntimeStateHolder(
 
     private fun bumpPushContextRevision() {
         pushContextRevision += 1L
+    }
+
+    private companion object {
+        const val MAX_TAB_TITLE_LENGTH = 32
     }
 }
