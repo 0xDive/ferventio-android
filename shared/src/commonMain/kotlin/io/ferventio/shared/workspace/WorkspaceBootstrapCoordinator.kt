@@ -2,6 +2,8 @@ package io.ferventio.shared.workspace
 
 import io.ferventio.app.domain.MobileDeviceIdentity
 import io.ferventio.app.domain.StoredAuthentication
+import io.ferventio.shared.settings.SharedAppPreferences
+import io.ferventio.shared.settings.SharedAppSettingsStateHolder
 import kotlin.Throws
 
 data class WorkspaceBootstrapOutcome(
@@ -10,7 +12,7 @@ data class WorkspaceBootstrapOutcome(
     val channelCount: Int,
 )
 
-/** Restores the shared workspace from synced settings and fresh Twitch channel metadata. */
+/** Restores shared workspace/settings state from sync and fresh Twitch channel metadata. */
 class WorkspaceBootstrapCoordinator(
     private val settings: WorkspaceSettingsSyncClient = WorkspaceSettingsSyncClient(),
     private val directory: TwitchChannelDirectoryClient = TwitchChannelDirectoryClient(),
@@ -25,6 +27,19 @@ class WorkspaceBootstrapCoordinator(
         identity: MobileDeviceIdentity,
         authentication: StoredAuthentication,
         state: WorkspaceRuntimeStateHolder,
+    ): WorkspaceBootstrapOutcome = bootstrap(
+        identity = identity,
+        authentication = authentication,
+        state = state,
+        settingsState = null,
+    )
+
+    @Throws(Exception::class)
+    suspend fun bootstrap(
+        identity: MobileDeviceIdentity,
+        authentication: StoredAuthentication,
+        state: WorkspaceRuntimeStateHolder,
+        settingsState: SharedAppSettingsStateHolder?,
     ): WorkspaceBootstrapOutcome {
         val snapshot = settings.fetch(identity, authentication)
             ?: return WorkspaceBootstrapOutcome(
@@ -32,6 +47,8 @@ class WorkspaceBootstrapCoordinator(
                 settingsRevision = 0L,
                 channelCount = state.channels.size,
             )
+
+        settingsState?.restore(snapshot.preferences, snapshot.revision)
 
         val refreshed = directory.resolveByLogins(
             authentication = authentication,
@@ -60,5 +77,27 @@ class WorkspaceBootstrapCoordinator(
             settingsRevision = snapshot.revision,
             channelCount = resolved.channels.size,
         )
+    }
+
+    @Throws(Exception::class)
+    suspend fun savePreferences(
+        identity: MobileDeviceIdentity,
+        authentication: StoredAuthentication,
+        preferences: SharedAppPreferences,
+        settingsState: SharedAppSettingsStateHolder,
+    ): WorkspaceSettingsSnapshot {
+        settingsState.markSaveStarted()
+        return try {
+            settings.updatePreferences(
+                identity = identity,
+                authentication = authentication,
+                preferences = preferences,
+            ).also { snapshot ->
+                settingsState.markSaveSucceeded(snapshot.preferences, snapshot.revision)
+            }
+        } catch (error: Throwable) {
+            settingsState.markSaveFailed(error.message)
+            throw error
+        }
     }
 }
