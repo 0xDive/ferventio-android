@@ -56,6 +56,12 @@ class WorkspaceRuntimeStateHolder(
     var settingsRevision by mutableStateOf(0L)
         private set
 
+    var mutationInFlight by mutableStateOf(false)
+        private set
+
+    var mutationErrorMessage by mutableStateOf<String?>(null)
+        private set
+
     val channelIds: List<String>
         get() = channels.map { it.id }
 
@@ -98,15 +104,33 @@ class WorkspaceRuntimeStateHolder(
         loadErrorMessage = errorMessage?.trim()?.takeIf(String::isNotEmpty)
     }
 
+    fun markMutationStarted() {
+        mutationInFlight = true
+        mutationErrorMessage = null
+    }
+
+    fun markMutationSucceeded() {
+        mutationInFlight = false
+        mutationErrorMessage = null
+    }
+
+    fun markMutationFailed(errorMessage: String?) {
+        mutationInFlight = false
+        mutationErrorMessage = errorMessage?.trim()?.takeIf(String::isNotEmpty)
+            ?: "Failed to update workspace"
+    }
+
+    fun clearMutationError() {
+        mutationErrorMessage = null
+    }
+
     fun replaceChannels(value: List<ChatChannel>) {
         val previousIds = channels.mapTo(linkedSetOf()) { it.id }
         val previousModerators = moderatorChannelIds
         channels = normalizeChannels(value)
         reconcileMembership()
         val currentIds = channels.mapTo(linkedSetOf()) { it.id }
-        if (previousIds != currentIds || previousModerators != moderatorChannelIds) {
-            bumpPushContextRevision()
-        }
+        if (previousIds != currentIds || previousModerators != moderatorChannelIds) bumpPushContextRevision()
     }
 
     fun addOrReplaceChannel(channel: ChatChannel) {
@@ -189,6 +213,8 @@ class WorkspaceRuntimeStateHolder(
         loadStatus = WorkspaceLoadStatus.IDLE
         loadErrorMessage = null
         settingsRevision = 0L
+        mutationInFlight = false
+        mutationErrorMessage = null
         if (affectedPushContext) bumpPushContextRevision()
     }
 
