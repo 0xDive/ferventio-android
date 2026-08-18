@@ -18,6 +18,7 @@ import io.ferventio.shared.auth.MobileAuthenticationStatus
 import io.ferventio.shared.generated.resources.Res
 import io.ferventio.shared.generated.resources.auth_sign_in_with_twitch
 import io.ferventio.shared.push.PushAuthorizationStatus
+import io.ferventio.shared.settings.SharedAppPreferences
 import io.ferventio.shared.ui.moderation.FerventioModeratedChatScreen
 import io.ferventio.shared.workspace.WorkspaceRuntimeStateHolder
 import org.jetbrains.compose.resources.stringResource
@@ -31,6 +32,7 @@ fun FerventioAuthenticationRoot(
     pushAuthorizationStatus: PushAuthorizationStatus = PushAuthorizationStatus.UNKNOWN,
     onRequestNotificationPermission: () -> Unit = {},
     onOpenNotificationSettings: () -> Unit = {},
+    onSaveSettings: (SharedAppPreferences) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     when (state.status) {
@@ -52,6 +54,7 @@ fun FerventioAuthenticationRoot(
             notificationAuthorizationStatus = pushAuthorizationStatus,
             onRequestNotificationPermission = onRequestNotificationPermission,
             onOpenNotificationSettings = onOpenNotificationSettings,
+            onSaveSettings = onSaveSettings,
             modifier = modifier,
         ) { channel ->
             key(channel.id) {
