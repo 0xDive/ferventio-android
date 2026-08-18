@@ -111,14 +111,14 @@ final class WorkspaceRuntimeBridge {
     func moveChannel(
         authentication: StoredAuthentication?,
         channelId: String,
-        targetIndex: Int32
+        targetIndex: KotlinInt
     ) async -> Bool {
         await performMutation(authentication: authentication) { identity, authentication in
             _ = try await coordinator.moveChannel(
                 identity: identity,
                 authentication: authentication,
                 channelId: channelId,
-                targetIndex: targetIndex,
+                targetIndex: targetIndex.int32Value,
                 state: stateHolder,
                 settingsState: settingsState
             )
@@ -128,14 +128,14 @@ final class WorkspaceRuntimeBridge {
     func setChannelPinned(
         authentication: StoredAuthentication?,
         channelId: String,
-        pinned: Bool
+        pinned: KotlinBoolean
     ) async -> Bool {
         await performMutation(authentication: authentication) { identity, authentication in
             _ = try await coordinator.setChannelPinned(
                 identity: identity,
                 authentication: authentication,
                 channelId: channelId,
-                pinned: pinned,
+                pinned: pinned.boolValue,
                 state: stateHolder,
                 settingsState: settingsState
             )
