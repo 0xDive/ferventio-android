@@ -14,7 +14,7 @@ final class AuthenticatedChatRuntimeBridge {
 
     init(
         stateHolder: ChatRuntimeStateHolder,
-        attentionHolder: ChatAttentionStateHolder,
+        attentionHolder: ChatAttentionStateHolder = MainViewControllerKt.IosRuntimeState().attention,
         onAuthenticationRequired: @escaping () -> Void = {}
     ) {
         self.stateHolder = stateHolder
