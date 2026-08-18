@@ -5,6 +5,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import io.ferventio.shared.auth.MobileAuthenticationStateHolder
 import io.ferventio.shared.chat.ChatRuntimeStateHolder
+import io.ferventio.shared.chat.TwitchChatMessageRuntime
 import io.ferventio.shared.chat.TwitchInteractiveRuntime
 import io.ferventio.shared.moderation.TwitchModerationRuntime
 import io.ferventio.shared.push.PushNavigationInbox
@@ -23,6 +24,7 @@ class FerventioRuntimeState(
 ) {
     val moderation: TwitchModerationRuntime by lazy { TwitchModerationRuntime(chat) }
     val interactive: TwitchInteractiveRuntime by lazy { TwitchInteractiveRuntime(chat) }
+    val chatMessages: TwitchChatMessageRuntime by lazy { TwitchChatMessageRuntime(chat) }
 
     constructor() : this(
         lifecycle = AppLifecycleStateHolder(),
