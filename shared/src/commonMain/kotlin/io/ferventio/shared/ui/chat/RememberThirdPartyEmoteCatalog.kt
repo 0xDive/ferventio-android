@@ -15,6 +15,9 @@ import kotlinx.coroutines.coroutineScope
 @Composable
 internal fun rememberThirdPartyEmoteCatalog(
     channelId: String,
+    betterTtvEnabled: Boolean = true,
+    frankerFaceZEnabled: Boolean = true,
+    sevenTvEnabled: Boolean = true,
 ): Map<String, ThirdPartyEmoteAsset> {
     val client = remember { ThirdPartyEmoteCatalogClient() }
     var catalog by remember(channelId) {
@@ -35,5 +38,14 @@ internal fun rememberThirdPartyEmoteCatalog(
         }
     }
 
-    return catalog
+    return remember(catalog, betterTtvEnabled, frankerFaceZEnabled, sevenTvEnabled) {
+        catalog.filterValues { asset ->
+            when (asset.provider.lowercase()) {
+                "betterttv" -> betterTtvEnabled
+                "frankerfacez" -> frankerFaceZEnabled
+                "7tv" -> sevenTvEnabled
+                else -> true
+            }
+        }
+    }
 }
