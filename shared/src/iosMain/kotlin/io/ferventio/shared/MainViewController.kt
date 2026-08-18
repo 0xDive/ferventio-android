@@ -20,6 +20,12 @@ fun MainViewController(
     onRequestNotificationPermission: () -> Unit = {},
     onOpenNotificationSettings: () -> Unit = {},
     onSaveSettings: (SharedAppPreferences) -> Unit = {},
+    onSelectChannel: (String) -> Unit = {},
+    onAddChannel: (String) -> Unit = {},
+    onSetChannelPinned: (String, Boolean) -> Unit = { _, _ -> },
+    onRenameChannel: (String, String?) -> Unit = { _, _ -> },
+    onRemoveChannel: (String) -> Unit = {},
+    onMoveChannel: (String, Int) -> Unit = { _, _ -> },
 ): UIViewController = ComposeUIViewController {
     val preferences = iosRuntimeState.settings.preferences
     ProvideFerventioRuntimeState(iosRuntimeState) {
@@ -40,6 +46,12 @@ fun MainViewController(
                 onRequestNotificationPermission = onRequestNotificationPermission,
                 onOpenNotificationSettings = onOpenNotificationSettings,
                 onSaveSettings = onSaveSettings,
+                onSelectChannel = onSelectChannel,
+                onAddChannel = onAddChannel,
+                onSetChannelPinned = onSetChannelPinned,
+                onRenameChannel = onRenameChannel,
+                onRemoveChannel = onRemoveChannel,
+                onMoveChannel = onMoveChannel,
             )
         }
     }
