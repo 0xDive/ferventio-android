@@ -24,7 +24,11 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
@@ -39,6 +43,7 @@ import io.ferventio.shared.generated.resources.notifications_enable
 import io.ferventio.shared.generated.resources.notifications_enabled
 import io.ferventio.shared.generated.resources.notifications_open_settings
 import io.ferventio.shared.generated.resources.notifications_title
+import io.ferventio.shared.generated.resources.settings_open
 import io.ferventio.shared.generated.resources.workspace_channels
 import io.ferventio.shared.generated.resources.workspace_chats
 import io.ferventio.shared.generated.resources.workspace_load_failed
@@ -48,6 +53,8 @@ import io.ferventio.shared.generated.resources.workspace_no_channels
 import io.ferventio.shared.generated.resources.workspace_no_channels_summary
 import io.ferventio.shared.generated.resources.workspace_signed_in_as
 import io.ferventio.shared.push.PushAuthorizationStatus
+import io.ferventio.shared.runtime.LocalFerventioRuntimeState
+import io.ferventio.shared.settings.SharedAppPreferences
 import io.ferventio.shared.workspace.WorkspaceLoadStatus
 import io.ferventio.shared.workspace.WorkspaceRuntimeStateHolder
 import kotlinx.coroutines.launch
@@ -62,11 +69,14 @@ fun FerventioWorkspaceShell(
     notificationAuthorizationStatus: PushAuthorizationStatus = PushAuthorizationStatus.UNKNOWN,
     onRequestNotificationPermission: () -> Unit = {},
     onOpenNotificationSettings: () -> Unit = {},
+    onSaveSettings: (SharedAppPreferences) -> Unit = {},
     modifier: Modifier = Modifier,
     content: @Composable (ChatChannel) -> Unit,
 ) {
+    val runtime = LocalFerventioRuntimeState.current
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    var settingsVisible by remember { mutableStateOf(false) }
     val selectedChannel = state.channels.firstOrNull { it.id == state.selectedChannelId }
         ?: state.channels.firstOrNull()
     val menuDescription = stringResource(Res.string.workspace_menu)
@@ -136,6 +146,19 @@ fun FerventioWorkspaceShell(
                     )
                 }
                 HorizontalDivider(modifier = Modifier.padding(top = 8.dp))
+                TextButton(
+                    onClick = {
+                        scope.launch {
+                            drawerState.close()
+                            settingsVisible = true
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp),
+                ) {
+                    Text(stringResource(Res.string.settings_open))
+                }
                 TextButton(
                     onClick = onSignOut,
                     modifier = Modifier
@@ -234,6 +257,17 @@ fun FerventioWorkspaceShell(
                 }
             }
         }
+    }
+
+    if (settingsVisible) {
+        FerventioSettingsSheet(
+            state = runtime.settings,
+            notificationAuthorizationStatus = notificationAuthorizationStatus,
+            onRequestNotificationPermission = onRequestNotificationPermission,
+            onOpenNotificationSettings = onOpenNotificationSettings,
+            onSave = onSaveSettings,
+            onDismiss = { settingsVisible = false },
+        )
     }
 }
 
