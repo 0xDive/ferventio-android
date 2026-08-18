@@ -2,8 +2,10 @@ package io.ferventio.shared.ui.chat
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
@@ -48,8 +50,13 @@ import io.ferventio.app.domain.ChatBadge
 import io.ferventio.app.domain.ChatBadgeAsset
 import io.ferventio.app.domain.ChatChannel
 import io.ferventio.app.domain.ChatMessage
+import io.ferventio.app.domain.ChatNameStyle
+import io.ferventio.app.domain.ChatRepeatCollapseConfig
+import io.ferventio.app.domain.ChatRepeatCollapser
+import io.ferventio.app.domain.ChatRepeatSummary
 import io.ferventio.app.domain.CheermoteAsset
 import io.ferventio.app.domain.ConnectionStatus
+import io.ferventio.app.domain.MessageDensity
 import io.ferventio.app.domain.ThirdPartyEmoteAsset
 import io.ferventio.shared.chat.ChatRuntimeStateHolder
 import io.ferventio.shared.generated.resources.Res
@@ -63,6 +70,7 @@ import io.ferventio.shared.generated.resources.chat_status_reconnecting
 import io.ferventio.shared.generated.resources.chat_status_waiting_welcome
 import io.ferventio.shared.generated.resources.chat_waiting_for_messages
 import io.ferventio.shared.runtime.LocalFerventioRuntimeState
+import io.ferventio.shared.settings.SharedAppPreferences
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -77,19 +85,41 @@ fun FerventioChatTimeline(
     modifier: Modifier = Modifier,
     onAuthorClick: ((ChatMessage) -> Unit)? = null,
 ) {
-    val chat = LocalFerventioRuntimeState.current.chat
-    val messages = chat.messages(channel.id)
-    val thirdPartyEmotes = rememberThirdPartyEmoteCatalog(channel.id)
+    val runtime = LocalFerventioRuntimeState.current
+    val chat = runtime.chat
+    val preferences = runtime.settings.preferences
+    val canonicalMessages = chat.messages(channel.id)
+    val sourceMessages = remember(canonicalMessages, preferences.showSystemMessages) {
+        if (preferences.showSystemMessages) canonicalMessages else canonicalMessages.filterNot(ChatMessage::isSystem)
+    }
+    val collapsePlan = remember(sourceMessages, preferences.repeatCollapseEnabled) {
+        ChatRepeatCollapser.build(
+            messages = sourceMessages,
+            config = ChatRepeatCollapseConfig(enabled = preferences.repeatCollapseEnabled),
+        )
+    }
+    val messages = remember(sourceMessages, collapsePlan.visibleMessageIds) {
+        sourceMessages.filter { message -> message.id in collapsePlan.visibleMessageIds }
+    }
+    val thirdPartyEmotes = rememberThirdPartyEmoteCatalog(
+        channelId = channel.id,
+        betterTtvEnabled = preferences.betterTtvEnabled,
+        frankerFaceZEnabled = preferences.frankerFaceZEnabled,
+        sevenTvEnabled = preferences.sevenTvEnabled,
+    )
     val cheermoteAssets = chat.cheermoteAssets(channel.id)
     val listState = rememberLazyListState()
-    var followTail by remember { mutableStateOf(true) }
+    var followTail by remember(channel.id) { mutableStateOf(preferences.autoScrollEnabled) }
 
-    LaunchedEffect(listState) {
+    LaunchedEffect(preferences.autoScrollEnabled) {
+        followTail = preferences.autoScrollEnabled && !listState.canScrollForward
+    }
+    LaunchedEffect(listState, preferences.autoScrollEnabled) {
         snapshotFlow { listState.isScrollInProgress }
             .distinctUntilChanged()
             .filter { scrolling -> !scrolling }
             .collect {
-                followTail = !listState.canScrollForward
+                followTail = preferences.autoScrollEnabled && !listState.canScrollForward
             }
     }
     LaunchedEffect(messages.size, followTail) {
@@ -122,6 +152,8 @@ fun FerventioChatTimeline(
                 ) { message ->
                     ChatMessageRow(
                         message = message,
+                        preferences = preferences,
+                        repeatSummary = collapsePlan.summaryFor(message.id),
                         thirdPartyEmotes = thirdPartyEmotes,
                         cheermoteAssets = cheermoteAssets,
                         onAuthorClick = onAuthorClick,
@@ -166,8 +198,7 @@ private fun ChatConnectionBanner(chat: ChatRuntimeStateHolder) {
             color = if (chat.connectionStatus == ConnectionStatus.FAILED) {
                 MaterialTheme.colorScheme.onErrorContainer
             } else {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            },
+                MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -175,6 +206,8 @@ private fun ChatConnectionBanner(chat: ChatRuntimeStateHolder) {
 @Composable
 private fun ChatMessageRow(
     message: ChatMessage,
+    preferences: SharedAppPreferences,
+    repeatSummary: ChatRepeatSummary?,
     thirdPartyEmotes: Map<String, ThirdPartyEmoteAsset>,
     cheermoteAssets: Map<String, List<CheermoteAsset>>,
     onAuthorClick: ((ChatMessage) -> Unit)?,
@@ -186,6 +219,8 @@ private fun ChatMessageRow(
         deletedPlaceholder = deletedPlaceholder,
         thirdPartyEmotes = thirdPartyEmotes,
         cheermoteAssetsByPrefix = cheermoteAssets,
+        animatedMediaSupported = supportsAnimatedChatMedia && preferences.animateEmotes,
+        showDeletedMessageContent = preferences.showDeletedMessageContent,
     )
     val renderSegments = groupChatMessageSegments(presentation.segments)
     val uriHandler = LocalUriHandler.current
@@ -193,6 +228,18 @@ private fun ChatMessageRow(
     val mentionColor = MaterialTheme.colorScheme.tertiary
     val metadataColor = MaterialTheme.colorScheme.onSurfaceVariant
     val bodyColor = MaterialTheme.colorScheme.onSurface
+    val authorLabel = message.authorLabel(preferences.nameStyle)
+    val rowVerticalPadding = when (preferences.messageDensity) {
+        MessageDensity.COMPACT -> 2.dp
+        MessageDensity.NORMAL -> 5.dp
+        MessageDensity.RELAXED -> 8.dp
+    }
+    val emoteScale = preferences.emoteScalePercent / 100f
+    val badges = if (preferences.showBadges) presentation.badges else emptyList()
+    val avatarImageUrl = message.author.profileImageUrl
+        ?.trim()
+        ?.takeIf(String::isNotEmpty)
+        .takeIf { preferences.showAvatars }
     var textLayoutResult by remember(message.id) { mutableStateOf<TextLayoutResult?>(null) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
@@ -218,14 +265,25 @@ private fun ChatMessageRow(
         }
 
         val text = buildAnnotatedString {
+            if (preferences.showTimestamps) {
+                withStyle(SpanStyle(color = metadataColor)) {
+                    append("[")
+                    append(formatChatTimestamp(message.timestampMillis))
+                    append("] ")
+                }
+            }
+            if (avatarImageUrl != null) {
+                appendInlineContent(inlineAvatarId(), authorLabel)
+                append(" ")
+            }
             if (message.isAction) append("* ")
-            presentation.badges.forEachIndexed { index, _ ->
+            badges.forEachIndexed { index, _ ->
                 appendInlineContent(inlineBadgeId(index), "◆")
                 append(" ")
             }
             val authorStart = length
             withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) {
-                append(message.author.displayName.ifBlank { message.author.login })
+                append(authorLabel)
             }
             val authorEnd = length
             if (authorEnd > authorStart) {
@@ -293,7 +351,25 @@ private fun ChatMessageRow(
         }
 
         val inlineContent = buildMap<String, InlineTextContent> {
-            presentation.badges.forEachIndexed { index, badge ->
+            avatarImageUrl?.let { imageUrl ->
+                put(
+                    inlineAvatarId(),
+                    InlineTextContent(
+                        placeholder = Placeholder(
+                            width = 1.2.em,
+                            height = 1.2.em,
+                            placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
+                        ),
+                    ) {
+                        SharedAvatarIcon(
+                            imageUrl = imageUrl,
+                            label = authorLabel,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    },
+                )
+            }
+            badges.forEachIndexed { index, badge ->
                 put(
                     inlineBadgeId(index),
                     InlineTextContent(
@@ -319,14 +395,15 @@ private fun ChatMessageRow(
                     inlineSegmentId(index),
                     InlineTextContent(
                         placeholder = Placeholder(
-                            width = (1.35f * bttvVisualState.widthMultiplier).em,
-                            height = 1.35.em,
+                            width = (1.35f * emoteScale * bttvVisualState.widthMultiplier).em,
+                            height = (1.35f * emoteScale).em,
                             placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
                         ),
                     ) {
                         SharedInlineEmoteStack(
                             base = renderSegment.base,
                             overlays = renderSegment.overlays,
+                            animationsEnabled = preferences.animateEmotes,
                             modifier = Modifier.fillMaxSize(),
                         )
                     },
@@ -338,7 +415,7 @@ private fun ChatMessageRow(
             text = text,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 5.dp)
+                .padding(horizontal = 12.dp, vertical = rowVerticalPadding)
                 .pointerInput(text, onAuthorClick) {
                     detectTapGestures { position ->
                         val offset = textLayoutResult?.getOffsetForPosition(position)
@@ -357,8 +434,45 @@ private fun ChatMessageRow(
                 },
             style = MaterialTheme.typography.bodyMedium.copy(color = bodyColor),
             inlineContent = inlineContent,
+            maxLines = if (preferences.wrapMessageLines) Int.MAX_VALUE else 1,
+            overflow = TextOverflow.Ellipsis,
             onTextLayout = { textLayoutResult = it },
         )
+
+        repeatSummary?.let { summary ->
+            Row(
+                modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = rowVerticalPadding),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RepeatCountBadge(summary = summary)
+                formatRepeatParticipantSummary(summary)
+                    .takeIf(String::isNotBlank)
+                    ?.let { participants ->
+                        Text(
+                            text = participants,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = metadataColor,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+            }
+        }
+    }
+}
+
+private fun ChatMessage.authorLabel(style: ChatNameStyle): String {
+    val displayName = author.displayName.trim().ifBlank { author.login.trim() }
+    val login = author.login.trim().ifBlank { displayName }
+    return when (style) {
+        ChatNameStyle.DISPLAY_NAME -> displayName
+        ChatNameStyle.LOGIN -> login
+        ChatNameStyle.DISPLAY_AND_LOGIN -> if (displayName.equals(login, ignoreCase = true)) {
+            displayName
+        } else {
+            "$displayName ($login)"
+        }
     }
 }
 
@@ -370,6 +484,7 @@ private fun ChatMessageSegmentKind.isInlineEmote(): Boolean = when (this) {
     else -> false
 }
 
+private fun inlineAvatarId(): String = "avatar"
 private fun inlineBadgeId(index: Int): String = "badge_$index"
 private fun inlineSegmentId(index: Int): String = "segment_$index"
 
@@ -377,10 +492,15 @@ private fun inlineSegmentId(index: Int): String = "segment_$index"
 private fun SharedInlineEmoteStack(
     base: ChatMessageSegment,
     overlays: List<ChatMessageSegment>,
+    animationsEnabled: Boolean,
     modifier: Modifier = Modifier,
 ) {
     val baseVisualState = BttvEmoteVisualState(base.bttvModifiers)
-    val baseAnimatedEffects = rememberBttvAnimatedEffects(baseVisualState)
+    val baseAnimatedEffects = if (animationsEnabled) {
+        rememberBttvAnimatedEffects(baseVisualState)
+    } else {
+        BttvAnimatedEffects(colorFilter = bttvCursedColorFilter(baseVisualState))
+    }
     Box(
         modifier = modifier
             .applyBttvStaticEffects(baseVisualState)
@@ -397,7 +517,11 @@ private fun SharedInlineEmoteStack(
         overlays.forEach { overlay ->
             val imageUrl = overlay.imageUrl ?: return@forEach
             val overlayVisualState = BttvEmoteVisualState(overlay.bttvModifiers)
-            val overlayAnimatedEffects = rememberBttvAnimatedEffects(overlayVisualState)
+            val overlayAnimatedEffects = if (animationsEnabled) {
+                rememberBttvAnimatedEffects(overlayVisualState)
+            } else {
+                BttvAnimatedEffects(colorFilter = bttvCursedColorFilter(overlayVisualState))
+            }
             SharedInlineEmote(
                 imageUrl = imageUrl,
                 code = overlay.text,
@@ -436,6 +560,33 @@ private fun SharedInlineEmote(
                 text = "•",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SharedAvatarIcon(
+    imageUrl: String,
+    label: String,
+    modifier: Modifier = Modifier,
+) {
+    val painter = rememberAsyncImagePainter(model = imageUrl)
+    val state by painter.state.collectAsState()
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        if (state is AsyncImagePainter.State.Success) {
+            Image(
+                painter = painter,
+                contentDescription = label,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        } else {
+            Text(
+                text = label.firstOrNull()?.uppercase() ?: "•",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.Bold,
             )
         }
     }
