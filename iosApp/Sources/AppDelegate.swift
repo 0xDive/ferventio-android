@@ -163,12 +163,74 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
             },
             onSaveSettings: { [weak self] preferences in
                 Task { @MainActor [weak self] in
-                    guard let self else {
-                        return
-                    }
+                    guard let self else { return }
                     await workspaceRuntimeBridge?.savePreferences(
                         authentication: runtimeState.authentication.state.authentication,
                         preferences: preferences
+                    )
+                }
+            },
+            onSelectChannel: { [weak self] channelId in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    _ = await workspaceRuntimeBridge?.persistSelectedChannel(
+                        authentication: runtimeState.authentication.state.authentication,
+                        channelId: channelId
+                    )
+                }
+            },
+            onAddChannel: { [weak self] login in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    let succeeded = await workspaceRuntimeBridge?.addChannel(
+                        authentication: runtimeState.authentication.state.authentication,
+                        login: login
+                    ) ?? false
+                    if succeeded {
+                        await synchronizeWorkspaceTransportAfterChannelSetChanged()
+                    }
+                }
+            },
+            onSetChannelPinned: { [weak self] channelId, pinned in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    _ = await workspaceRuntimeBridge?.setChannelPinned(
+                        authentication: runtimeState.authentication.state.authentication,
+                        channelId: channelId,
+                        pinned: pinned
+                    )
+                }
+            },
+            onRenameChannel: { [weak self] channelId, title in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    _ = await workspaceRuntimeBridge?.renameChannel(
+                        authentication: runtimeState.authentication.state.authentication,
+                        channelId: channelId,
+                        title: title
+                    )
+                }
+            },
+            onRemoveChannel: { [weak self] channelId in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    let succeeded = await workspaceRuntimeBridge?.removeChannel(
+                        authentication: runtimeState.authentication.state.authentication,
+                        channelId: channelId
+                    ) ?? false
+                    if succeeded {
+                        runtimeState.chat.retainChannels(channelIds: runtimeState.workspace.channelIds)
+                        await synchronizeWorkspaceTransportAfterChannelSetChanged()
+                    }
+                }
+            },
+            onMoveChannel: { [weak self] channelId, targetIndex in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    _ = await workspaceRuntimeBridge?.moveChannel(
+                        authentication: runtimeState.authentication.state.authentication,
+                        channelId: channelId,
+                        targetIndex: targetIndex
                     )
                 }
             }
@@ -179,9 +241,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         isPrimarySceneActive = true
         runtimeState.lifecycle.markActive()
         Task { @MainActor [weak self] in
-            guard let self else {
-                return
-            }
+            guard let self else { return }
             await pushRuntimeBridge.refreshAuthorizationAndRestoreRemoteRegistration()
             await refreshAuthenticationAndSynchronizeRuntime()
         }
@@ -216,28 +276,20 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     }
 
     private func openNotificationSettings() {
-        guard let url = URL(string: UIApplication.openSettingsURLString) else {
-            return
-        }
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
         UIApplication.shared.open(url)
     }
 
     private func signOutAndCleanup() async {
-        guard let authenticationRuntimeBridge else {
-            return
-        }
-        guard await authenticationRuntimeBridge.signOut() else {
-            return
-        }
+        guard let authenticationRuntimeBridge else { return }
+        guard await authenticationRuntimeBridge.signOut() else { return }
         authenticatedChatRuntimeBridge?.stop(clearState: true)
         clearAuthenticatedWorkspaceState()
         await synchronizePushBackendRegistration()
     }
 
     private func recoverAuthenticationAfterChatRejection() async {
-        guard let authenticationRuntimeBridge else {
-            return
-        }
+        guard let authenticationRuntimeBridge else { return }
         switch await authenticationRuntimeBridge.refreshAfterAuthenticationRejection() {
         case .deferred:
             return
@@ -253,17 +305,13 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     }
 
     private func recoverAfterNetworkAvailable() async {
-        guard isPrimarySceneActive else {
-            return
-        }
+        guard isPrimarySceneActive else { return }
         await pushRuntimeBridge.refreshAuthorizationAndRestoreRemoteRegistration()
         await refreshAuthenticationAndSynchronizeRuntime()
     }
 
     private func refreshAuthenticationAndSynchronizeRuntime() async {
-        guard let authenticationRuntimeBridge else {
-            return
-        }
+        guard let authenticationRuntimeBridge else { return }
         let disposition: ForegroundAuthenticationRefreshDisposition
         if runtimeState.chat.authenticationRequired {
             disposition = await authenticationRuntimeBridge.refreshAfterAuthenticationRejection()
@@ -285,8 +333,6 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     }
 
     private func synchronizeReadyAuthenticatedRuntime() async {
-        // A refresh may have started while active and completed after the scene transitioned to
-        // background. Never recreate the EventSub session from that stale foreground callback.
         guard isPrimarySceneActive else {
             authenticatedChatRuntimeBridge?.stop()
             return
@@ -317,6 +363,11 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         } else {
             authenticatedChatRuntimeBridge?.stop()
         }
+    }
+
+    private func synchronizeWorkspaceTransportAfterChannelSetChanged() async {
+        await synchronizePushBackendRegistration()
+        synchronizeAuthenticatedChatRuntime()
     }
 
     private func clearAuthenticatedWorkspaceState() {
