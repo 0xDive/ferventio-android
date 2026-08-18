@@ -73,6 +73,43 @@ class WorkspaceSettingsSyncClient(
         identity: MobileDeviceIdentity,
         authentication: StoredAuthentication,
         preferences: SharedAppPreferences,
+    ): WorkspaceSettingsSnapshot = updateSnapshot(
+        identity = identity,
+        authentication = authentication,
+    ) { snapshot ->
+        SharedSettingsPayloadCodec.replacePreferences(
+            payload = snapshot.payload,
+            preferences = preferences,
+        )
+    }
+
+    /**
+     * Applies a channel mutation to the freshest available snapshot. If another device wins the
+     * optimistic revision race, the operation is recomputed against that remote channel state once.
+     */
+    @Throws(Exception::class)
+    suspend fun updateChannels(
+        identity: MobileDeviceIdentity,
+        authentication: StoredAuthentication,
+        mutate: (PersistedWorkspaceChannels) -> PersistedWorkspaceChannels,
+    ): WorkspaceSettingsSnapshot = updateSnapshot(
+        identity = identity,
+        authentication = authentication,
+    ) { snapshot ->
+        val updated = mutate(snapshot.channels)
+        SharedSettingsPayloadCodec.replaceChannels(
+            payload = snapshot.payload,
+            logins = updated.logins,
+            selectedLogin = updated.selectedLogin,
+            pinnedChannelIds = updated.pinnedChannelIds,
+            tabTitles = updated.tabTitles,
+        )
+    }
+
+    private suspend fun updateSnapshot(
+        identity: MobileDeviceIdentity,
+        authentication: StoredAuthentication,
+        mutatePayload: (WorkspaceSettingsSnapshot) -> String,
     ): WorkspaceSettingsSnapshot {
         val baseUrl = validateAndResolveBaseUrl(identity, authentication)
         val credential = authentication.backendCredential
@@ -80,10 +117,7 @@ class WorkspaceSettingsSyncClient(
             ?: error("Remote settings are unavailable")
 
         repeat(MAX_CONFLICT_ATTEMPTS + 1) { attempt ->
-            val updatedPayload = SharedSettingsPayloadCodec.replacePreferences(
-                payload = snapshot.payload,
-                preferences = preferences,
-            )
+            val updatedPayload = mutatePayload(snapshot)
             val response = client.put("$baseUrl/v1/sync/settings") {
                 authenticatedHeaders(identity, credential.token)
                 contentType(ContentType.Application.Json)
