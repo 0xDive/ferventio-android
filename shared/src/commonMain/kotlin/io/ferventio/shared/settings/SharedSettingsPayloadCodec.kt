@@ -24,6 +24,9 @@ object SharedSettingsPayloadCodec {
     private const val MAX_PAYLOAD_CHARS = 2 * 1024 * 1024
     private const val BACKUP_FORMAT = "ferventio-settings-backup"
     private const val CURRENT_FORMAT_VERSION = 2
+    private const val MAX_CHANNELS = 20
+    private const val MAX_TAB_TITLE_LENGTH = 32
+    private val CHANNEL_LOGIN_PATTERN = Regex("[A-Za-z0-9_]{1,25}")
     private val json = Json { ignoreUnknownKeys = true }
 
     fun parsePreferences(payload: String): SharedAppPreferences {
@@ -46,33 +49,83 @@ object SharedSettingsPayloadCodec {
         payload: String,
         preferences: SharedAppPreferences,
     ): String {
-        val root = parseRoot(payload)
-        require(root.string("format") == BACKUP_FORMAT) {
-            "Unsupported Ferventio settings payload format"
-        }
-        val createdAt = root.string("createdAt")
-            ?: error("Settings payload does not contain createdAt")
-        val appVersion = root.string("appVersion")
-            ?: error("Settings payload does not contain appVersion")
-        val content = root["content"]?.runCatching { jsonObject }?.getOrNull()
-            ?: error("Settings payload does not contain content")
-        val canonicalContent = canonicalContent(
-            original = content,
-            settings = settingsJson(preferences.normalized()),
+        val root = requireBackupRoot(payload)
+        val content = requireContent(root)
+        return rebuildDocument(
+            root = root,
+            content = canonicalContent(
+                original = content,
+                settings = settingsJson(preferences.normalized()),
+                channels = canonicalChannels(content["channels"] as? JsonObject),
+            ),
         )
-        val contentHash = sha256Hex(canonicalContent.toString())
+    }
 
-        return buildJsonObject {
-            put("format", JsonPrimitive(BACKUP_FORMAT))
-            put("formatVersion", JsonPrimitive(CURRENT_FORMAT_VERSION))
-            put("createdAt", JsonPrimitive(createdAt))
-            put("appVersion", JsonPrimitive(appVersion))
-            put("contentHash", JsonPrimitive(contentHash))
-            put("content", canonicalContent)
-            root.forEach { (name, value) ->
-                if (name !in DOCUMENT_FIELDS) put(name, value)
-            }
-        }.toString()
+    /**
+     * Replaces the mutable channel projection while preserving settings, filters, workspaces,
+     * commands, favourites/recent channel metadata, and unknown top-level document fields.
+     */
+    fun replaceChannels(
+        payload: String,
+        logins: List<String>,
+        selectedLogin: String?,
+        pinnedChannelIds: List<String>,
+        tabTitles: Map<String, String>? = null,
+    ): String {
+        val root = requireBackupRoot(payload)
+        val content = requireContent(root)
+        val originalChannels = content["channels"] as? JsonObject ?: JsonObject(emptyMap())
+        val normalizedLogins = normalizeChannelLogins(logins)
+        val normalizedSelectedLogin = selectedLogin
+            ?.trim()
+            ?.removePrefix("#")
+            ?.lowercase()
+            ?.takeIf { it in normalizedLogins }
+        val normalizedPinned = normalizeIds(pinnedChannelIds).take(MAX_CHANNELS)
+        val normalizedTabTitles = normalizeTabTitles(
+            tabTitles ?: originalChannels.stringMap("tabTitles"),
+        )
+        val channels = buildJsonObject {
+            put("logins", JsonArray(normalizedLogins.map(::JsonPrimitive)))
+            normalizedSelectedLogin?.let { put("selectedLogin", JsonPrimitive(it)) }
+            put(
+                "favouriteChannelIds",
+                JsonArray(
+                    originalChannels.stringList("favouriteChannelIds")
+                        .let(::normalizeIds)
+                        .take(MAX_CHANNELS)
+                        .map(::JsonPrimitive),
+                ),
+            )
+            put("pinnedChannelIds", JsonArray(normalizedPinned.map(::JsonPrimitive)))
+            put(
+                "recentChannelIds",
+                JsonArray(
+                    originalChannels.stringList("recentChannelIds")
+                        .let(::normalizeIds)
+                        .take(MAX_CHANNELS)
+                        .map(::JsonPrimitive),
+                ),
+            )
+            put(
+                "tabTitles",
+                buildJsonObject {
+                    normalizedTabTitles.forEach { (channelId, title) ->
+                        put(channelId, JsonPrimitive(title))
+                    }
+                },
+            )
+        }
+        val settings = content["settings"] as? JsonObject
+            ?: error("Settings payload does not contain settings")
+        return rebuildDocument(
+            root = root,
+            content = canonicalContent(
+                original = content,
+                settings = settings,
+                channels = channels,
+            ),
+        )
     }
 
     internal fun contentHashForTesting(
@@ -82,9 +135,42 @@ object SharedSettingsPayloadCodec {
         val root = parseRoot(payload)
         val content = root["content"]?.jsonObject ?: error("Settings payload does not contain content")
         return sha256Hex(
-            canonicalContent(content, settingsJson(preferences.normalized())).toString(),
+            canonicalContent(
+                original = content,
+                settings = settingsJson(preferences.normalized()),
+                channels = canonicalChannels(content["channels"] as? JsonObject),
+            ).toString(),
         )
     }
+
+    private fun rebuildDocument(root: JsonObject, content: JsonObject): String {
+        val createdAt = root.string("createdAt")
+            ?: error("Settings payload does not contain createdAt")
+        val appVersion = root.string("appVersion")
+            ?: error("Settings payload does not contain appVersion")
+        val contentHash = sha256Hex(content.toString())
+        return buildJsonObject {
+            put("format", JsonPrimitive(BACKUP_FORMAT))
+            put("formatVersion", JsonPrimitive(CURRENT_FORMAT_VERSION))
+            put("createdAt", JsonPrimitive(createdAt))
+            put("appVersion", JsonPrimitive(appVersion))
+            put("contentHash", JsonPrimitive(contentHash))
+            put("content", content)
+            root.forEach { (name, value) ->
+                if (name !in DOCUMENT_FIELDS) put(name, value)
+            }
+        }.toString()
+    }
+
+    private fun requireBackupRoot(payload: String): JsonObject = parseRoot(payload).also { root ->
+        require(root.string("format") == BACKUP_FORMAT) {
+            "Unsupported Ferventio settings payload format"
+        }
+    }
+
+    private fun requireContent(root: JsonObject): JsonObject =
+        root["content"]?.runCatching { jsonObject }?.getOrNull()
+            ?: error("Settings payload does not contain content")
 
     private fun parseRoot(payload: String): JsonObject {
         require(payload.length <= MAX_PAYLOAD_CHARS) { "Settings payload is too large" }
@@ -179,9 +265,13 @@ object SharedSettingsPayloadCodec {
         )
     }
 
-    private fun canonicalContent(original: JsonObject, settings: JsonObject): JsonObject = buildJsonObject {
+    private fun canonicalContent(
+        original: JsonObject,
+        settings: JsonObject,
+        channels: JsonObject,
+    ): JsonObject = buildJsonObject {
         put("settings", settings)
-        put("channels", canonicalChannels(original["channels"] as? JsonObject))
+        put("channels", channels)
         put("workspaces", original["workspaces"] ?: JsonNull)
         put("filters", original["filters"] ?: JsonObject(emptyMap()))
         put("highlights", original["highlights"] ?: JsonArray(emptyList()))
@@ -200,6 +290,39 @@ object SharedSettingsPayloadCodec {
         put("pinnedChannelIds", canonicalStringArray(channels["pinnedChannelIds"]))
         put("recentChannelIds", canonicalStringArray(channels["recentChannelIds"]))
         put("tabTitles", channels["tabTitles"] as? JsonObject ?: JsonObject(emptyMap()))
+    }
+
+    private fun normalizeChannelLogins(values: Iterable<String>): List<String> {
+        val seen = hashSetOf<String>()
+        return buildList {
+            values.forEach { raw ->
+                val normalized = raw.trim().removePrefix("#").lowercase()
+                require(normalized.isEmpty() || CHANNEL_LOGIN_PATTERN.matches(normalized)) {
+                    "Invalid Twitch channel login"
+                }
+                if (normalized.isNotEmpty() && seen.add(normalized)) add(normalized)
+            }
+        }.also { normalized ->
+            require(normalized.size <= MAX_CHANNELS) { "Too many channels" }
+        }
+    }
+
+    private fun normalizeIds(values: Iterable<String>): List<String> {
+        val seen = hashSetOf<String>()
+        return buildList {
+            values.forEach { raw ->
+                val normalized = raw.trim()
+                if (normalized.isNotEmpty() && seen.add(normalized)) add(normalized)
+            }
+        }
+    }
+
+    private fun normalizeTabTitles(values: Map<String, String>): Map<String, String> = buildMap {
+        values.forEach { (rawChannelId, rawTitle) ->
+            val channelId = rawChannelId.trim()
+            val title = rawTitle.trim().take(MAX_TAB_TITLE_LENGTH)
+            if (channelId.isNotEmpty() && title.isNotEmpty()) put(channelId, title)
+        }
     }
 
     private fun canonicalStringArray(element: JsonElement?): JsonArray =
@@ -232,6 +355,15 @@ object SharedSettingsPayloadCodec {
 
     private fun JsonObject.stringList(name: String): List<String> = this[name]
         ?.runCatching { jsonArray.mapNotNull { it.jsonPrimitive.contentOrNull } }
+        ?.getOrNull()
+        .orEmpty()
+
+    private fun JsonObject.stringMap(name: String): Map<String, String> = this[name]
+        ?.runCatching {
+            jsonObject.mapNotNull { (key, value) ->
+                value.jsonPrimitive.contentOrNull?.let { key to it }
+            }.toMap(linkedMapOf())
+        }
         ?.getOrNull()
         .orEmpty()
 
