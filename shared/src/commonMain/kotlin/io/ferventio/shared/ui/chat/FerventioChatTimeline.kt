@@ -194,6 +194,12 @@ fun FerventioChatTimeline(
             listState.animateScrollToItem(messages.lastIndex)
         }
     }
+    ChatHistoryPagingEffect(
+        channel = channel,
+        listState = listState,
+        isFollowingTail = followTail,
+        onPagingStarted = { followTail = false },
+    )
 
     Column(modifier = modifier.fillMaxSize()) {
         ChatConnectionBanner(chat)
