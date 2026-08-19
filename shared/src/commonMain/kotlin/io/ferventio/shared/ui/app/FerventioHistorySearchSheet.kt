@@ -56,6 +56,7 @@ import org.jetbrains.compose.resources.stringResource
 internal fun FerventioHistorySearchSheet(
     history: ChatHistoryStore,
     currentChannelId: String?,
+    navigableChannelIds: Set<String>,
     onOpenMessage: (ChatMessage) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -88,7 +89,7 @@ internal fun FerventioHistorySearchSheet(
                         currentChannelId = currentChannelId,
                     ),
                 ).onSuccess { messages ->
-                    results = messages
+                    results = filterNavigableHistorySearchResults(messages, navigableChannelIds)
                     hasSearched = true
                 }.onFailure { error ->
                     results = emptyList()
@@ -189,6 +190,20 @@ internal fun FerventioHistorySearchSheet(
             }
         }
     }
+}
+
+internal fun filterNavigableHistorySearchResults(
+    messages: List<ChatMessage>,
+    navigableChannelIds: Set<String>,
+): List<ChatMessage> {
+    if (messages.isEmpty() || navigableChannelIds.isEmpty()) return emptyList()
+    val normalized = navigableChannelIds
+        .asSequence()
+        .map(String::trim)
+        .filter(String::isNotEmpty)
+        .toHashSet()
+    if (normalized.isEmpty()) return emptyList()
+    return messages.filter { it.channelId in normalized }
 }
 
 @Composable
