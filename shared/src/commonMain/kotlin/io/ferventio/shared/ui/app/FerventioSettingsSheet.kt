@@ -359,6 +359,10 @@ internal fun FerventioSettingsSheet(
                 checked = state.preferences.userCardShowBanAction,
                 onCheckedChange = { value -> update { it.copy(userCardShowBanAction = value) } },
             )
+            UserCardModerationSettingsEditor(
+                preferences = state.preferences,
+                onPreferencesChange = { preferences -> update { preferences } },
+            )
 
             when (state.saveStatus) {
                 SharedSettingsSaveStatus.SAVING -> Row(
