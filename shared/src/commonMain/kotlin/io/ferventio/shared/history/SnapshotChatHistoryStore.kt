@@ -7,14 +7,13 @@ import io.ferventio.app.domain.ChatHistorySearchScope
 import io.ferventio.app.domain.ChatHistoryStore
 import io.ferventio.app.domain.ChatMessage
 import io.ferventio.app.domain.ChatMessageType
-import io.ferventio.app.domain.MessageFlags
 import io.ferventio.app.domain.ModerationAction
 import io.ferventio.app.domain.ModerationState
 import kotlin.time.Clock
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 internal interface ChatHistorySnapshotStorage {
     fun read(): String?
@@ -61,7 +60,10 @@ internal class SnapshotChatHistoryStore(
         if (channelSet.isEmpty()) return emptyMap()
         return withSnapshot(writeBack = true) { current ->
             val pruned = prune(current, config, nowMillis())
-            val pageSize = minOf(config.limitPerChannel.coerceIn(MIN_HISTORY_LIMIT, MAX_HISTORY_LIMIT), INITIAL_HISTORY_PAGE_SIZE)
+            val pageSize = minOf(
+                config.limitPerChannel.coerceIn(MIN_HISTORY_LIMIT, MAX_HISTORY_LIMIT),
+                INITIAL_HISTORY_PAGE_SIZE,
+            )
             val result = channelIds.distinct().associateWith { channelId ->
                 pruned.asSequence()
                     .filter { it.channelId == channelId }
@@ -98,10 +100,19 @@ internal class SnapshotChatHistoryStore(
         if (parsed.isEmpty && request.dateRange.days == null && request.messageTypes.isEmpty()) {
             return@runCatching emptyList()
         }
-        val rangeCutoff = request.dateRange.days?.let { days -> request.nowMillis - days * MILLIS_PER_DAY }
+        val scopedChannelId = if (request.scope == ChatHistorySearchScope.CURRENT_CHANNEL) {
+            request.currentChannelId?.takeIf(String::isNotBlank)
+                ?: throw IllegalArgumentException("Current channel is not selected")
+        } else {
+            null
+        }
+        val rangeCutoff = request.dateRange.days?.let { days ->
+            request.nowMillis - days * MILLIS_PER_DAY
+        }
         val effectiveAfter = listOfNotNull(rangeCutoff, parsed.afterMillis).maxOrNull()
         val requestedTypes = when {
-            request.messageTypes.isNotEmpty() && parsed.types.isNotEmpty() -> request.messageTypes.intersect(parsed.types)
+            request.messageTypes.isNotEmpty() && parsed.types.isNotEmpty() ->
+                request.messageTypes.intersect(parsed.types)
             request.messageTypes.isNotEmpty() -> request.messageTypes
             else -> parsed.types
         }
@@ -110,11 +121,7 @@ internal class SnapshotChatHistoryStore(
         }
         val regex = parsed.regexPattern?.let { Regex(it, RegexOption.IGNORE_CASE) }
         readSnapshot().asSequence()
-            .filter { message ->
-                request.scope != ChatHistorySearchScope.CURRENT_CHANNEL ||
-                    message.channelId == request.currentChannelId?.takeIf(String::isNotBlank)
-                        ?: throw IllegalArgumentException("Current channel is not selected")
-            }
+            .filter { scopedChannelId == null || it.channelId == scopedChannelId }
             .filter { parsed.channelLogin == null || it.channelLogin.equals(parsed.channelLogin, ignoreCase = true) }
             .filter { message ->
                 parsed.authorLogin == null ||
@@ -128,14 +135,14 @@ internal class SnapshotChatHistoryStore(
                         message.author.displayName.contains(term, ignoreCase = true)
                 }
             }
-            .filter { !parsed.hasLink || message.hasLink() }
-            .filter { !parsed.isDeleted || message.flags.isDeleted }
-            .filter { !parsed.isTimeout || message.moderation.action == ModerationAction.TIMEOUT }
-            .filter { !parsed.isSubscription || message.type in subscriptionTypes }
-            .filter { requestedTypes.isEmpty() || message.type in requestedTypes }
-            .filter { effectiveAfter == null || message.timestampMillis >= effectiveAfter }
-            .filter { parsed.beforeMillis == null || message.timestampMillis < parsed.beforeMillis }
-            .filter { regex == null || regex.containsMatchIn(message.text) }
+            .filter { !parsed.hasLink || it.hasLink() }
+            .filter { !parsed.isDeleted || it.flags.isDeleted }
+            .filter { !parsed.isTimeout || it.moderation.action == ModerationAction.TIMEOUT }
+            .filter { !parsed.isSubscription || it.type in subscriptionTypes }
+            .filter { requestedTypes.isEmpty() || it.type in requestedTypes }
+            .filter { effectiveAfter == null || it.timestampMillis >= effectiveAfter }
+            .filter { parsed.beforeMillis == null || it.timestampMillis < parsed.beforeMillis }
+            .filter { regex == null || regex.containsMatchIn(it.text) }
             .sortedWith(messageDescending)
             .take(request.limit.coerceIn(1, MAX_SEARCH_RESULTS))
             .toList()
@@ -208,7 +215,11 @@ internal class SnapshotChatHistoryStore(
         withContext(Dispatchers.Default) {
             mutex.withLock {
                 val current = ChatHistorySnapshotCodec.decodeOrEmpty(storage.read())
-                storage.write(ChatHistorySnapshotCodec.encode(transform(current).sortedWith(messageAscending)))
+                storage.write(
+                    ChatHistorySnapshotCodec.encode(
+                        transform(current).sortedWith(messageAscending),
+                    ),
+                )
             }
         }
     }
@@ -235,7 +246,9 @@ internal class SnapshotChatHistoryStore(
             .filter { cutoff == null || it.timestampMillis >= cutoff }
             .groupBy(ChatMessage::channelId)
             .values
-            .flatMap { channelMessages -> channelMessages.sortedWith(messageDescending).take(safeLimit) }
+            .flatMap { channelMessages ->
+                channelMessages.sortedWith(messageDescending).take(safeLimit)
+            }
             .sortedWith(messageAscending)
 
         val safeSizeMb = config.maxDatabaseSizeMb.coerceIn(0, MAX_DATABASE_SIZE_MB)
@@ -266,7 +279,8 @@ internal class SnapshotChatHistoryStore(
         const val BYTES_PER_MEBIBYTE = 1_048_576L
 
         val messageAscending = compareBy<ChatMessage>({ it.timestampMillis }, { it.id })
-        val messageDescending = compareByDescending<ChatMessage> { it.timestampMillis }.thenByDescending { it.id }
+        val messageDescending = compareByDescending<ChatMessage> { it.timestampMillis }
+            .thenByDescending { it.id }
         val subscriptionTypes = setOf(
             ChatMessageType.SUBSCRIPTION,
             ChatMessageType.RESUBSCRIPTION,
@@ -312,7 +326,9 @@ private object NativeChatSearchParser {
         raw: String,
         localDateResolver: ChatHistoryLocalDateResolver,
     ): Result<ParsedNativeChatSearchQuery> = runCatching {
-        require(raw.length <= MAX_QUERY_LENGTH) { "Search query is too long: maximum is $MAX_QUERY_LENGTH characters" }
+        require(raw.length <= MAX_QUERY_LENGTH) {
+            "Search query is too long: maximum is $MAX_QUERY_LENGTH characters"
+        }
         var author: String? = null
         var channel: String? = null
         var hasLink = false
@@ -357,17 +373,24 @@ private object NativeChatSearchParser {
                     "deleted" -> deleted = true
                     "sub", "subscription" -> subscription = true
                     "timeout" -> timeout = true
-                    else -> throw IllegalArgumentException("Unknown is:$value. Available: deleted, sub, timeout")
+                    else -> throw IllegalArgumentException(
+                        "Unknown is:$value. Available: deleted, sub, timeout",
+                    )
                 }
                 "regex" -> {
                     require(value.isNotBlank()) { "regex: requires an expression" }
                     runCatching { Regex(value, RegexOption.IGNORE_CASE) }
-                        .getOrElse { error -> throw IllegalArgumentException("Invalid regex: ${error.message}") }
+                        .getOrElse { error ->
+                            throw IllegalArgumentException("Invalid regex: ${error.message}")
+                        }
                     regex = value
                 }
                 "type" -> {
                     require(value.isNotBlank()) { "type: requires a message type" }
-                    value.split(',').map(String::trim).filter(String::isNotBlank).forEach { types += parseType(it) }
+                    value.split(',')
+                        .map(String::trim)
+                        .filter(String::isNotBlank)
+                        .forEach { types += parseType(it) }
                 }
                 "after" -> {
                     val range = resolveDate(value, "after", localDateResolver)
@@ -432,7 +455,11 @@ private object NativeChatSearchParser {
         raw.trim().forEach { char ->
             when {
                 escaped -> {
-                    if (char == '"' || char == '\\') current.append(char) else current.append('\\').append(char)
+                    if (char == '"' || char == '\\') {
+                        current.append(char)
+                    } else {
+                        current.append('\\').append(char)
+                    }
                     escaped = false
                 }
                 char == '\\' -> escaped = true
