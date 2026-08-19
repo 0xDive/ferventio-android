@@ -176,7 +176,7 @@ final class WorkspaceRuntimeBridge {
 
     private func performMutation(
         authentication: StoredAuthentication?,
-        operation: (MobileDeviceIdentity, StoredAuthentication) async throws -> Void
+        operation: @MainActor (MobileDeviceIdentity, StoredAuthentication) async throws -> Void
     ) async -> Bool {
         guard let authentication else {
             stateHolder.markMutationFailed(errorMessage: "Authentication is unavailable")
