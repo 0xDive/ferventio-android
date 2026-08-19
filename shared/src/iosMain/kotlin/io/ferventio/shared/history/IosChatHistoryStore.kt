@@ -18,6 +18,7 @@ import platform.Foundation.NSString
 import platform.Foundation.NSUTF8StringEncoding
 import platform.Foundation.NSUserDomainMask
 import platform.Foundation.create
+import platform.posix.rename
 
 /** Durable iOS history store backed by an atomically replaced Application Support snapshot. */
 class IosChatHistoryStore : ChatHistoryStore by createIosChatHistoryStoreDelegate()
@@ -31,6 +32,7 @@ private class FoundationChatHistorySnapshotStorage : ChatHistorySnapshotStorage 
     private val fileManager = NSFileManager.defaultManager
     private val directoryPath = applicationSupportPath().trimEnd('/') + "/Ferventio"
     private val filePath = "$directoryPath/chat-history-v1.json"
+    private val temporaryFilePath = "$directoryPath/chat-history-v1.tmp"
 
     init {
         ensureDirectory()
@@ -49,14 +51,20 @@ private class FoundationChatHistorySnapshotStorage : ChatHistorySnapshotStorage 
 
     override fun write(value: String) {
         ensureDirectory()
-        val written = value.toUtf8Data().writeToFile(
-            path = filePath,
-            atomically = true,
+        removeTemporaryFile()
+        val written = fileManager.createFileAtPath(
+            path = temporaryFilePath,
+            contents = value.toUtf8Data(),
+            attributes = null,
         )
-        check(written) { "Unable to persist chat history snapshot" }
+        check(written) { "Unable to write chat history temporary snapshot" }
+        val replaced = rename(temporaryFilePath, filePath) == 0
+        if (!replaced) removeTemporaryFile()
+        check(replaced) { "Unable to atomically replace chat history snapshot" }
     }
 
     override fun clear() {
+        removeTemporaryFile()
         if (!fileManager.fileExistsAtPath(filePath)) return
         val removed = fileManager.removeItemAtPath(filePath, error = null)
         check(removed) { "Unable to clear chat history snapshot" }
@@ -71,6 +79,12 @@ private class FoundationChatHistorySnapshotStorage : ChatHistorySnapshotStorage 
             error = null,
         )
         check(created) { "Unable to create Ferventio Application Support directory" }
+    }
+
+    private fun removeTemporaryFile() {
+        if (fileManager.fileExistsAtPath(temporaryFilePath)) {
+            fileManager.removeItemAtPath(temporaryFilePath, error = null)
+        }
     }
 
     private fun applicationSupportPath(): String =
