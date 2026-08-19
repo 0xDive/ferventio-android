@@ -36,6 +36,7 @@ class ChatRuntimeStateHolder(
 ) {
     var messagesByChannel by mutableStateOf(emptyMap<String, List<ChatMessage>>())
         private set
+    private var historyMessagesByChannel by mutableStateOf(emptyMap<String, List<ChatMessage>>())
     var globalBadgeAssets by mutableStateOf(emptyMap<String, ChatBadgeAsset>())
         private set
     var badgeAssetsByChannel by mutableStateOf(emptyMap<String, Map<String, ChatBadgeAsset>>())
@@ -57,6 +58,7 @@ class ChatRuntimeStateHolder(
     var authenticationRequired by mutableStateOf(false)
         private set
 
+    /** Snapshots intentionally contain only the canonical bounded live window. */
     val snapshot: ChatRuntimeSnapshot
         get() = ChatRuntimeSnapshot(
             messagesByChannel = messagesByChannel,
@@ -90,7 +92,14 @@ class ChatRuntimeStateHolder(
         authenticationRequired = initialSnapshot.authenticationRequired
     }
 
-    fun messages(channelId: String): List<ChatMessage> = messagesByChannel[channelId.trim()].orEmpty()
+    /** Returns the durable history overlay merged with the canonical 5,000-message live window. */
+    fun messages(channelId: String): List<ChatMessage> {
+        val normalizedChannelId = channelId.trim()
+        return mergeTimelineMessages(
+            history = historyMessagesByChannel[normalizedChannelId].orEmpty(),
+            live = messagesByChannel[normalizedChannelId].orEmpty(),
+        )
+    }
 
     fun cheermoteAssets(channelId: String): Map<String, List<CheermoteAsset>> =
         cheermoteAssetsByChannel[channelId.trim()].orEmpty()
@@ -135,6 +144,7 @@ class ChatRuntimeStateHolder(
         } else {
             messagesByChannel + (normalizedChannelId to normalized)
         }
+        historyMessagesByChannel = historyMessagesByChannel - normalizedChannelId
     }
 
     fun applyInteractive(event: InteractiveChatOverlayEvent) {
@@ -167,6 +177,7 @@ class ChatRuntimeStateHolder(
             else -> (existing + message).takeLast(MAX_MESSAGES_PER_CHANNEL).toMutableList()
         }
         messagesByChannel = messagesByChannel + (message.channelId to updated)
+        removeHistoryMessage(message.channelId, message.id)
     }
 
     fun markOutgoingSending(channelId: String, localMessageId: String): Boolean =
@@ -218,6 +229,7 @@ class ChatRuntimeStateHolder(
             }
         }
         messagesByChannel = messagesByChannel + (normalizedChannelId to updated)
+        removeHistoryMessage(normalizedChannelId, normalizedServerMessageId)
         return true
     }
 
@@ -253,10 +265,25 @@ class ChatRuntimeStateHolder(
         return changed
     }
 
-    fun prependHistory(channelId: String, messages: List<ChatMessage>) {
+    /** Adds durable history without consuming the canonical live-message capacity. */
+    fun prependHistory(channelId: String, messages: List<ChatMessage>): Int {
         val normalizedChannelId = requireChannelId(channelId)
-        val existing = messagesByChannel[normalizedChannelId].orEmpty()
-        replaceChannelMessages(normalizedChannelId, messages + existing)
+        if (messages.isEmpty()) return 0
+        val liveIds = messagesByChannel[normalizedChannelId].orEmpty()
+            .mapTo(hashSetOf(), ChatMessage::id)
+        val existing = historyMessagesByChannel[normalizedChannelId].orEmpty()
+        val merged = mergeHistoryMessages(
+            channelId = normalizedChannelId,
+            existing = existing,
+            incoming = messages,
+            liveIds = liveIds,
+        )
+        historyMessagesByChannel = if (merged.messages.isEmpty()) {
+            historyMessagesByChannel - normalizedChannelId
+        } else {
+            historyMessagesByChannel + (normalizedChannelId to merged.messages)
+        }
+        return merged.acceptedCount
     }
 
     fun markMessageDeleted(
@@ -266,23 +293,35 @@ class ChatRuntimeStateHolder(
     ): Boolean {
         val normalizedChannelId = requireChannelId(channelId)
         val normalizedMessageId = requireMessageId(messageId)
-        var changed = false
-        val updated = messagesByChannel[normalizedChannelId].orEmpty().map { message ->
+        var liveChanged = false
+        var historyChanged = false
+        val live = messagesByChannel[normalizedChannelId].orEmpty().map { message ->
             if (
                 message.id != normalizedMessageId ||
                 !shouldApplyModeration(message, ModerationAction.DELETE)
             ) {
                 message
             } else {
-                changed = true
-                message.copy(
-                    flags = message.flags.copy(isDeleted = true),
-                    moderation = ModerationState(ModerationAction.DELETE, atMillis = atMillis),
-                )
+                liveChanged = true
+                deletedMessage(message, ModerationAction.DELETE, atMillis)
             }
         }
-        if (changed) messagesByChannel = messagesByChannel + (normalizedChannelId to updated)
-        return changed
+        val history = historyMessagesByChannel[normalizedChannelId].orEmpty().map { message ->
+            if (
+                message.id != normalizedMessageId ||
+                !shouldApplyModeration(message, ModerationAction.DELETE)
+            ) {
+                message
+            } else {
+                historyChanged = true
+                deletedMessage(message, ModerationAction.DELETE, atMillis)
+            }
+        }
+        if (liveChanged) messagesByChannel = messagesByChannel + (normalizedChannelId to live)
+        if (historyChanged) {
+            historyMessagesByChannel = historyMessagesByChannel + (normalizedChannelId to history)
+        }
+        return liveChanged || historyChanged
     }
 
     fun markUserMessagesDeleted(
@@ -297,29 +336,46 @@ class ChatRuntimeStateHolder(
         val normalizedChannelId = requireChannelId(channelId)
         val normalizedUserId = userId.trim().takeIf(String::isNotEmpty)
             ?: throw IllegalArgumentException("Chat user id must not be blank")
-        var changed = 0
-        val updated = messagesByChannel[normalizedChannelId].orEmpty().map { message ->
+        val changedIds = hashSetOf<String>()
+        var liveChanged = false
+        var historyChanged = false
+        val live = messagesByChannel[normalizedChannelId].orEmpty().map { message ->
             if (
                 message.userId != normalizedUserId ||
                 !shouldApplyModeration(message, action)
             ) {
                 message
             } else {
-                changed += 1
-                message.copy(
-                    flags = message.flags.copy(isDeleted = true),
-                    moderation = ModerationState(action, atMillis = atMillis),
-                )
+                liveChanged = true
+                changedIds += message.id
+                deletedMessage(message, action, atMillis)
             }
         }
-        if (changed > 0) messagesByChannel = messagesByChannel + (normalizedChannelId to updated)
-        return changed
+        val history = historyMessagesByChannel[normalizedChannelId].orEmpty().map { message ->
+            if (
+                message.userId != normalizedUserId ||
+                !shouldApplyModeration(message, action)
+            ) {
+                message
+            } else {
+                historyChanged = true
+                changedIds += message.id
+                deletedMessage(message, action, atMillis)
+            }
+        }
+        if (liveChanged) messagesByChannel = messagesByChannel + (normalizedChannelId to live)
+        if (historyChanged) {
+            historyMessagesByChannel = historyMessagesByChannel + (normalizedChannelId to history)
+        }
+        return changedIds.size
     }
 
     fun clearChannelMessages(channelId: String): Boolean {
         val normalizedChannelId = requireChannelId(channelId)
-        if (normalizedChannelId !in messagesByChannel) return false
+        val existed = normalizedChannelId in messagesByChannel || normalizedChannelId in historyMessagesByChannel
+        if (!existed) return false
         messagesByChannel = messagesByChannel - normalizedChannelId
+        historyMessagesByChannel = historyMessagesByChannel - normalizedChannelId
         return true
     }
 
@@ -327,6 +383,7 @@ class ChatRuntimeStateHolder(
         val normalized = channelId.trim()
         if (normalized.isEmpty()) return
         messagesByChannel = messagesByChannel - normalized
+        historyMessagesByChannel = historyMessagesByChannel - normalized
         badgeAssetsByChannel = badgeAssetsByChannel - normalized
         cheermoteAssetsByChannel = cheermoteAssetsByChannel - normalized
         applyInteractive(InteractiveChatOverlayEvent.ClearChannel(normalized))
@@ -335,6 +392,7 @@ class ChatRuntimeStateHolder(
     fun retainChannels(channelIds: Iterable<String>) {
         val allowed = channelIds.map { it.trim() }.filter { it.isNotEmpty() }.toSet()
         messagesByChannel = messagesByChannel.filterKeys(allowed::contains)
+        historyMessagesByChannel = historyMessagesByChannel.filterKeys(allowed::contains)
         badgeAssetsByChannel = badgeAssetsByChannel.filterKeys(allowed::contains)
         cheermoteAssetsByChannel = cheermoteAssetsByChannel.filterKeys(allowed::contains)
         val interactiveChannels = interactiveState.pollsByChannel.keys +
@@ -373,6 +431,7 @@ class ChatRuntimeStateHolder(
 
     fun clear() {
         messagesByChannel = emptyMap()
+        historyMessagesByChannel = emptyMap()
         globalBadgeAssets = emptyMap()
         badgeAssetsByChannel = emptyMap()
         cheermoteAssetsByChannel = emptyMap()
@@ -389,6 +448,7 @@ class ChatRuntimeStateHolder(
             if (channelMessages.isNotEmpty()) normalized[id] = channelMessages
         }
         messagesByChannel = normalized
+        historyMessagesByChannel = emptyMap()
     }
 
     private fun normalizeMessages(channelId: String, messages: List<ChatMessage>): List<ChatMessage> {
@@ -401,9 +461,106 @@ class ChatRuntimeStateHolder(
             byId[message.id] = message
         }
         return byId.values
-            .sortedWith(compareBy(ChatMessage::timestampMillis, ChatMessage::id))
+            .sortedWith(MESSAGE_ORDER)
             .takeLast(MAX_MESSAGES_PER_CHANNEL)
     }
+
+    private fun mergeHistoryMessages(
+        channelId: String,
+        existing: List<ChatMessage>,
+        incoming: List<ChatMessage>,
+        liveIds: Set<String>,
+    ): HistoryMergeResult {
+        val byId = linkedMapOf<String, ChatMessage>()
+        existing.forEach { message ->
+            if (message.id !in liveIds) byId[message.id] = message
+        }
+        val incomingIds = linkedSetOf<String>()
+        incoming.forEach { message ->
+            requireMessage(message)
+            require(message.channelId == channelId) {
+                "Chat history message channel does not match its runtime bucket"
+            }
+            if (message.id !in liveIds) {
+                byId[message.id] = message
+                incomingIds += message.id
+            }
+        }
+        val sorted = byId.values.sortedWith(MESSAGE_ORDER)
+        val retained = if (sorted.size <= MAX_HISTORY_MESSAGES_PER_CHANNEL) {
+            sorted
+        } else {
+            val required = sorted
+                .filter { it.id in incomingIds }
+                .takeLast(MAX_HISTORY_MESSAGES_PER_CHANNEL)
+            val requiredIds = required.mapTo(hashSetOf(), ChatMessage::id)
+            val remaining = sorted
+                .asSequence()
+                .filterNot { it.id in requiredIds }
+                .toList()
+                .takeLast((MAX_HISTORY_MESSAGES_PER_CHANNEL - required.size).coerceAtLeast(0))
+            (remaining + required).sortedWith(MESSAGE_ORDER)
+        }
+        val retainedIds = retained.mapTo(hashSetOf(), ChatMessage::id)
+        return HistoryMergeResult(
+            messages = retained,
+            acceptedCount = incomingIds.count(retainedIds::contains),
+        )
+    }
+
+    private fun mergeTimelineMessages(
+        history: List<ChatMessage>,
+        live: List<ChatMessage>,
+    ): List<ChatMessage> {
+        if (history.isEmpty()) return live
+        if (live.isEmpty()) return history
+        val liveIds = live.mapTo(hashSetOf(), ChatMessage::id)
+        val historyWithoutLiveDuplicates = history.filterNot { it.id in liveIds }
+        if (historyWithoutLiveDuplicates.isEmpty()) return live
+
+        val result = ArrayList<ChatMessage>(historyWithoutLiveDuplicates.size + live.size)
+        var historyIndex = 0
+        var liveIndex = 0
+        while (historyIndex < historyWithoutLiveDuplicates.size && liveIndex < live.size) {
+            val historical = historyWithoutLiveDuplicates[historyIndex]
+            val liveMessage = live[liveIndex]
+            if (MESSAGE_ORDER.compare(historical, liveMessage) <= 0) {
+                result += historical
+                historyIndex += 1
+            } else {
+                result += liveMessage
+                liveIndex += 1
+            }
+        }
+        while (historyIndex < historyWithoutLiveDuplicates.size) {
+            result += historyWithoutLiveDuplicates[historyIndex++]
+        }
+        while (liveIndex < live.size) {
+            result += live[liveIndex++]
+        }
+        return result
+    }
+
+    private fun removeHistoryMessage(channelId: String, messageId: String) {
+        val normalizedChannelId = channelId.trim()
+        val existing = historyMessagesByChannel[normalizedChannelId].orEmpty()
+        if (existing.none { it.id == messageId }) return
+        val updated = existing.filterNot { it.id == messageId }
+        historyMessagesByChannel = if (updated.isEmpty()) {
+            historyMessagesByChannel - normalizedChannelId
+        } else {
+            historyMessagesByChannel + (normalizedChannelId to updated)
+        }
+    }
+
+    private fun deletedMessage(
+        message: ChatMessage,
+        action: ModerationAction,
+        atMillis: Long,
+    ): ChatMessage = message.copy(
+        flags = message.flags.copy(isDeleted = true),
+        moderation = ModerationState(action, atMillis = atMillis),
+    )
 
     private fun shouldApplyModeration(
         message: ChatMessage,
@@ -454,7 +611,14 @@ class ChatRuntimeStateHolder(
         value.trim().takeIf { it.isNotEmpty() }
             ?: throw IllegalArgumentException("Chat channel id must not be blank")
 
+    private data class HistoryMergeResult(
+        val messages: List<ChatMessage>,
+        val acceptedCount: Int,
+    )
+
     private companion object {
+        val MESSAGE_ORDER = compareBy<ChatMessage>(ChatMessage::timestampMillis, ChatMessage::id)
         const val MAX_MESSAGES_PER_CHANNEL = 5_000
+        const val MAX_HISTORY_MESSAGES_PER_CHANNEL = 5_000
     }
 }
