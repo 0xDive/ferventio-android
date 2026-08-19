@@ -10,6 +10,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     private var workspaceRuntimeBridge: WorkspaceRuntimeBridge?
     private var pushBackendRegistrationRuntimeBridge: PushBackendRegistrationRuntimeBridge?
     private var authenticatedChatRuntimeBridge: AuthenticatedChatRuntimeBridge?
+    private var authenticationLeaseRefreshTask: Task<Void, Never>?
     private var isPrimarySceneActive = false
     private lazy var networkRecoveryObserver = NetworkRecoveryObserver(
         onReachable: { [weak self] in
@@ -71,6 +72,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
             Task { @MainActor [weak self] in
                 await authenticationRuntimeBridge.restore()
                 await self?.restoreWorkspaceAndSynchronizePush()
+                self?.scheduleAuthenticationLeaseRefresh()
             }
         } catch {
             runtimeState.authentication.markFailed(
@@ -134,6 +136,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     }
 
     func applicationWillTerminate(_ application: UIApplication) {
+        cancelAuthenticationLeaseRefresh()
         authenticatedChatRuntimeBridge?.stop()
         networkRecoveryObserver.stop()
     }
@@ -144,6 +147,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
                 Task { @MainActor [weak self] in
                     await self?.authenticationRuntimeBridge?.signIn()
                     await self?.restoreWorkspaceAndSynchronizePush()
+                    self?.scheduleAuthenticationLeaseRefresh()
                 }
             },
             onSignOut: { [weak self] in
@@ -249,6 +253,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
 
     func sceneWillResignActive() {
         isPrimarySceneActive = false
+        cancelAuthenticationLeaseRefresh()
         runtimeState.lifecycle.markInactive()
     }
 
@@ -258,12 +263,14 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
 
     func sceneDidEnterBackground() {
         isPrimarySceneActive = false
+        cancelAuthenticationLeaseRefresh()
         runtimeState.lifecycle.markBackground()
         authenticatedChatRuntimeBridge?.stop()
     }
 
     func sceneDidDisconnect() {
         isPrimarySceneActive = false
+        cancelAuthenticationLeaseRefresh()
         authenticatedChatRuntimeBridge?.stop()
     }
 
@@ -281,6 +288,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     }
 
     private func signOutAndCleanup() async {
+        cancelAuthenticationLeaseRefresh()
         guard let authenticationRuntimeBridge else { return }
         guard await authenticationRuntimeBridge.signOut() else { return }
         authenticatedChatRuntimeBridge?.stop(clearState: true)
@@ -294,13 +302,16 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         case .deferred:
             return
         case .signedOut:
+            cancelAuthenticationLeaseRefresh()
             authenticatedChatRuntimeBridge?.stop(clearState: true)
             clearAuthenticatedWorkspaceState()
             await synchronizePushBackendRegistration()
         case .unavailable:
             authenticatedChatRuntimeBridge?.stop()
+            scheduleAuthenticationLeaseRefresh()
         case .ready:
             await synchronizeReadyAuthenticatedRuntime()
+            scheduleAuthenticationLeaseRefresh()
         }
     }
 
@@ -322,13 +333,16 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         case .deferred:
             return
         case .signedOut:
+            cancelAuthenticationLeaseRefresh()
             authenticatedChatRuntimeBridge?.stop(clearState: true)
             clearAuthenticatedWorkspaceState()
             await synchronizePushBackendRegistration()
         case .unavailable:
             authenticatedChatRuntimeBridge?.stop()
+            scheduleAuthenticationLeaseRefresh()
         case .ready:
             await synchronizeReadyAuthenticatedRuntime()
+            scheduleAuthenticationLeaseRefresh()
         }
     }
 
@@ -348,6 +362,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     private func restoreWorkspaceAndSynchronizePush() async {
         let authentication = runtimeState.authentication.state.authentication
         guard let authentication else {
+            cancelAuthenticationLeaseRefresh()
             authenticatedChatRuntimeBridge?.stop(clearState: true)
             clearAuthenticatedWorkspaceState()
             await synchronizePushBackendRegistration()
@@ -387,4 +402,41 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
             workspaceState: runtimeState.workspace
         )
     }
+
+    private func scheduleAuthenticationLeaseRefresh() {
+        cancelAuthenticationLeaseRefresh()
+        guard
+            isPrimarySceneActive,
+            let lease = runtimeState.authentication.state.authentication?.accessLease
+        else {
+            return
+        }
+
+        let nowEpochMillis = Int64(Date().timeIntervalSince1970 * 1_000)
+        let untilSafetyWindowMillis =
+            lease.leaseExpiresAtEpochMillis - nowEpochMillis - authenticationRefreshLeadTimeMillis
+        let delayMillis = untilSafetyWindowMillis > 0
+            ? untilSafetyWindowMillis
+            : authenticationRefreshRetryDelayMillis
+        let delayNanoseconds = UInt64(delayMillis) * 1_000_000
+
+        authenticationLeaseRefreshTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: delayNanoseconds)
+            } catch {
+                return
+            }
+            guard let self, !Task.isCancelled, isPrimarySceneActive else { return }
+            authenticationLeaseRefreshTask = nil
+            await refreshAuthenticationAndSynchronizeRuntime()
+        }
+    }
+
+    private func cancelAuthenticationLeaseRefresh() {
+        authenticationLeaseRefreshTask?.cancel()
+        authenticationLeaseRefreshTask = nil
+    }
+
+    private let authenticationRefreshLeadTimeMillis: Int64 = 5_000
+    private let authenticationRefreshRetryDelayMillis: Int64 = 30_000
 }
