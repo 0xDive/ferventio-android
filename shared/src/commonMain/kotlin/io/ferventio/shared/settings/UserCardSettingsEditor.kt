@@ -89,10 +89,12 @@ internal object UserCardSettingsEditor {
 
     private fun SharedAppPreferences.withTimeoutPresets(values: List<Int>): SharedAppPreferences {
         val normalizedValues = values
-            .filter { it in MIN_TIMEOUT_SECONDS..MAX_TIMEOUT_SECONDS }
+            .filter {
+                it in SharedAppPreferences.MIN_TIMEOUT_SECONDS..SharedAppPreferences.MAX_TIMEOUT_SECONDS
+            }
             .distinct()
-            .take(MAX_TIMEOUT_PRESETS)
-            .ifEmpty { DEFAULT_TIMEOUT_PRESETS }
+            .take(SharedAppPreferences.MAX_TIMEOUT_PRESETS)
+            .ifEmpty { SharedAppPreferences.DEFAULT_TIMEOUT_PRESETS }
         val updatedOrder = UserCardModerationLayout.normalize(
             storedOrder = userCardModerationActionOrder,
             timeoutPresetsSeconds = normalizedValues,
