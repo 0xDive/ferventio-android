@@ -101,7 +101,7 @@ fun FerventioModeratedChatScreen(
     if (showNukePreview && canModerateChannel) {
         NukePreviewSheet(
             channelId = channel.id,
-            messages = runtime.chat.messages(channel.id),
+            messages = nukePreviewMessages(runtime.chat, channel.id),
             onDismiss = { showNukePreview = false },
         )
     }
