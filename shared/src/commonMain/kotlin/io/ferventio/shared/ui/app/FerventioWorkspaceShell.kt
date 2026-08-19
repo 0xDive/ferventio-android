@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.ferventio.app.domain.ChatChannel
 import io.ferventio.shared.generated.resources.Res
+import io.ferventio.shared.generated.resources.attention_open
 import io.ferventio.shared.generated.resources.auth_sign_out
 import io.ferventio.shared.generated.resources.notifications_enable
 import io.ferventio.shared.generated.resources.notifications_enabled
@@ -81,9 +82,11 @@ fun FerventioWorkspaceShell(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     var settingsVisible by remember { mutableStateOf(false) }
+    var attentionVisible by remember { mutableStateOf(false) }
     val selectedChannel = state.channels.firstOrNull { it.id == state.selectedChannelId }
         ?: state.channels.firstOrNull()
     val menuDescription = stringResource(Res.string.workspace_menu)
+    val attentionDescription = stringResource(Res.string.attention_open)
     val notificationAction = notificationPermissionAction(notificationAuthorizationStatus)
 
     ModalNavigationDrawer(
@@ -197,6 +200,27 @@ fun FerventioWorkspaceShell(
                             }
                         }
                     },
+                    actions = {
+                        TextButton(
+                            onClick = { attentionVisible = true },
+                            modifier = Modifier.semantics { contentDescription = attentionDescription },
+                        ) {
+                            val unreadMentions = runtime.attention.mentionUnreadCount
+                            Text(
+                                text = if (unreadMentions > 0) {
+                                    "@${unreadMentions.coerceAtMost(999)}"
+                                } else {
+                                    "@"
+                                },
+                                fontWeight = if (unreadMentions > 0) FontWeight.Bold else FontWeight.Medium,
+                                color = if (unreadMentions > 0) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                            )
+                        }
+                    },
                 )
             },
         ) { padding ->
@@ -238,6 +262,19 @@ fun FerventioWorkspaceShell(
             onOpenNotificationSettings = onOpenNotificationSettings,
             onSave = onSaveSettings,
             onDismiss = { settingsVisible = false },
+        )
+    }
+
+    if (attentionVisible) {
+        FerventioAttentionSheet(
+            attention = runtime.attention,
+            onOpenEntry = { entry ->
+                runtime.attention.requestMessageNavigation(entry.channelId, entry.messageId)
+                state.selectChannel(entry.channelId)
+                onSelectChannel(entry.channelId)
+                attentionVisible = false
+            },
+            onDismiss = { attentionVisible = false },
         )
     }
 }
