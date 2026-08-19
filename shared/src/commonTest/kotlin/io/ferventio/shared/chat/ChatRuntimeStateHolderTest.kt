@@ -106,13 +106,17 @@ class ChatRuntimeStateHolderTest {
         assertTrue(holder.markMessageDeleted(CHANNEL_ID, "history-a", atMillis = 10L))
         assertTrue(holder.messages(CHANNEL_ID).first { it.id == "history-a" }.isDeleted)
         assertEquals(
-            1,
+            2,
             holder.markUserMessagesDeleted(
                 CHANNEL_ID,
                 "user-a",
                 atMillis = 20L,
                 action = ModerationAction.TIMEOUT,
             ),
+        )
+        assertEquals(
+            ModerationAction.TIMEOUT,
+            holder.messages(CHANNEL_ID).first { it.id == "history-a" }.moderation.action,
         )
         assertEquals(
             ModerationAction.TIMEOUT,
