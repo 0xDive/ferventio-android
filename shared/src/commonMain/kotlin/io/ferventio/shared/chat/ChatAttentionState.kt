@@ -35,11 +35,31 @@ class ChatAttentionStateHolder {
     var channelsAtLiveTail by mutableStateOf(emptySet<String>())
         private set
 
+    var messageNavigationTargets by mutableStateOf(emptyMap<String, String>())
+        private set
+
     val mentionUnreadCount: Int
         get() = channelAttention.values.sumOf(SharedChannelAttention::mentionCount)
 
     fun attention(channelId: String): SharedChannelAttention =
         channelAttention[channelId.trim()] ?: SharedChannelAttention()
+
+    fun navigationTarget(channelId: String): String? =
+        messageNavigationTargets[channelId.trim()]?.takeIf(String::isNotBlank)
+
+    fun requestMessageNavigation(channelId: String, messageId: String) {
+        val normalizedChannelId = requireChannelId(channelId)
+        val normalizedMessageId = requireMessageId(messageId)
+        messageNavigationTargets = messageNavigationTargets + (normalizedChannelId to normalizedMessageId)
+    }
+
+    fun consumeMessageNavigation(channelId: String, messageId: String): Boolean {
+        val normalizedChannelId = requireChannelId(channelId)
+        val normalizedMessageId = requireMessageId(messageId)
+        if (messageNavigationTargets[normalizedChannelId] != normalizedMessageId) return false
+        messageNavigationTargets = messageNavigationTargets - normalizedChannelId
+        return true
+    }
 
     fun updateViewport(
         channelId: String,
@@ -132,6 +152,7 @@ class ChatAttentionStateHolder {
         attentionEntries = attentionEntries.filter { it.channelId in allowed }
         visibleChannelIds = visibleChannelIds.filterTo(linkedSetOf(), allowed::contains)
         channelsAtLiveTail = channelsAtLiveTail.filterTo(linkedSetOf(), allowed::contains)
+        messageNavigationTargets = messageNavigationTargets.filterKeys(allowed::contains)
     }
 
     fun clear() {
@@ -139,11 +160,16 @@ class ChatAttentionStateHolder {
         attentionEntries = emptyList()
         visibleChannelIds = emptySet()
         channelsAtLiveTail = emptySet()
+        messageNavigationTargets = emptyMap()
     }
 
     private fun requireChannelId(value: String): String =
         value.trim().takeIf(String::isNotEmpty)
             ?: throw IllegalArgumentException("Chat attention channel id must not be blank")
+
+    private fun requireMessageId(value: String): String =
+        value.trim().takeIf(String::isNotEmpty)
+            ?: throw IllegalArgumentException("Chat attention message id must not be blank")
 
     private companion object {
         const val MAX_ATTENTION_COUNT = 9_999
