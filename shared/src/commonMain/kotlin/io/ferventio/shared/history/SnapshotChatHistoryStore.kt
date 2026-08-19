@@ -56,20 +56,20 @@ internal class SnapshotChatHistoryStore(
         config: ChatHistoryConfig,
     ): Map<String, List<ChatMessage>> {
         if (!config.enabled || channelIds.isEmpty()) return emptyMap()
-        val channelSet = channelIds.filter(String::isNotBlank).toSet()
-        if (channelSet.isEmpty()) return emptyMap()
+        val validChannelIds = channelIds.filter(String::isNotBlank).distinct()
+        if (validChannelIds.isEmpty()) return emptyMap()
         return withSnapshot(writeBack = true) { current ->
             val pruned = prune(current, config, nowMillis())
             val pageSize = minOf(
                 config.limitPerChannel.coerceIn(MIN_HISTORY_LIMIT, MAX_HISTORY_LIMIT),
                 INITIAL_HISTORY_PAGE_SIZE,
             )
-            val result = channelIds.distinct().associateWith { channelId ->
+            val result = validChannelIds.associateWith { channelId ->
                 pruned.asSequence()
                     .filter { it.channelId == channelId }
                     .sortedWith(messageAscending)
-                    .takeLast(pageSize)
                     .toList()
+                    .takeLast(pageSize)
             }
             SnapshotResult(pruned, result)
         }
