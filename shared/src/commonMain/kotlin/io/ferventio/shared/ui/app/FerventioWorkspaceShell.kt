@@ -300,8 +300,12 @@ fun FerventioWorkspaceShell(
         FerventioHistorySearchSheet(
             history = history,
             currentChannelId = selectedChannel?.id,
+            navigableChannelIds = state.channelIds.toSet(),
             onOpenMessage = { message ->
                 scope.launch {
+                    // The workspace can change while search results are visible. Do not leave a
+                    // navigation target pending for a channel that disappeared after the search.
+                    if (message.channelId !in state.channelIds) return@launch
                     val contextMessages = runCatching {
                         history.loadMessageContext(message.id)
                     }.getOrDefault(emptyList()).ifEmpty { listOf(message) }
