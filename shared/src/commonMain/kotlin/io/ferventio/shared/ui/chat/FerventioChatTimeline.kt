@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicText
@@ -122,13 +123,18 @@ fun FerventioChatTimeline(
     )
     val cheermoteAssets = chat.cheermoteAssets(channel.id)
     val listState = rememberLazyListState()
-    var followTail by remember(channel.id) { mutableStateOf(preferences.autoScrollEnabled) }
+    val navigationTarget = attention.navigationTarget(channel.id)
+    var followTail by remember(channel.id) {
+        mutableStateOf(preferences.autoScrollEnabled && navigationTarget == null)
+    }
 
     DisposableEffect(channel.id, attention) {
+        // Do not declare the channel read before LazyColumn has a real layout. The flow below owns
+        // live-tail detection, while this effect only owns visible/not-visible lifecycle.
         attention.updateViewport(
             channelId = channel.id,
             visible = true,
-            isAtLiveTail = !listState.canScrollForward,
+            isAtLiveTail = false,
         )
         onDispose {
             attention.updateViewport(
@@ -138,8 +144,11 @@ fun FerventioChatTimeline(
             )
         }
     }
-    LaunchedEffect(channel.id, listState, attention) {
-        snapshotFlow { !listState.canScrollForward }
+    LaunchedEffect(channel.id, listState, attention, messages.size) {
+        snapshotFlow {
+            attention.navigationTarget(channel.id) == null &&
+                listState.isTimelineAtLiveTail(messages.isEmpty())
+        }
             .distinctUntilChanged()
             .collect { isAtLiveTail ->
                 attention.updateViewport(
@@ -149,15 +158,35 @@ fun FerventioChatTimeline(
                 )
             }
     }
-    LaunchedEffect(preferences.autoScrollEnabled) {
-        followTail = preferences.autoScrollEnabled && !listState.canScrollForward
+    LaunchedEffect(channel.id, navigationTarget, messages, sourceMessages) {
+        val target = navigationTarget ?: return@LaunchedEffect
+        followTail = false
+        attention.updateViewport(
+            channelId = channel.id,
+            visible = true,
+            isAtLiveTail = false,
+        )
+        val index = resolveNavigationIndex(
+            visibleMessages = messages,
+            sourceMessages = sourceMessages,
+            targetMessageId = target,
+        ) ?: return@LaunchedEffect
+        listState.scrollToItem(index)
+        attention.consumeMessageNavigation(channel.id, target)
     }
-    LaunchedEffect(listState, preferences.autoScrollEnabled) {
+    LaunchedEffect(preferences.autoScrollEnabled, navigationTarget) {
+        followTail = navigationTarget == null &&
+            preferences.autoScrollEnabled &&
+            listState.isTimelineAtLiveTail(messages.isEmpty())
+    }
+    LaunchedEffect(listState, preferences.autoScrollEnabled, attention, channel.id) {
         snapshotFlow { listState.isScrollInProgress }
             .distinctUntilChanged()
             .filter { scrolling -> !scrolling }
             .collect {
-                followTail = preferences.autoScrollEnabled && !listState.canScrollForward
+                followTail = attention.navigationTarget(channel.id) == null &&
+                    preferences.autoScrollEnabled &&
+                    listState.isTimelineAtLiveTail(messages.isEmpty())
             }
     }
     LaunchedEffect(messages.size, followTail) {
@@ -202,6 +231,36 @@ fun FerventioChatTimeline(
             }
         }
     }
+}
+
+private fun LazyListState.isTimelineAtLiveTail(empty: Boolean): Boolean {
+    val layout = layoutInfo
+    if (layout.totalItemsCount == 0) return empty
+    val lastVisibleIndex = layout.visibleItemsInfo.lastOrNull()?.index ?: return false
+    return lastVisibleIndex >= layout.totalItemsCount - 1 && !canScrollForward
+}
+
+private fun resolveNavigationIndex(
+    visibleMessages: List<ChatMessage>,
+    sourceMessages: List<ChatMessage>,
+    targetMessageId: String,
+): Int? {
+    fun ChatMessage.matchesTarget(): Boolean =
+        id == targetMessageId || serverMessageId == targetMessageId
+
+    val directIndex = visibleMessages.indexOfFirst(ChatMessage::matchesTarget)
+    if (directIndex >= 0) return directIndex
+
+    val sourceIndex = sourceMessages.indexOfFirst(ChatMessage::matchesTarget)
+    if (sourceIndex < 0) return null
+    val visibleIds = visibleMessages.mapTo(hashSetOf()) { it.id }
+    val representative = sourceMessages
+        .subList(0, sourceIndex + 1)
+        .asReversed()
+        .firstOrNull { it.id in visibleIds }
+        ?: sourceMessages.drop(sourceIndex + 1).firstOrNull { it.id in visibleIds }
+        ?: return null
+    return visibleMessages.indexOfFirst { it.id == representative.id }.takeIf { it >= 0 }
 }
 
 @Composable
@@ -467,7 +526,7 @@ private fun ChatMessageRow(
                 .pointerInput(text, onAuthorClick, onReplyRequest, canReply) {
                     detectTapGestures(
                         onLongPress = {
-                            if (canReply) onReplyRequest?.invoke(message)
+                            if (canReply) onReplyRequest(message)
                         },
                         onTap = { position ->
                             val offset = textLayoutResult?.getOffsetForPosition(position)
