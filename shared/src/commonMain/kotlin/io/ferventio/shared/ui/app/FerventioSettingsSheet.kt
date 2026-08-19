@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import io.ferventio.app.domain.AppLanguage
 import io.ferventio.app.domain.AppThemeMode
 import io.ferventio.app.domain.ChatNameStyle
 import io.ferventio.app.domain.MessageDensity
@@ -77,6 +78,16 @@ internal fun FerventioSettingsSheet(
             Spacer(Modifier.height(20.dp))
 
             SettingsSectionTitle(stringResource(Res.string.settings_appearance))
+            SettingsChoiceGroup(
+                title = stringResource(Res.string.settings_language),
+                options = listOf(
+                    AppLanguage.SYSTEM to stringResource(Res.string.settings_language_system),
+                    AppLanguage.RUSSIAN to stringResource(Res.string.settings_language_russian),
+                    AppLanguage.ENGLISH to stringResource(Res.string.settings_language_english),
+                ),
+                selected = state.preferences.appLanguage,
+                onSelected = { value -> update { it.copy(appLanguage = value) } },
+            )
             SettingsChoiceGroup(
                 title = stringResource(Res.string.settings_theme),
                 options = listOf(
@@ -141,10 +152,33 @@ internal fun FerventioSettingsSheet(
                 onCheckedChange = { value -> update { it.copy(showTimestamps = value) } },
             )
             SettingsSwitchRow(
+                label = stringResource(Res.string.settings_wrap_messages),
+                checked = state.preferences.wrapMessageLines,
+                onCheckedChange = { value -> update { it.copy(wrapMessageLines = value) } },
+            )
+            SettingsSwitchRow(
+                label = stringResource(Res.string.settings_show_deleted_content),
+                checked = state.preferences.showDeletedMessageContent,
+                onCheckedChange = { value -> update { it.copy(showDeletedMessageContent = value) } },
+            )
+            SettingsSwitchRow(
+                label = stringResource(Res.string.settings_show_system_messages),
+                checked = state.preferences.showSystemMessages,
+                onCheckedChange = { value -> update { it.copy(showSystemMessages = value) } },
+            )
+            SettingsSwitchRow(
+                label = stringResource(Res.string.settings_auto_scroll),
+                checked = state.preferences.autoScrollEnabled,
+                onCheckedChange = { value -> update { it.copy(autoScrollEnabled = value) } },
+            )
+            SettingsSwitchRow(
                 label = stringResource(Res.string.settings_repeat_collapse),
                 checked = state.preferences.repeatCollapseEnabled,
                 onCheckedChange = { value -> update { it.copy(repeatCollapseEnabled = value) } },
             )
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+            SettingsSectionTitle(stringResource(Res.string.settings_media))
             SettingsSwitchRow(
                 label = stringResource(Res.string.settings_animate_emotes),
                 checked = state.preferences.animateEmotes,
@@ -182,7 +216,30 @@ internal fun FerventioSettingsSheet(
             )
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+            SettingsSectionTitle(stringResource(Res.string.settings_composer))
+            SettingsSwitchRow(
+                label = stringResource(Res.string.settings_send_on_enter),
+                checked = state.preferences.sendOnEnter,
+                onCheckedChange = { value -> update { it.copy(sendOnEnter = value) } },
+            )
+            SettingsSwitchRow(
+                label = stringResource(Res.string.settings_composer_emote_images),
+                checked = state.preferences.showComposerEmoteImages,
+                onCheckedChange = { value -> update { it.copy(showComposerEmoteImages = value) } },
+            )
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
             SettingsSectionTitle(stringResource(Res.string.notifications_title))
+            SettingsSwitchRow(
+                label = stringResource(Res.string.settings_reply_notifications),
+                checked = state.preferences.replyNotificationsEnabled,
+                onCheckedChange = { value -> update { it.copy(replyNotificationsEnabled = value) } },
+            )
+            SettingsSwitchRow(
+                label = stringResource(Res.string.settings_automod_notifications),
+                checked = state.preferences.autoModNotificationsEnabled,
+                onCheckedChange = { value -> update { it.copy(autoModNotificationsEnabled = value) } },
+            )
             TextButton(
                 onClick = {
                     when (notificationAction) {
@@ -207,6 +264,84 @@ internal fun FerventioSettingsSheet(
                     },
                 )
             }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+            SettingsSectionTitle(stringResource(Res.string.settings_history))
+            SettingsSwitchRow(
+                label = stringResource(Res.string.settings_recent_messages),
+                checked = state.preferences.recentMessagesEnabled,
+                onCheckedChange = { value -> update { it.copy(recentMessagesEnabled = value) } },
+            )
+            SettingsSwitchRow(
+                label = stringResource(Res.string.settings_local_history),
+                checked = state.preferences.localHistoryEnabled,
+                onCheckedChange = { value -> update { it.copy(localHistoryEnabled = value) } },
+            )
+            if (state.preferences.localHistoryEnabled) {
+                Text(
+                    text = stringResource(
+                        Res.string.settings_history_limit,
+                        state.preferences.localHistoryLimit,
+                    ),
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Slider(
+                    value = state.preferences.localHistoryLimit.toFloat(),
+                    onValueChange = { raw ->
+                        val value = ((raw / 100f).roundToInt() * 100).coerceIn(100, 5_000)
+                        update { it.copy(localHistoryLimit = value) }
+                    },
+                    valueRange = 100f..5_000f,
+                )
+                Text(
+                    text = if (state.preferences.localHistoryRetentionDays == 0) {
+                        stringResource(Res.string.settings_history_retention_unlimited)
+                    } else {
+                        stringResource(
+                            Res.string.settings_history_retention,
+                            state.preferences.localHistoryRetentionDays,
+                        )
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Slider(
+                    value = state.preferences.localHistoryRetentionDays.toFloat(),
+                    onValueChange = { raw ->
+                        update {
+                            it.copy(localHistoryRetentionDays = raw.roundToInt().coerceIn(0, 365))
+                        }
+                    },
+                    valueRange = 0f..365f,
+                )
+                Text(
+                    text = if (state.preferences.localHistoryMaxSizeMb == 0) {
+                        stringResource(Res.string.settings_history_max_size_unlimited)
+                    } else {
+                        stringResource(
+                            Res.string.settings_history_max_size,
+                            state.preferences.localHistoryMaxSizeMb,
+                        )
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Slider(
+                    value = state.preferences.localHistoryMaxSizeMb.toFloat(),
+                    onValueChange = { raw ->
+                        update {
+                            it.copy(localHistoryMaxSizeMb = raw.roundToInt().coerceIn(0, 1_024))
+                        }
+                    },
+                    valueRange = 0f..1_024f,
+                )
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+            SettingsSectionTitle(stringResource(Res.string.settings_user_card))
+            SettingsSwitchRow(
+                label = stringResource(Res.string.settings_user_card_show_ban),
+                checked = state.preferences.userCardShowBanAction,
+                onCheckedChange = { value -> update { it.copy(userCardShowBanAction = value) } },
+            )
 
             when (state.saveStatus) {
                 SharedSettingsSaveStatus.SAVING -> Row(
