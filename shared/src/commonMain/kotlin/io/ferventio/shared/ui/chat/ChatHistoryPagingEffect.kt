@@ -91,12 +91,7 @@ internal fun ChatHistoryPagingEffect(
                         return@collect
                     }
 
-                    chat.prependHistory(channel.id, older)
-                    val acceptedIds = chat.messages(channel.id).asSequence()
-                        .map(ChatMessage::id)
-                        .filterNot(existingIds::contains)
-                        .toHashSet()
-                    val acceptedCount = older.count { it.id in acceptedIds }
+                    val acceptedCount = chat.prependHistory(channel.id, older)
                     gate.finish(boundary, acceptedCount)
                     if (acceptedCount <= 0) return@collect
 
