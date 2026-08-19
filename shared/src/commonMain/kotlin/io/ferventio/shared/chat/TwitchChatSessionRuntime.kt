@@ -2,6 +2,7 @@ package io.ferventio.shared.chat
 
 import io.ferventio.app.domain.MessageRuleEvaluator
 import io.ferventio.app.domain.StoredAuthentication
+import io.ferventio.shared.history.ChatHistoryPersistenceRuntime
 import io.ferventio.shared.workspace.WorkspaceRuntimeSnapshot
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -14,6 +15,7 @@ internal class TwitchChatSessionRuntime(
     private val workspace: WorkspaceRuntimeSnapshot,
     private val state: ChatRuntimeStateHolder,
     private val attention: ChatAttentionStateHolder = ChatAttentionStateHolder(),
+    private val history: ChatHistoryPersistenceRuntime? = null,
     private val bootstrapCoordinator: TwitchEventSubBootstrapCoordinator = TwitchEventSubBootstrapCoordinator(),
     private val onFatalSessionError: (Throwable) -> Unit = {},
 ) {
@@ -60,15 +62,30 @@ internal class TwitchChatSessionRuntime(
         val mutation = runCatching { TwitchChatMutationEventParser.parse(envelope) }.getOrNull()
         if (mutation != null) {
             when (mutation) {
-                is TwitchChatMutationEvent.MessageDeleted -> state.markMessageDeleted(
-                    channelId = mutation.channelId,
-                    messageId = mutation.messageId,
-                )
-                is TwitchChatMutationEvent.UserMessagesCleared -> state.markUserMessagesDeleted(
-                    channelId = mutation.channelId,
-                    userId = mutation.userId,
-                )
-                is TwitchChatMutationEvent.ChatCleared -> state.clearChannelMessages(mutation.channelId)
+                is TwitchChatMutationEvent.MessageDeleted -> {
+                    state.markMessageDeleted(
+                        channelId = mutation.channelId,
+                        messageId = mutation.messageId,
+                    )
+                    history?.markMessageDeleted(
+                        channelId = mutation.channelId,
+                        messageId = mutation.messageId,
+                    )
+                }
+                is TwitchChatMutationEvent.UserMessagesCleared -> {
+                    state.markUserMessagesDeleted(
+                        channelId = mutation.channelId,
+                        userId = mutation.userId,
+                    )
+                    history?.markUserMessagesDeleted(
+                        channelId = mutation.channelId,
+                        userId = mutation.userId,
+                    )
+                }
+                is TwitchChatMutationEvent.ChatCleared -> {
+                    state.clearChannelMessages(mutation.channelId)
+                    history?.clearChannel(mutation.channelId)
+                }
             }
             return true
         }
@@ -87,6 +104,7 @@ internal class TwitchChatSessionRuntime(
             session = session,
             evaluator = messageRuleEvaluator,
         )
+        history?.saveMessage(message)
         return true
     }
 
