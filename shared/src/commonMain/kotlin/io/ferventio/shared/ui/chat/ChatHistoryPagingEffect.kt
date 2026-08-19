@@ -89,7 +89,7 @@ internal fun ChatHistoryPagingEffect(
                     withFrameNanos { }
                     val sourceAfter = chat.messages(channel.id).let { canonical ->
                         if (preferences.showSystemMessages) canonical
-                        else canonical.filterNot(ChatMessage::isSystem)
+                        else canonical.filterNot { message -> message.isSystem }
                     }
                     val collapsePlan = ChatRepeatCollapser.build(
                         messages = sourceAfter,
