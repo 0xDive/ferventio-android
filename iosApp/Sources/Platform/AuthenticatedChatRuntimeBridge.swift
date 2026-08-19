@@ -15,13 +15,17 @@ final class AuthenticatedChatRuntimeBridge {
     init(
         stateHolder: ChatRuntimeStateHolder,
         attentionHolder: ChatAttentionStateHolder = MainViewControllerKt.IosRuntimeState().attention,
+        historyStore: ChatHistoryStore? = MainViewControllerKt.IosRuntimeState().history,
+        settingsState: SharedAppSettingsStateHolder = MainViewControllerKt.IosRuntimeState().settings,
         onAuthenticationRequired: @escaping () -> Void = {}
     ) {
         self.stateHolder = stateHolder
         self.attentionHolder = attentionHolder
         self.coordinator = AuthenticatedChatRuntimeCoordinator(
             state: stateHolder,
-            attention: attentionHolder
+            attention: attentionHolder,
+            historyStore: historyStore,
+            settings: settingsState
         )
         self.onAuthenticationRequired = onAuthenticationRequired
     }
