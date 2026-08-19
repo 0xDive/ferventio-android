@@ -82,12 +82,24 @@ internal fun ChatHistoryPagingEffect(
                         beforeTimestampMillis = boundary.timestampMillis,
                         beforeMessageId = boundary.messageId,
                         limit = HISTORY_PAGE_SIZE,
-                    ).filterNot { it.id in existingIds }
+                    ).filter { message ->
+                        message.channelId == channel.id && message.id !in existingIds
+                    }
 
-                    gate.finish(boundary, older.size)
-                    if (older.isEmpty()) return@collect
+                    if (older.isEmpty()) {
+                        gate.finish(boundary, loadedCount = 0)
+                        return@collect
+                    }
 
                     chat.prependHistory(channel.id, older)
+                    val acceptedIds = chat.messages(channel.id).asSequence()
+                        .map(ChatMessage::id)
+                        .filterNot(existingIds::contains)
+                        .toHashSet()
+                    val acceptedCount = older.count { it.id in acceptedIds }
+                    gate.finish(boundary, acceptedCount)
+                    if (acceptedCount <= 0) return@collect
+
                     val anchor = anchorId ?: return@collect
 
                     // Let LazyColumn consume the new keyed items before restoring the old viewport.
