@@ -46,6 +46,7 @@ internal fun ChatHistoryPagingEffect(
         preferences.showSystemMessages,
         preferences.repeatCollapseEnabled,
         listState,
+        isFollowingTail,
     ) {
         val historyStore = history ?: return@LaunchedEffect
         if (!preferences.localHistoryEnabled) return@LaunchedEffect
