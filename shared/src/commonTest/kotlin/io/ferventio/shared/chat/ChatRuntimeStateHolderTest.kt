@@ -64,6 +64,66 @@ class ChatRuntimeStateHolderTest {
     }
 
     @Test
+    fun durableHistoryDoesNotConsumeCanonicalLiveWindow() {
+        val holder = ChatRuntimeStateHolder()
+        repeat(5_000) { index ->
+            holder.append(
+                message(
+                    id = "live-$index",
+                    timestampMillis = 1_000L + index,
+                ),
+            )
+        }
+
+        val accepted = holder.prependHistory(
+            CHANNEL_ID,
+            listOf(message("history-target", 100L)),
+        )
+
+        assertEquals(1, accepted)
+        assertEquals(5_000, holder.messagesByChannel.getValue(CHANNEL_ID).size)
+        assertEquals(5_001, holder.messages(CHANNEL_ID).size)
+        assertEquals("history-target", holder.messages(CHANNEL_ID).first().id)
+
+        holder.append(message("live-next", 10_000L))
+
+        assertEquals(5_000, holder.messagesByChannel.getValue(CHANNEL_ID).size)
+        assertEquals("history-target", holder.messages(CHANNEL_ID).first().id)
+        assertEquals("live-next", holder.messages(CHANNEL_ID).last().id)
+    }
+
+    @Test
+    fun moderationAndClearAlsoApplyToDurableHistoryOverlay() {
+        val holder = ChatRuntimeStateHolder()
+        holder.prependHistory(
+            CHANNEL_ID,
+            listOf(
+                message("history-a", 1L, authorId = "user-a"),
+                message("history-b", 2L, authorId = "user-a"),
+            ),
+        )
+
+        assertTrue(holder.markMessageDeleted(CHANNEL_ID, "history-a", atMillis = 10L))
+        assertTrue(holder.messages(CHANNEL_ID).first { it.id == "history-a" }.isDeleted)
+        assertEquals(
+            1,
+            holder.markUserMessagesDeleted(
+                CHANNEL_ID,
+                "user-a",
+                atMillis = 20L,
+                action = ModerationAction.TIMEOUT,
+            ),
+        )
+        assertEquals(
+            ModerationAction.TIMEOUT,
+            holder.messages(CHANNEL_ID).first { it.id == "history-b" }.moderation.action,
+        )
+
+        assertTrue(holder.clearChannelMessages(CHANNEL_ID))
+        assertEquals(emptyList(), holder.messages(CHANNEL_ID))
+    }
+
+    @Test
     fun deletionMutationsMatchAndroidCanonicalState() {
         val holder = ChatRuntimeStateHolder()
         holder.append(message("target", 1L, authorId = "user-a"))
