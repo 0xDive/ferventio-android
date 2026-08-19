@@ -1,5 +1,6 @@
 package io.ferventio.shared
 
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.window.ComposeUIViewController
 import io.ferventio.app.domain.AppThemeMode
 import io.ferventio.shared.history.IosChatHistoryStore
@@ -18,6 +19,7 @@ fun IosRuntimeState(): FerventioRuntimeState = iosRuntimeState
 fun MainViewController(
     onAuthenticate: () -> Unit = {},
     onSignOut: () -> Unit = {},
+    onAuthenticationRequired: () -> Unit = {},
     onRequestNotificationPermission: () -> Unit = {},
     onOpenNotificationSettings: () -> Unit = {},
     onSaveSettings: (SharedAppPreferences) -> Unit = {},
@@ -29,6 +31,10 @@ fun MainViewController(
     onMoveChannel: (String, Int) -> Unit = { _, _ -> },
 ): UIViewController = ComposeUIViewController {
     val preferences = iosRuntimeState.settings.preferences
+    val authenticationRequired = iosRuntimeState.chat.authenticationRequired
+    LaunchedEffect(authenticationRequired) {
+        if (authenticationRequired) onAuthenticationRequired()
+    }
     ProvideFerventioRuntimeState(iosRuntimeState) {
         FerventioTheme(
             themeMode = when (preferences.themeMode) {

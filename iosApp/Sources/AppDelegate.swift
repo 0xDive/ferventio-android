@@ -31,12 +31,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         UNUserNotificationCenter.current().delegate = self
         runtimeState.lifecycle.markInactive()
         authenticatedChatRuntimeBridge = AuthenticatedChatRuntimeBridge(
-            stateHolder: runtimeState.chat,
-            onAuthenticationRequired: { [weak self] in
-                Task { @MainActor [weak self] in
-                    await self?.recoverAuthenticationAfterChatRejection()
-                }
-            }
+            stateHolder: runtimeState.chat
         )
         Task {
             await pushRuntimeBridge.refreshAuthorizationAndRestoreRemoteRegistration()
@@ -153,6 +148,11 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
             onSignOut: { [weak self] in
                 Task { @MainActor [weak self] in
                     await self?.signOutAndCleanup()
+                }
+            },
+            onAuthenticationRequired: { [weak self] in
+                Task { @MainActor [weak self] in
+                    await self?.recoverAuthenticationAfterChatRejection()
                 }
             },
             onRequestNotificationPermission: { [weak self] in
