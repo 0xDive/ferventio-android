@@ -2,6 +2,7 @@ package io.ferventio.shared
 
 import androidx.compose.ui.window.ComposeUIViewController
 import io.ferventio.app.domain.AppThemeMode
+import io.ferventio.shared.history.IosChatHistoryStore
 import io.ferventio.shared.runtime.FerventioRuntimeState
 import io.ferventio.shared.runtime.ProvideFerventioRuntimeState
 import io.ferventio.shared.settings.SharedAppPreferences
@@ -10,7 +11,7 @@ import io.ferventio.shared.ui.theme.FerventioTheme
 import io.ferventio.shared.ui.theme.FerventioThemeMode
 import platform.UIKit.UIViewController
 
-private val iosRuntimeState = FerventioRuntimeState()
+private val iosRuntimeState = FerventioRuntimeState(history = IosChatHistoryStore())
 
 fun IosRuntimeState(): FerventioRuntimeState = iosRuntimeState
 
