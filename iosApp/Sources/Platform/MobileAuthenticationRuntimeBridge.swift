@@ -149,8 +149,11 @@ final class MobileAuthenticationRuntimeBridge {
             stateHolder.signOut()
             return true
         } catch {
+            // Fail closed in memory even if secure-storage cleanup fails. Returning true tells
+            // the host to stop authenticated transports, clear workspace state, and unregister
+            // push. The FAILED auth state keeps the persistence error visible for diagnostics.
             stateHolder.markFailed(errorMessage: String(describing: error))
-            return false
+            return true
         }
     }
 
