@@ -4,9 +4,12 @@
 package io.ferventio.shared.history
 
 import io.ferventio.app.domain.ChatHistoryStore
+import kotlinx.cinterop.allocArrayOf
+import kotlinx.cinterop.memScoped
 import platform.Foundation.NSApplicationSupportDirectory
 import platform.Foundation.NSCalendar
 import platform.Foundation.NSCalendarUnitDay
+import platform.Foundation.NSData
 import platform.Foundation.NSDateFormatter
 import platform.Foundation.NSFileManager
 import platform.Foundation.NSLocale
@@ -14,7 +17,6 @@ import platform.Foundation.NSSearchPathForDirectoriesInDomains
 import platform.Foundation.NSString
 import platform.Foundation.NSUTF8StringEncoding
 import platform.Foundation.NSUserDomainMask
-import platform.Foundation.NSTimeZone
 import platform.Foundation.create
 
 /** Durable iOS history store backed by an atomically replaced Application Support snapshot. */
@@ -47,11 +49,9 @@ private class FoundationChatHistorySnapshotStorage : ChatHistorySnapshotStorage 
 
     override fun write(value: String) {
         ensureDirectory()
-        val written = (value as NSString).writeToFile(
+        val written = value.toUtf8Data().writeToFile(
             path = filePath,
             atomically = true,
-            encoding = NSUTF8StringEncoding,
-            error = null,
         )
         check(written) { "Unable to persist chat history snapshot" }
     }
@@ -80,13 +80,20 @@ private class FoundationChatHistorySnapshotStorage : ChatHistorySnapshotStorage 
             expandTilde = true,
         ).firstOrNull() as? String)
             ?: error("Application Support directory is unavailable")
+
+    private fun String.toUtf8Data(): NSData = memScoped {
+        val bytes = encodeToByteArray()
+        NSData.create(
+            bytes = allocArrayOf(bytes),
+            length = bytes.size.toULong(),
+        )
+    }
 }
 
 private class FoundationChatHistoryLocalDateResolver : ChatHistoryLocalDateResolver {
     private val formatter = NSDateFormatter().apply {
         locale = NSLocale(localeIdentifier = "en_US_POSIX")
         dateFormat = "yyyy-MM-dd"
-        timeZone = NSTimeZone.localTimeZone
         lenient = false
     }
     private val calendar = NSCalendar.currentCalendar
@@ -100,12 +107,15 @@ private class FoundationChatHistoryLocalDateResolver : ChatHistoryLocalDateResol
             toDate = start,
             options = 0u,
         ) ?: return null
-        return start.timeIntervalSince1970.toEpochMillis() to next.timeIntervalSince1970.toEpochMillis()
+        return start.timeIntervalSinceReferenceDate.toUnixEpochMillis() to
+            next.timeIntervalSinceReferenceDate.toUnixEpochMillis()
     }
 
-    private fun Double.toEpochMillis(): Long = (this * 1_000.0).toLong()
+    private fun Double.toUnixEpochMillis(): Long =
+        ((this + REFERENCE_DATE_UNIX_OFFSET_SECONDS) * 1_000.0).toLong()
 
     private companion object {
+        const val REFERENCE_DATE_UNIX_OFFSET_SECONDS = 978_307_200.0
         val ISO_DATE = Regex("\\d{4}-\\d{2}-\\d{2}")
     }
 }
