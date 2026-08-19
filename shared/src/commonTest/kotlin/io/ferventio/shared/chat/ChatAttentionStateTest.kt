@@ -140,7 +140,19 @@ class ChatAttentionStateTest {
     }
 
     @Test
-    fun retainingWorkspaceChannelsPrunesRemovedAttention() {
+    fun navigationTargetIsConsumedOnlyByMatchingChannelAndMessage() {
+        val state = ChatAttentionStateHolder()
+        state.requestMessageNavigation("channel-id", "message-id")
+
+        assertEquals("message-id", state.navigationTarget("channel-id"))
+        assertFalse(state.consumeMessageNavigation("channel-id", "other-message"))
+        assertEquals("message-id", state.navigationTarget("channel-id"))
+        assertTrue(state.consumeMessageNavigation("channel-id", "message-id"))
+        assertNull(state.navigationTarget("channel-id"))
+    }
+
+    @Test
+    fun retainingWorkspaceChannelsPrunesRemovedAttentionAndNavigationTargets() {
         val state = ChatAttentionStateHolder()
         state.recordIncoming(message("one", "@viewer"), session, evaluator)
         state.recordIncoming(
@@ -148,12 +160,26 @@ class ChatAttentionStateTest {
             session,
             evaluator,
         )
+        state.requestMessageNavigation("channel-id", "one")
+        state.requestMessageNavigation("other-channel", "two")
 
         state.retainChannels(listOf("other-channel"))
 
         assertEquals(0, state.attention("channel-id").unreadCount)
         assertEquals(1, state.attention("other-channel").unreadCount)
         assertEquals(listOf("other-channel"), state.attentionEntries.map { it.channelId })
+        assertNull(state.navigationTarget("channel-id"))
+        assertEquals("two", state.navigationTarget("other-channel"))
+    }
+
+    @Test
+    fun clearRemovesNavigationTargets() {
+        val state = ChatAttentionStateHolder()
+        state.requestMessageNavigation("channel-id", "one")
+
+        state.clear()
+
+        assertNull(state.navigationTarget("channel-id"))
     }
 
     private fun message(
