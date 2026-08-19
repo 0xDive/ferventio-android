@@ -10,8 +10,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 
 internal fun SharedAppPreferences.toChatHistoryConfig(): ChatHistoryConfig = ChatHistoryConfig(
@@ -60,7 +60,7 @@ internal class ChatHistoryPersistenceRuntime(
             )
         }.getOrDefault(emptyMap())
         channelIds.distinct().forEach { channelId ->
-            restored[channelId]?.takeIf(List<ChatMessage>::isNotEmpty)?.let { messages ->
+            restored[channelId]?.takeIf { it.isNotEmpty() }?.let { messages ->
                 state.prependHistory(channelId, messages)
             }
         }
@@ -88,7 +88,8 @@ internal class ChatHistoryPersistenceRuntime(
 
     suspend fun flushAndClose() {
         close()
-        joinAll(worker)
+        worker.join()
+        scope.cancel()
     }
 
     private fun enqueue(mutation: Mutation) {
