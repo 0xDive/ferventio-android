@@ -2,7 +2,6 @@ package io.ferventio.shared.ui.user
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -21,28 +20,27 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.ferventio.app.domain.UserCardData
 import io.ferventio.shared.generated.resources.Res
+import io.ferventio.shared.generated.resources.settings_user_card_action_timeout
 import io.ferventio.shared.generated.resources.user_card_ban
 import io.ferventio.shared.generated.resources.user_card_ban_done
 import io.ferventio.shared.generated.resources.user_card_cancel
 import io.ferventio.shared.generated.resources.user_card_confirm
 import io.ferventio.shared.generated.resources.user_card_confirm_ban
 import io.ferventio.shared.generated.resources.user_card_confirm_delete
-import io.ferventio.shared.generated.resources.user_card_confirm_timeout
 import io.ferventio.shared.generated.resources.user_card_confirm_title
 import io.ferventio.shared.generated.resources.user_card_delete_done
 import io.ferventio.shared.generated.resources.user_card_delete_message
 import io.ferventio.shared.generated.resources.user_card_moderation_actions
 import io.ferventio.shared.generated.resources.user_card_moderation_failed
-import io.ferventio.shared.generated.resources.user_card_timeout_10m
-import io.ferventio.shared.generated.resources.user_card_timeout_done
 import io.ferventio.shared.runtime.LocalFerventioRuntimeState
+import io.ferventio.shared.settings.UserCardSettingsEditor
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 
-private enum class UserCardModerationAction {
-    TIMEOUT,
-    BAN,
-    DELETE_MESSAGE,
+private sealed interface UserCardPendingModerationAction {
+    data class Timeout(val durationSeconds: Int) : UserCardPendingModerationAction
+    data object Ban : UserCardPendingModerationAction
+    data object DeleteMessage : UserCardPendingModerationAction
 }
 
 private data class UserCardModerationFeedback(
@@ -62,6 +60,7 @@ internal fun UserCardModerationActions(
     )
     if (!availability.canModerateUser && !availability.canDeleteSourceMessage) return
 
+    val configuredActions = UserCardModerationActionPolicy.visibleActions(runtime.settings.preferences)
     val scope = rememberCoroutineScope()
     val targetLabel = data.user.displayName
         .trim()
@@ -69,16 +68,25 @@ internal fun UserCardModerationActions(
         ?: data.user.login.trim().takeIf(String::isNotEmpty)
         ?: data.user.id
     var pendingAction by remember(data.channelId, data.user.id, data.sourceMessageId) {
-        mutableStateOf<UserCardModerationAction?>(null)
+        mutableStateOf<UserCardPendingModerationAction?>(null)
     }
     var mutationInFlight by remember(data.channelId, data.user.id) { mutableStateOf(false) }
     var feedback by remember(data.channelId, data.user.id) {
         mutableStateOf<UserCardModerationFeedback?>(null)
     }
 
-    val timeoutSuccess = stringResource(Res.string.user_card_timeout_done, targetLabel)
     val banSuccess = stringResource(Res.string.user_card_ban_done, targetLabel)
     val deleteSuccess = stringResource(Res.string.user_card_delete_done)
+    val pendingTimeoutLabel = when (val action = pendingAction) {
+        is UserCardPendingModerationAction.Timeout -> userCardTimeoutActionLabel(action.durationSeconds)
+        else -> null
+    }
+    val pendingSuccess = when (pendingAction) {
+        is UserCardPendingModerationAction.Timeout -> "$targetLabel · ${pendingTimeoutLabel.orEmpty()}"
+        UserCardPendingModerationAction.Ban -> banSuccess
+        UserCardPendingModerationAction.DeleteMessage -> deleteSuccess
+        null -> ""
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
@@ -86,33 +94,40 @@ internal fun UserCardModerationActions(
             style = MaterialTheme.typography.titleSmall,
         )
         if (availability.canModerateUser) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                OutlinedButton(
-                    onClick = { pendingAction = UserCardModerationAction.TIMEOUT },
-                    enabled = !mutationInFlight,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(stringResource(Res.string.user_card_timeout_10m))
-                }
-                Button(
-                    onClick = { pendingAction = UserCardModerationAction.BAN },
-                    enabled = !mutationInFlight,
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.error,
-                        contentColor = MaterialTheme.colorScheme.onError,
-                    ),
-                ) {
-                    Text(stringResource(Res.string.user_card_ban))
+            configuredActions.forEach { action ->
+                when (action) {
+                    is UserCardRuntimeModerationAction.Timeout -> {
+                        OutlinedButton(
+                            onClick = {
+                                pendingAction = UserCardPendingModerationAction.Timeout(
+                                    action.durationSeconds,
+                                )
+                            },
+                            enabled = !mutationInFlight,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(userCardTimeoutActionLabel(action.durationSeconds))
+                        }
+                    }
+                    UserCardRuntimeModerationAction.Ban -> {
+                        Button(
+                            onClick = { pendingAction = UserCardPendingModerationAction.Ban },
+                            enabled = !mutationInFlight,
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.error,
+                                contentColor = MaterialTheme.colorScheme.onError,
+                            ),
+                        ) {
+                            Text(stringResource(Res.string.user_card_ban))
+                        }
+                    }
                 }
             }
         }
         if (availability.canDeleteSourceMessage) {
             OutlinedButton(
-                onClick = { pendingAction = UserCardModerationAction.DELETE_MESSAGE },
+                onClick = { pendingAction = UserCardPendingModerationAction.DeleteMessage },
                 enabled = !mutationInFlight,
                 modifier = Modifier.fillMaxWidth(),
             ) {
@@ -138,11 +153,11 @@ internal fun UserCardModerationActions(
 
     pendingAction?.let { action ->
         val confirmation = when (action) {
-            UserCardModerationAction.TIMEOUT ->
-                stringResource(Res.string.user_card_confirm_timeout, targetLabel)
-            UserCardModerationAction.BAN ->
+            is UserCardPendingModerationAction.Timeout ->
+                "$targetLabel · ${pendingTimeoutLabel.orEmpty()}"
+            UserCardPendingModerationAction.Ban ->
                 stringResource(Res.string.user_card_confirm_ban, targetLabel)
-            UserCardModerationAction.DELETE_MESSAGE ->
+            UserCardPendingModerationAction.DeleteMessage ->
                 stringResource(Res.string.user_card_confirm_delete)
         }
         AlertDialog(
@@ -156,6 +171,7 @@ internal fun UserCardModerationActions(
                     enabled = !mutationInFlight,
                     onClick = {
                         val selectedAction = pendingAction ?: return@TextButton
+                        val successMessage = pendingSuccess
                         pendingAction = null
                         mutationInFlight = true
                         feedback = null
@@ -165,30 +181,22 @@ internal fun UserCardModerationActions(
                                     runtime.authentication.state.authentication
                                         ?: error("Twitch authentication is unavailable")
                                 when (selectedAction) {
-                                    UserCardModerationAction.TIMEOUT -> {
+                                    is UserCardPendingModerationAction.Timeout -> {
                                         runtime.moderation.timeoutUser(
                                             authentication = currentAuthentication,
                                             broadcasterId = data.channelId,
                                             targetUserId = data.user.id,
-                                            durationSeconds = TEN_MINUTES_SECONDS,
-                                        )
-                                        feedback = UserCardModerationFeedback(
-                                            message = timeoutSuccess,
-                                            isError = false,
+                                            durationSeconds = selectedAction.durationSeconds,
                                         )
                                     }
-                                    UserCardModerationAction.BAN -> {
+                                    UserCardPendingModerationAction.Ban -> {
                                         runtime.moderation.banUser(
                                             authentication = currentAuthentication,
                                             broadcasterId = data.channelId,
                                             targetUserId = data.user.id,
                                         )
-                                        feedback = UserCardModerationFeedback(
-                                            message = banSuccess,
-                                            isError = false,
-                                        )
                                     }
-                                    UserCardModerationAction.DELETE_MESSAGE -> {
+                                    UserCardPendingModerationAction.DeleteMessage -> {
                                         val messageId = data.sourceMessageId
                                             ?: error("Selected message is unavailable")
                                         runtime.moderation.deleteChatMessage(
@@ -196,12 +204,12 @@ internal fun UserCardModerationActions(
                                             broadcasterId = data.channelId,
                                             messageId = messageId,
                                         )
-                                        feedback = UserCardModerationFeedback(
-                                            message = deleteSuccess,
-                                            isError = false,
-                                        )
                                     }
                                 }
+                                feedback = UserCardModerationFeedback(
+                                    message = successMessage,
+                                    isError = false,
+                                )
                             } catch (error: Exception) {
                                 feedback = UserCardModerationFeedback(
                                     message = error.message
@@ -231,4 +239,9 @@ internal fun UserCardModerationActions(
     }
 }
 
-private const val TEN_MINUTES_SECONDS = 10 * 60
+@Composable
+private fun userCardTimeoutActionLabel(durationSeconds: Int): String =
+    stringResource(
+        Res.string.settings_user_card_action_timeout,
+        UserCardSettingsEditor.formatTimeoutPreset(durationSeconds),
+    )
