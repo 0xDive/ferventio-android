@@ -1,12 +1,16 @@
 package io.ferventio.shared.ui.app
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
@@ -16,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Slider
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -23,11 +28,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.ferventio.app.domain.AppLanguage
 import io.ferventio.app.domain.AppThemeMode
 import io.ferventio.app.domain.ChatNameStyle
+import io.ferventio.app.domain.MentionColors
 import io.ferventio.app.domain.MessageDensity
 import io.ferventio.shared.generated.resources.*
 import io.ferventio.shared.push.PushAuthorizationStatus
@@ -175,6 +182,16 @@ internal fun FerventioSettingsSheet(
                 label = stringResource(Res.string.settings_repeat_collapse),
                 checked = state.preferences.repeatCollapseEnabled,
                 onCheckedChange = { value -> update { it.copy(repeatCollapseEnabled = value) } },
+            )
+            Text(
+                text = stringResource(Res.string.settings_mention_color),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            SettingsMentionColorPicker(
+                selectedArgb = state.preferences.mentionColorArgb,
+                onSelected = { value -> update { it.copy(mentionColorArgb = value) } },
             )
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
@@ -411,6 +428,41 @@ private fun <T> SettingsChoiceGroup(
                 onClick = { onSelected(value) },
             )
             Text(label, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+@Composable
+private fun SettingsMentionColorPicker(
+    selectedArgb: Long,
+    onSelected: (Long) -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        MentionColors.presets.forEach { argb ->
+            val selected = argb == selectedArgb
+            Surface(
+                modifier = Modifier
+                    .size(if (selected) 36.dp else 32.dp)
+                    .clickable { onSelected(argb) },
+                shape = MaterialTheme.shapes.extraLarge,
+                color = Color(argb.toInt()),
+                border = BorderStroke(
+                    width = if (selected) 3.dp else 1.dp,
+                    color = if (selected) {
+                        MaterialTheme.colorScheme.onSurface
+                    } else {
+                        MaterialTheme.colorScheme.outline
+                    },
+                ),
+            ) {
+                Box(Modifier.fillMaxWidth())
+            }
         }
     }
 }
