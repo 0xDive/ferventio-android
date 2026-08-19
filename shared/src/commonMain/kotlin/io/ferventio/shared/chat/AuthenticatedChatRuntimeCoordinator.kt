@@ -1,14 +1,20 @@
 package io.ferventio.shared.chat
 
+import io.ferventio.app.domain.ChatHistoryStore
 import io.ferventio.app.domain.ConnectionStatus
 import io.ferventio.app.domain.StoredAuthentication
+import io.ferventio.shared.history.ChatHistoryPersistenceRuntime
+import io.ferventio.shared.history.toChatHistoryConfig
+import io.ferventio.shared.settings.SharedAppSettingsStateHolder
 import io.ferventio.shared.workspace.WorkspaceRuntimeSnapshot
 import kotlin.Throws
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.withContext
 
 internal class ChatSessionRunGate {
     private val mutex = Mutex()
@@ -32,15 +38,45 @@ internal class ChatSessionRunGate {
 class AuthenticatedChatRuntimeCoordinator(
     val state: ChatRuntimeStateHolder,
     val attention: ChatAttentionStateHolder,
+    private val historyStore: ChatHistoryStore?,
+    private val settings: SharedAppSettingsStateHolder?,
 ) {
-    constructor() : this(ChatRuntimeStateHolder(), ChatAttentionStateHolder())
-    constructor(state: ChatRuntimeStateHolder) : this(state, ChatAttentionStateHolder())
+    constructor() : this(
+        ChatRuntimeStateHolder(),
+        ChatAttentionStateHolder(),
+        historyStore = null,
+        settings = null,
+    )
+
+    constructor(state: ChatRuntimeStateHolder) : this(
+        state,
+        ChatAttentionStateHolder(),
+        historyStore = null,
+        settings = null,
+    )
+
+    constructor(
+        state: ChatRuntimeStateHolder,
+        attention: ChatAttentionStateHolder,
+    ) : this(
+        state,
+        attention,
+        historyStore = null,
+        settings = null,
+    )
+
+    init {
+        require(historyStore == null || settings != null) {
+            "Chat history settings are required when a history store is configured"
+        }
+    }
 
     private val runGate = ChatSessionRunGate()
     private val badgeClient = TwitchChatBadgeClient()
     private val cheermoteClient = TwitchCheermoteClient()
     private var runningClient: TwitchEventSubSocketClient? = null
     private var sessionRuntime: TwitchChatSessionRuntime? = null
+    private var historyRuntime: ChatHistoryPersistenceRuntime? = null
 
     @Throws(Exception::class)
     suspend fun run(
@@ -52,6 +88,22 @@ class AuthenticatedChatRuntimeCoordinator(
                 "Authenticated chat runtime requires at least one workspace channel"
             }
             state.clearAuthenticationRequired()
+            state.retainChannels(workspace.channelIds)
+            attention.retainChannels(workspace.channelIds)
+
+            val sessionHistory = historyStore?.let { store ->
+                ChatHistoryPersistenceRuntime(
+                    store = store,
+                    configProvider = {
+                        checkNotNull(settings).preferences.toChatHistoryConfig()
+                    },
+                )
+            }
+            historyRuntime = sessionHistory
+            sessionHistory?.restoreRecent(
+                state = state,
+                channelIds = workspace.channelIds,
+            )
 
             lateinit var client: TwitchEventSubSocketClient
             val runtime = TwitchChatSessionRuntime(
@@ -59,6 +111,7 @@ class AuthenticatedChatRuntimeCoordinator(
                 workspace = workspace,
                 state = state,
                 attention = attention,
+                history = sessionHistory,
                 onFatalSessionError = { client.close() },
             )
             client = TwitchEventSubSocketClient(
@@ -70,8 +123,6 @@ class AuthenticatedChatRuntimeCoordinator(
             )
             sessionRuntime = runtime
             runningClient = client
-            state.retainChannels(workspace.channelIds)
-            attention.retainChannels(workspace.channelIds)
 
             try {
                 coroutineScope {
@@ -100,9 +151,14 @@ class AuthenticatedChatRuntimeCoordinator(
             } finally {
                 runtime.close()
                 client.close()
+                sessionHistory?.close()
+                withContext(NonCancellable) {
+                    sessionHistory?.flushAndClose()
+                }
                 if (runningClient === client) {
                     runningClient = null
                     sessionRuntime = null
+                    historyRuntime = null
                 }
                 if (state.connectionStatus != ConnectionStatus.FAILED) {
                     state.updateConnection(ConnectionStatus.DISCONNECTED)
@@ -113,6 +169,7 @@ class AuthenticatedChatRuntimeCoordinator(
 
     fun close() {
         sessionRuntime?.close()
+        historyRuntime?.close()
         runningClient?.close()
     }
 
