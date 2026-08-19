@@ -97,10 +97,12 @@ final class AuthenticatedChatRuntimeBridge {
         authentication: StoredAuthentication,
         workspaceState: WorkspaceRuntimeStateHolder
     ) -> String {
-        let session = authentication.accessLease?.session
-        let leaseExpiresAt = authentication.accessLease?.leaseExpiresAtEpochMillis ?? 0
+        let lease = authentication.accessLease
+        let session = lease?.session
+        let leaseExpiresAt = lease?.leaseExpiresAtEpochMillis ?? 0
         return [
             session?.userId ?? "",
+            lease?.accessToken ?? "",
             String(leaseExpiresAt),
             String(workspaceState.pushContextRevision)
         ].joined(separator: "\u{1F}")
