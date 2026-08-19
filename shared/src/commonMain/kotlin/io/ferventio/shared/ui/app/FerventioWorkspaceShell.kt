@@ -39,6 +39,7 @@ import io.ferventio.app.domain.ChatChannel
 import io.ferventio.shared.generated.resources.Res
 import io.ferventio.shared.generated.resources.attention_open
 import io.ferventio.shared.generated.resources.auth_sign_out
+import io.ferventio.shared.generated.resources.history_search_open
 import io.ferventio.shared.generated.resources.notifications_enable
 import io.ferventio.shared.generated.resources.notifications_enabled
 import io.ferventio.shared.generated.resources.notifications_open_settings
@@ -83,10 +84,12 @@ fun FerventioWorkspaceShell(
     val scope = rememberCoroutineScope()
     var settingsVisible by remember { mutableStateOf(false) }
     var attentionVisible by remember { mutableStateOf(false) }
+    var historySearchVisible by remember { mutableStateOf(false) }
     val selectedChannel = state.channels.firstOrNull { it.id == state.selectedChannelId }
         ?: state.channels.firstOrNull()
     val menuDescription = stringResource(Res.string.workspace_menu)
     val attentionDescription = stringResource(Res.string.attention_open)
+    val historySearchDescription = stringResource(Res.string.history_search_open)
     val notificationAction = notificationPermissionAction(notificationAuthorizationStatus)
 
     ModalNavigationDrawer(
@@ -201,6 +204,20 @@ fun FerventioWorkspaceShell(
                         }
                     },
                     actions = {
+                        if (runtime.history != null) {
+                            TextButton(
+                                onClick = { historySearchVisible = true },
+                                modifier = Modifier.semantics {
+                                    contentDescription = historySearchDescription
+                                },
+                            ) {
+                                Text(
+                                    text = "⌕",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
                         TextButton(
                             onClick = { attentionVisible = true },
                             modifier = Modifier.semantics { contentDescription = attentionDescription },
@@ -275,6 +292,27 @@ fun FerventioWorkspaceShell(
                 attentionVisible = false
             },
             onDismiss = { attentionVisible = false },
+        )
+    }
+
+    val history = runtime.history
+    if (historySearchVisible && history != null) {
+        FerventioHistorySearchSheet(
+            history = history,
+            currentChannelId = selectedChannel?.id,
+            onOpenMessage = { message ->
+                scope.launch {
+                    val contextMessages = runCatching {
+                        history.loadMessageContext(message.id)
+                    }.getOrDefault(emptyList()).ifEmpty { listOf(message) }
+                    runtime.chat.prependHistory(message.channelId, contextMessages)
+                    runtime.attention.requestMessageNavigation(message.channelId, message.id)
+                    state.selectChannel(message.channelId)
+                    onSelectChannel(message.channelId)
+                    historySearchVisible = false
+                }
+            },
+            onDismiss = { historySearchVisible = false },
         )
     }
 }
