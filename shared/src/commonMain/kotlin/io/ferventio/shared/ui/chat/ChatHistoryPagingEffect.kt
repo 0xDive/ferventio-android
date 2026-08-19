@@ -36,6 +36,7 @@ internal fun ChatHistoryPagingEffect(
     val runtime = LocalFerventioRuntimeState.current
     val history = runtime.history
     val chat = runtime.chat
+    val attention = runtime.attention
     val preferences = runtime.settings.preferences
     val gate = remember(channel.id, history) { ChatHistoryPagingGate() }
 
@@ -54,9 +55,12 @@ internal fun ChatHistoryPagingEffect(
         snapshotFlow {
             val oldest = chat.messages(channel.id).firstOrNull()
             HistoryTopSignal(
-                nearTop = !isFollowingTail &&
-                    listState.layoutInfo.totalItemsCount > 0 &&
-                    listState.firstVisibleItemIndex <= HISTORY_PREFETCH_ITEMS,
+                nearTop = shouldRequestOlderHistory(
+                    isFollowingTail = isFollowingTail,
+                    hasNavigationTarget = attention.navigationTarget(channel.id) != null,
+                    totalItemsCount = listState.layoutInfo.totalItemsCount,
+                    firstVisibleItemIndex = listState.firstVisibleItemIndex,
+                ),
                 oldestTimestampMillis = oldest?.timestampMillis,
                 oldestMessageId = oldest?.id,
             )
@@ -113,6 +117,16 @@ internal fun ChatHistoryPagingEffect(
             }
     }
 }
+
+internal fun shouldRequestOlderHistory(
+    isFollowingTail: Boolean,
+    hasNavigationTarget: Boolean,
+    totalItemsCount: Int,
+    firstVisibleItemIndex: Int,
+): Boolean = !isFollowingTail &&
+    !hasNavigationTarget &&
+    totalItemsCount > 0 &&
+    firstVisibleItemIndex <= HISTORY_PREFETCH_ITEMS
 
 private fun resolveHistoryAnchorIndex(
     visibleMessages: List<ChatMessage>,
