@@ -5,6 +5,7 @@ import androidx.compose.ui.window.ComposeUIViewController
 import io.ferventio.app.domain.AppThemeMode
 import io.ferventio.app.domain.HighlightRule
 import io.ferventio.app.domain.IgnoreRule
+import io.ferventio.app.domain.SavedMessageFilter
 import io.ferventio.shared.history.IosChatHistoryStore
 import io.ferventio.shared.runtime.FerventioRuntimeState
 import io.ferventio.shared.runtime.ProvideFerventioRuntimeState
@@ -34,6 +35,8 @@ fun MainViewController(
     onDeleteHighlightRule: (String) -> Unit = {},
     onUpsertIgnoreRule: (IgnoreRule) -> Unit = {},
     onDeleteIgnoreRule: (String) -> Unit = {},
+    onUpsertSavedFilter: (SavedMessageFilter) -> Unit = {},
+    onDeleteSavedFilter: (String) -> Unit = {},
     onSelectChannel: (String) -> Unit = {},
     onAddChannel: (String) -> Unit = {},
     onSetChannelPinned: (String, Boolean) -> Unit = { _, _ -> },
@@ -68,6 +71,8 @@ fun MainViewController(
                 onDeleteHighlightRule = onDeleteHighlightRule,
                 onUpsertIgnoreRule = onUpsertIgnoreRule,
                 onDeleteIgnoreRule = onDeleteIgnoreRule,
+                onUpsertSavedFilter = onUpsertSavedFilter,
+                onDeleteSavedFilter = onDeleteSavedFilter,
                 onSelectChannel = onSelectChannel,
                 onAddChannel = onAddChannel,
                 onSetChannelPinned = onSetChannelPinned,

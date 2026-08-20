@@ -1,0 +1,18 @@
+<resources>
+    <string name="saved_filters_title">Сохранённые фильтры</string>
+    <string name="saved_filters_intro">Сохранённые фильтры используют тот же компилируемый язык фильтрации сообщений, что и Android. Сравнения без regex не учитывают регистр.</string>
+    <string name="saved_filters_empty">Сохранённых фильтров пока нет.</string>
+    <string name="saved_filters_add">Создать фильтр</string>
+    <string name="saved_filters_edit">Изменить</string>
+    <string name="saved_filters_delete">Удалить</string>
+    <string name="saved_filters_new_title">Новый фильтр</string>
+    <string name="saved_filters_edit_title">Редактирование фильтра</string>
+    <string name="saved_filters_name">Название</string>
+    <string name="saved_filters_expression">Выражение</string>
+    <string name="saved_filters_expression_valid">Выражение корректно.</string>
+    <string name="saved_filters_expression_invalid">Выражение некорректно. Проверьте поля, операторы, кавычки и скобки.</string>
+    <string name="saved_filters_save">Сохранить</string>
+    <string name="saved_filters_cancel">Отмена</string>
+    <string name="saved_filters_close">Закрыть</string>
+    <string name="saved_filters_summary">Сохранённые выражения фильтрации сообщений</string>
+</resources>

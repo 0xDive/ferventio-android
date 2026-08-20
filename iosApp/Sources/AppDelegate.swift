@@ -53,7 +53,8 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
             workspaceRuntimeBridge = try WorkspaceRuntimeBridge.live(
                 stateHolder: runtimeState.workspace,
                 settingsState: runtimeState.settings,
-                rulesState: runtimeState.messageRules
+                rulesState: runtimeState.messageRules,
+                filtersState: runtimeState.savedFilters
             )
         } catch {
             runtimeState.workspace.markLoadFailed(
@@ -209,6 +210,24 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
                     _ = await workspaceRuntimeBridge?.deleteIgnoreRule(
                         authentication: runtimeState.authentication.state.authentication,
                         ruleId: ruleId
+                    )
+                }
+            },
+            onUpsertSavedFilter: { [weak self] filter in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    _ = await workspaceRuntimeBridge?.upsertSavedFilter(
+                        authentication: runtimeState.authentication.state.authentication,
+                        filter: filter
+                    )
+                }
+            },
+            onDeleteSavedFilter: { [weak self] filterId in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    _ = await workspaceRuntimeBridge?.deleteSavedFilter(
+                        authentication: runtimeState.authentication.state.authentication,
+                        filterId: filterId
                     )
                 }
             },
@@ -427,6 +446,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         runtimeState.workspace.clear()
         runtimeState.settings.clear()
         runtimeState.messageRules.clear()
+        runtimeState.savedFilters.clear()
     }
 
     private func synchronizePushBackendRegistration() async {

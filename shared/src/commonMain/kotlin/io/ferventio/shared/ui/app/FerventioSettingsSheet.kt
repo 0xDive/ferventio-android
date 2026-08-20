@@ -65,6 +65,7 @@ internal fun FerventioSettingsSheet(
     onOpenNotificationSettings: () -> Unit,
     onSave: (SharedAppPreferences) -> Unit,
     onOpenMessageRules: () -> Unit = {},
+    onOpenSavedFilters: () -> Unit = {},
     onDismiss: () -> Unit,
 ) {
     val initialPreferences = remember { state.preferences }
@@ -90,6 +91,12 @@ internal fun FerventioSettingsSheet(
         onOpenMessageRules()
     }
 
+    fun openSavedFilters() {
+        persistIfChanged()
+        onDismiss()
+        onOpenSavedFilters()
+    }
+
     ModalBottomSheet(onDismissRequest = ::saveAndDismiss) {
         Column(
             modifier = Modifier
@@ -104,6 +111,7 @@ internal fun FerventioSettingsSheet(
                 SharedSettingsPage.ROOT -> SettingsHome(
                     onOpen = { page = it },
                     onOpenMessageRules = ::openMessageRules,
+                    onOpenSavedFilters = ::openSavedFilters,
                 )
                 SharedSettingsPage.APPEARANCE -> AppearanceSettingsPage(
                     preferences = state.preferences,
@@ -172,6 +180,7 @@ private fun SettingsPageHeader(page: SharedSettingsPage, onBack: () -> Unit) {
 private fun SettingsHome(
     onOpen: (SharedSettingsPage) -> Unit,
     onOpenMessageRules: () -> Unit,
+    onOpenSavedFilters: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SettingsHomeGroup(stringResource(Res.string.settings_home_chat_group)) {
@@ -199,6 +208,12 @@ private fun SettingsHome(
                 title = stringResource(Res.string.message_rules_title),
                 summary = stringResource(Res.string.settings_message_rules_summary),
                 onClick = onOpenMessageRules,
+            )
+            HorizontalDivider()
+            SettingsMenuRow(
+                title = stringResource(Res.string.saved_filters_title),
+                summary = stringResource(Res.string.saved_filters_summary),
+                onClick = onOpenSavedFilters,
             )
             HorizontalDivider()
             SettingsMenuRow(

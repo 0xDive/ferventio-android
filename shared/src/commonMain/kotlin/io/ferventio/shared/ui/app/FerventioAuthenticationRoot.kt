@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.ferventio.app.domain.HighlightRule
 import io.ferventio.app.domain.IgnoreRule
+import io.ferventio.app.domain.SavedMessageFilter
 import io.ferventio.shared.auth.MobileAuthenticationState
 import io.ferventio.shared.auth.MobileAuthenticationStatus
 import io.ferventio.shared.generated.resources.Res
@@ -39,6 +40,8 @@ fun FerventioAuthenticationRoot(
     onDeleteHighlightRule: (String) -> Unit = {},
     onUpsertIgnoreRule: (IgnoreRule) -> Unit = {},
     onDeleteIgnoreRule: (String) -> Unit = {},
+    onUpsertSavedFilter: (SavedMessageFilter) -> Unit = {},
+    onDeleteSavedFilter: (String) -> Unit = {},
     onSelectChannel: (String) -> Unit = {},
     onAddChannel: (String) -> Unit = {},
     onSetChannelPinned: (String, Boolean) -> Unit = { _, _ -> },
@@ -71,6 +74,8 @@ fun FerventioAuthenticationRoot(
             onDeleteHighlightRule = onDeleteHighlightRule,
             onUpsertIgnoreRule = onUpsertIgnoreRule,
             onDeleteIgnoreRule = onDeleteIgnoreRule,
+            onUpsertSavedFilter = onUpsertSavedFilter,
+            onDeleteSavedFilter = onDeleteSavedFilter,
             onSelectChannel = onSelectChannel,
             onAddChannel = onAddChannel,
             onSetChannelPinned = onSetChannelPinned,

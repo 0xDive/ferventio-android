@@ -1,0 +1,18 @@
+<resources>
+    <string name="saved_filters_title">Saved filters</string>
+    <string name="saved_filters_intro">Saved filters use the same compiled message-filter language as Android. Comparisons other than regex are case-insensitive.</string>
+    <string name="saved_filters_empty">No saved filters yet.</string>
+    <string name="saved_filters_add">Create filter</string>
+    <string name="saved_filters_edit">Edit</string>
+    <string name="saved_filters_delete">Delete</string>
+    <string name="saved_filters_new_title">New filter</string>
+    <string name="saved_filters_edit_title">Edit filter</string>
+    <string name="saved_filters_name">Name</string>
+    <string name="saved_filters_expression">Expression</string>
+    <string name="saved_filters_expression_valid">Expression is valid.</string>
+    <string name="saved_filters_expression_invalid">Expression is invalid. Check the field names, operators, quotes and parentheses.</string>
+    <string name="saved_filters_save">Save</string>
+    <string name="saved_filters_cancel">Cancel</string>
+    <string name="saved_filters_close">Close</string>
+    <string name="saved_filters_summary">Saved message-filter expressions</string>
+</resources>
