@@ -1,15 +1,20 @@
 package io.ferventio.shared.workspace
 
+import io.ferventio.app.domain.HighlightRule
+import io.ferventio.app.domain.IgnoreRule
 import io.ferventio.app.domain.MobileDeviceIdentity
 import io.ferventio.app.domain.StoredAuthentication
 import io.ferventio.shared.settings.SharedAppPreferences
 import io.ferventio.shared.settings.SharedAppSettingsStateHolder
+import io.ferventio.shared.settings.SharedMessageRulesSnapshot
+import io.ferventio.shared.settings.SharedMessageRulesStateHolder
 import kotlin.Throws
 
 data class WorkspaceBootstrapOutcome(
     val remoteSettingsAvailable: Boolean,
     val settingsRevision: Long,
     val channelCount: Int,
+    val messageRules: SharedMessageRulesSnapshot = SharedMessageRulesSnapshot(),
 )
 
 class WorkspaceChannelMutationException(message: String) : IllegalStateException(message)
@@ -61,6 +66,7 @@ class WorkspaceBootstrapCoordinator(
             remoteSettingsAvailable = true,
             settingsRevision = snapshot.revision,
             channelCount = state.channels.size,
+            messageRules = snapshot.messageRules,
         )
     }
 
@@ -83,6 +89,74 @@ class WorkspaceBootstrapCoordinator(
         } catch (error: Throwable) {
             settingsState.markSaveFailed(error.message)
             throw error
+        }
+    }
+
+    @Throws(Exception::class)
+    suspend fun upsertHighlightRule(
+        identity: MobileDeviceIdentity,
+        authentication: StoredAuthentication,
+        rule: HighlightRule,
+        rulesState: SharedMessageRulesStateHolder,
+    ): WorkspaceSettingsSnapshot = mutateMessageRules(rulesState) {
+        settings.updateMessageRules(identity, authentication) { remote ->
+            val index = remote.highlightRules.indexOfFirst { it.id == rule.id }
+            remote.copy(
+                highlightRules = if (index < 0) {
+                    remote.highlightRules + rule
+                } else {
+                    remote.highlightRules.toMutableList().apply { this[index] = rule }
+                },
+            )
+        }
+    }
+
+    @Throws(Exception::class)
+    suspend fun deleteHighlightRule(
+        identity: MobileDeviceIdentity,
+        authentication: StoredAuthentication,
+        ruleId: String,
+        rulesState: SharedMessageRulesStateHolder,
+    ): WorkspaceSettingsSnapshot {
+        val id = requireRuleId(ruleId)
+        return mutateMessageRules(rulesState) {
+            settings.updateMessageRules(identity, authentication) { remote ->
+                remote.copy(highlightRules = remote.highlightRules.filterNot { it.id == id })
+            }
+        }
+    }
+
+    @Throws(Exception::class)
+    suspend fun upsertIgnoreRule(
+        identity: MobileDeviceIdentity,
+        authentication: StoredAuthentication,
+        rule: IgnoreRule,
+        rulesState: SharedMessageRulesStateHolder,
+    ): WorkspaceSettingsSnapshot = mutateMessageRules(rulesState) {
+        settings.updateMessageRules(identity, authentication) { remote ->
+            val index = remote.ignoreRules.indexOfFirst { it.id == rule.id }
+            remote.copy(
+                ignoreRules = if (index < 0) {
+                    remote.ignoreRules + rule
+                } else {
+                    remote.ignoreRules.toMutableList().apply { this[index] = rule }
+                },
+            )
+        }
+    }
+
+    @Throws(Exception::class)
+    suspend fun deleteIgnoreRule(
+        identity: MobileDeviceIdentity,
+        authentication: StoredAuthentication,
+        ruleId: String,
+        rulesState: SharedMessageRulesStateHolder,
+    ): WorkspaceSettingsSnapshot {
+        val id = requireRuleId(ruleId)
+        return mutateMessageRules(rulesState) {
+            settings.updateMessageRules(identity, authentication) { remote ->
+                remote.copy(ignoreRules = remote.ignoreRules.filterNot { it.id == id })
+            }
         }
     }
 
@@ -228,6 +302,21 @@ class WorkspaceBootstrapCoordinator(
         return snapshot
     }
 
+    private suspend fun mutateMessageRules(
+        rulesState: SharedMessageRulesStateHolder,
+        block: suspend () -> WorkspaceSettingsSnapshot,
+    ): WorkspaceSettingsSnapshot {
+        rulesState.markSaveStarted()
+        return try {
+            block().also { snapshot ->
+                rulesState.markSaveSucceeded(snapshot.messageRules)
+            }
+        } catch (error: Throwable) {
+            rulesState.markSaveFailed(error.message)
+            throw error
+        }
+    }
+
     private suspend fun applySnapshot(
         snapshot: WorkspaceSettingsSnapshot,
         authentication: StoredAuthentication,
@@ -266,6 +355,10 @@ class WorkspaceBootstrapCoordinator(
         channelId: String,
     ) = state.channels.firstOrNull { it.id == channelId.trim() }
         ?: throw WorkspaceChannelMutationException("Channel is not in the workspace")
+
+    private fun requireRuleId(value: String): String =
+        value.trim().takeIf(String::isNotEmpty)
+            ?: throw IllegalArgumentException("Message rule id must not be blank")
 
     private fun normalizeLogin(input: String): String {
         val login = input.trim().removePrefix("#").lowercase()
