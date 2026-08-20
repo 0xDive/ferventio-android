@@ -15,6 +15,7 @@ import io.ferventio.shared.push.PushRegistrationStateHolder
 import io.ferventio.shared.settings.SharedAppSettingsStateHolder
 import io.ferventio.shared.settings.SharedLocalUiPreferencesStateHolder
 import io.ferventio.shared.settings.SharedMessageRulesStateHolder
+import io.ferventio.shared.settings.SharedSavedFiltersStateHolder
 import io.ferventio.shared.workspace.WorkspaceRuntimeStateHolder
 
 class FerventioRuntimeState(
@@ -23,6 +24,7 @@ class FerventioRuntimeState(
     val workspace: WorkspaceRuntimeStateHolder,
     val settings: SharedAppSettingsStateHolder,
     val messageRules: SharedMessageRulesStateHolder,
+    val savedFilters: SharedSavedFiltersStateHolder,
     val chat: ChatRuntimeStateHolder,
     val attention: ChatAttentionStateHolder,
     val pushRegistration: PushRegistrationStateHolder,
@@ -43,6 +45,7 @@ class FerventioRuntimeState(
         workspace = WorkspaceRuntimeStateHolder(),
         settings = SharedAppSettingsStateHolder(),
         messageRules = SharedMessageRulesStateHolder(),
+        savedFilters = SharedSavedFiltersStateHolder(),
         chat = ChatRuntimeStateHolder(),
         attention = ChatAttentionStateHolder(),
         pushRegistration = PushRegistrationStateHolder(),
