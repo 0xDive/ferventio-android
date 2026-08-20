@@ -3,11 +3,14 @@ package io.ferventio.shared.workspace
 import io.ferventio.app.domain.HighlightRule
 import io.ferventio.app.domain.IgnoreRule
 import io.ferventio.app.domain.MobileDeviceIdentity
+import io.ferventio.app.domain.SavedMessageFilter
 import io.ferventio.app.domain.StoredAuthentication
 import io.ferventio.shared.settings.SharedAppPreferences
 import io.ferventio.shared.settings.SharedAppSettingsStateHolder
 import io.ferventio.shared.settings.SharedMessageRulesSnapshot
 import io.ferventio.shared.settings.SharedMessageRulesStateHolder
+import io.ferventio.shared.settings.SharedSavedFiltersSnapshot
+import io.ferventio.shared.settings.SharedSavedFiltersStateHolder
 import kotlin.Throws
 
 data class WorkspaceBootstrapOutcome(
@@ -15,6 +18,7 @@ data class WorkspaceBootstrapOutcome(
     val settingsRevision: Long,
     val channelCount: Int,
     val messageRules: SharedMessageRulesSnapshot = SharedMessageRulesSnapshot(),
+    val savedFilters: SharedSavedFiltersSnapshot = SharedSavedFiltersSnapshot(),
 )
 
 class WorkspaceChannelMutationException(message: String) : IllegalStateException(message)
@@ -67,6 +71,7 @@ class WorkspaceBootstrapCoordinator(
             settingsRevision = snapshot.revision,
             channelCount = state.channels.size,
             messageRules = snapshot.messageRules,
+            savedFilters = snapshot.savedFilters,
         )
     }
 
@@ -156,6 +161,39 @@ class WorkspaceBootstrapCoordinator(
         return mutateMessageRules(rulesState) {
             settings.updateMessageRules(identity, authentication) { remote ->
                 remote.copy(ignoreRules = remote.ignoreRules.filterNot { it.id == id })
+            }
+        }
+    }
+
+    @Throws(Exception::class)
+    suspend fun upsertSavedFilter(
+        identity: MobileDeviceIdentity,
+        authentication: StoredAuthentication,
+        filter: SavedMessageFilter,
+        filtersState: SharedSavedFiltersStateHolder,
+    ): WorkspaceSettingsSnapshot {
+        val normalized = SharedSavedFiltersStateHolder().upsert(filter)
+        return mutateSavedFilters(filtersState) {
+            settings.updateSavedFilters(identity, authentication) { remote ->
+                SharedSavedFiltersStateHolder(remote).apply {
+                    upsert(normalized)
+                }.snapshot
+            }
+        }
+    }
+
+    @Throws(Exception::class)
+    suspend fun deleteSavedFilter(
+        identity: MobileDeviceIdentity,
+        authentication: StoredAuthentication,
+        filterId: String,
+        filtersState: SharedSavedFiltersStateHolder,
+    ): WorkspaceSettingsSnapshot {
+        val id = filterId.trim().takeIf(String::isNotEmpty)
+            ?: throw IllegalArgumentException("Saved message filter id must not be blank")
+        return mutateSavedFilters(filtersState) {
+            settings.updateSavedFilters(identity, authentication) { remote ->
+                remote.copy(filters = remote.filters.filterNot { it.id == id })
             }
         }
     }
@@ -313,6 +351,21 @@ class WorkspaceBootstrapCoordinator(
             }
         } catch (error: Throwable) {
             rulesState.markSaveFailed(error.message)
+            throw error
+        }
+    }
+
+    private suspend fun mutateSavedFilters(
+        filtersState: SharedSavedFiltersStateHolder,
+        block: suspend () -> WorkspaceSettingsSnapshot,
+    ): WorkspaceSettingsSnapshot {
+        filtersState.markSaveStarted()
+        return try {
+            block().also { snapshot ->
+                filtersState.markSaveSucceeded(snapshot.savedFilters)
+            }
+        } catch (error: Throwable) {
+            filtersState.markSaveFailed(error.message)
             throw error
         }
     }
