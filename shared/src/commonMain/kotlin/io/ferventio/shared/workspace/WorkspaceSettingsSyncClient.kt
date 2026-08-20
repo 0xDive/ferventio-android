@@ -6,6 +6,8 @@ import io.ferventio.app.domain.MobileDeviceIdentityValidation
 import io.ferventio.app.domain.StoredAuthentication
 import io.ferventio.shared.auth.createPlatformMobileAuthenticationHttpClient
 import io.ferventio.shared.settings.SharedAppPreferences
+import io.ferventio.shared.settings.SharedMessageRulesPayloadCodec
+import io.ferventio.shared.settings.SharedMessageRulesSnapshot
 import io.ferventio.shared.settings.SharedSettingsPayloadCodec
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
@@ -30,6 +32,7 @@ data class WorkspaceSettingsSnapshot(
     val revision: Long,
     val channels: PersistedWorkspaceChannels,
     val preferences: SharedAppPreferences,
+    val messageRules: SharedMessageRulesSnapshot,
     val payload: String,
 )
 
@@ -103,6 +106,25 @@ class WorkspaceSettingsSyncClient(
             selectedLogin = updated.selectedLogin,
             pinnedChannelIds = updated.pinnedChannelIds,
             tabTitles = updated.tabTitles,
+        )
+    }
+
+    /**
+     * Applies a highlight/ignore mutation to the freshest snapshot so concurrent Android/iOS edits
+     * are rebased by rule id instead of replacing a stale local list after a 409 conflict.
+     */
+    @Throws(Exception::class)
+    suspend fun updateMessageRules(
+        identity: MobileDeviceIdentity,
+        authentication: StoredAuthentication,
+        mutate: (SharedMessageRulesSnapshot) -> SharedMessageRulesSnapshot,
+    ): WorkspaceSettingsSnapshot = updateSnapshot(
+        identity = identity,
+        authentication = authentication,
+    ) { snapshot ->
+        SharedMessageRulesPayloadCodec.replace(
+            payload = snapshot.payload,
+            rules = mutate(snapshot.messageRules),
         )
     }
 
@@ -184,6 +206,7 @@ class WorkspaceSettingsSyncClient(
             revision = revision,
             channels = WorkspaceSettingsPayloadParser.parse(payloadText),
             preferences = SharedSettingsPayloadCodec.parsePreferences(payloadText),
+            messageRules = SharedMessageRulesPayloadCodec.parse(payloadText),
             payload = payloadText,
         )
     }
