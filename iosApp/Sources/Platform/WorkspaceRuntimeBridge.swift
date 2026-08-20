@@ -6,6 +6,7 @@ final class WorkspaceRuntimeBridge {
     private let stateHolder: WorkspaceRuntimeStateHolder
     private let settingsState: SharedAppSettingsStateHolder
     private let rulesState: SharedMessageRulesStateHolder
+    private let filtersState: SharedSavedFiltersStateHolder
     private let identityStore: DeviceIdentityStore
     private let coordinator: WorkspaceBootstrapCoordinator
 
@@ -13,12 +14,14 @@ final class WorkspaceRuntimeBridge {
         stateHolder: WorkspaceRuntimeStateHolder,
         settingsState: SharedAppSettingsStateHolder,
         rulesState: SharedMessageRulesStateHolder = MainViewControllerKt.IosRuntimeState().messageRules,
+        filtersState: SharedSavedFiltersStateHolder = MainViewControllerKt.IosRuntimeState().savedFilters,
         identityStore: DeviceIdentityStore,
         coordinator: WorkspaceBootstrapCoordinator = WorkspaceBootstrapCoordinator()
     ) {
         self.stateHolder = stateHolder
         self.settingsState = settingsState
         self.rulesState = rulesState
+        self.filtersState = filtersState
         self.identityStore = identityStore
         self.coordinator = coordinator
     }
@@ -26,7 +29,8 @@ final class WorkspaceRuntimeBridge {
     static func live(
         stateHolder: WorkspaceRuntimeStateHolder,
         settingsState: SharedAppSettingsStateHolder,
-        rulesState: SharedMessageRulesStateHolder = MainViewControllerKt.IosRuntimeState().messageRules
+        rulesState: SharedMessageRulesStateHolder = MainViewControllerKt.IosRuntimeState().messageRules,
+        filtersState: SharedSavedFiltersStateHolder = MainViewControllerKt.IosRuntimeState().savedFilters
     ) throws -> WorkspaceRuntimeBridge {
         let configuration = try AppConfiguration.live()
         let keychain = KeychainStore(service: configuration.keychainService)
@@ -34,6 +38,7 @@ final class WorkspaceRuntimeBridge {
             stateHolder: stateHolder,
             settingsState: settingsState,
             rulesState: rulesState,
+            filtersState: filtersState,
             identityStore: DeviceIdentityStore(store: keychain)
         )
     }
@@ -43,6 +48,7 @@ final class WorkspaceRuntimeBridge {
             stateHolder.clear()
             settingsState.clear()
             rulesState.clear()
+            filtersState.clear()
             return false
         }
 
@@ -56,6 +62,7 @@ final class WorkspaceRuntimeBridge {
                 settingsState: settingsState
             )
             rulesState.restore(snapshot: outcome.messageRules)
+            filtersState.restore(snapshot: outcome.savedFilters)
             stateHolder.markLoadReady(settingsRevision: outcome.settingsRevision)
             return true
         } catch {
@@ -166,6 +173,50 @@ final class WorkspaceRuntimeBridge {
                 authentication: authentication,
                 ruleId: ruleId,
                 rulesState: rulesState
+            )
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func upsertSavedFilter(
+        authentication: StoredAuthentication?,
+        filter: SavedMessageFilter
+    ) async -> Bool {
+        guard let authentication else {
+            filtersState.markSaveFailed(message: "Authentication is unavailable")
+            return false
+        }
+        do {
+            let identity = try identityStore.loadOrCreate()
+            _ = try await coordinator.upsertSavedFilter(
+                identity: identity,
+                authentication: authentication,
+                filter: filter,
+                filtersState: filtersState
+            )
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func deleteSavedFilter(
+        authentication: StoredAuthentication?,
+        filterId: String
+    ) async -> Bool {
+        guard let authentication else {
+            filtersState.markSaveFailed(message: "Authentication is unavailable")
+            return false
+        }
+        do {
+            let identity = try identityStore.loadOrCreate()
+            _ = try await coordinator.deleteSavedFilter(
+                identity: identity,
+                authentication: authentication,
+                filterId: filterId,
+                filtersState: filtersState
             )
             return true
         } catch {
