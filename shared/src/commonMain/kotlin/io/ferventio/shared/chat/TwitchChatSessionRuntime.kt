@@ -3,6 +3,8 @@ package io.ferventio.shared.chat
 import io.ferventio.app.domain.MessageRuleEvaluator
 import io.ferventio.app.domain.StoredAuthentication
 import io.ferventio.shared.history.ChatHistoryPersistenceRuntime
+import io.ferventio.shared.settings.SharedMessageRulesSnapshot
+import io.ferventio.shared.settings.SharedMessageRulesStateHolder
 import io.ferventio.shared.workspace.WorkspaceRuntimeSnapshot
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -16,16 +18,14 @@ internal class TwitchChatSessionRuntime(
     private val state: ChatRuntimeStateHolder,
     private val attention: ChatAttentionStateHolder = ChatAttentionStateHolder(),
     private val history: ChatHistoryPersistenceRuntime? = null,
+    private val messageRules: SharedMessageRulesStateHolder? = null,
     private val bootstrapCoordinator: TwitchEventSubBootstrapCoordinator = TwitchEventSubBootstrapCoordinator(),
     private val onFatalSessionError: (Throwable) -> Unit = {},
 ) {
     private var supplementalSubscriptionsJob: Job? = null
     private val session = authentication.accessLease?.session
-    private val messageRuleEvaluator = MessageRuleEvaluator.compile(
-        highlights = emptyList(),
-        ignores = emptyList(),
-        session = session,
-    )
+    private var evaluatorRules = messageRules?.snapshot ?: SharedMessageRulesSnapshot()
+    private var messageRuleEvaluator = compileEvaluator(evaluatorRules)
 
     suspend fun onSessionReady(sessionId: String): Int {
         supplementalSubscriptionsJob?.cancel()
@@ -102,7 +102,7 @@ internal class TwitchChatSessionRuntime(
         attention.recordIncoming(
             message = message,
             session = session,
-            evaluator = messageRuleEvaluator,
+            evaluator = currentMessageRuleEvaluator(),
         )
         history?.saveMessage(message)
         return true
@@ -134,6 +134,22 @@ internal class TwitchChatSessionRuntime(
         supplementalSubscriptionsJob?.cancel()
         supplementalSubscriptionsJob = null
     }
+
+    private fun currentMessageRuleEvaluator(): MessageRuleEvaluator {
+        val currentRules = messageRules?.snapshot ?: SharedMessageRulesSnapshot()
+        if (currentRules != evaluatorRules) {
+            evaluatorRules = currentRules
+            messageRuleEvaluator = compileEvaluator(currentRules)
+        }
+        return messageRuleEvaluator
+    }
+
+    private fun compileEvaluator(rules: SharedMessageRulesSnapshot): MessageRuleEvaluator =
+        MessageRuleEvaluator.compile(
+            highlights = rules.highlightRules,
+            ignores = rules.ignoreRules,
+            session = session,
+        )
 
     private fun reportSupplementalSubscriptionFailures(
         failures: List<TwitchEventSubBootstrapFailure>,
