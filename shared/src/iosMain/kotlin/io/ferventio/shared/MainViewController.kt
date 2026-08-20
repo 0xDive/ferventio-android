@@ -8,13 +8,18 @@ import io.ferventio.app.domain.IgnoreRule
 import io.ferventio.shared.history.IosChatHistoryStore
 import io.ferventio.shared.runtime.FerventioRuntimeState
 import io.ferventio.shared.runtime.ProvideFerventioRuntimeState
+import io.ferventio.shared.settings.IosLocalUiPreferencesStore
 import io.ferventio.shared.settings.SharedAppPreferences
+import io.ferventio.shared.settings.SharedLocalUiPreferencesStateHolder
 import io.ferventio.shared.ui.app.FerventioAuthenticationRoot
 import io.ferventio.shared.ui.theme.FerventioTheme
 import io.ferventio.shared.ui.theme.FerventioThemeMode
 import platform.UIKit.UIViewController
 
-private val iosRuntimeState = FerventioRuntimeState(history = IosChatHistoryStore())
+private val iosRuntimeState = FerventioRuntimeState(
+    history = IosChatHistoryStore(),
+    localUiPreferences = SharedLocalUiPreferencesStateHolder(IosLocalUiPreferencesStore()),
+)
 
 fun IosRuntimeState(): FerventioRuntimeState = iosRuntimeState
 

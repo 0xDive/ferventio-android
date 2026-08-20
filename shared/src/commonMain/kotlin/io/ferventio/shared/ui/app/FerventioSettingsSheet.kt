@@ -158,6 +158,7 @@ internal fun FerventioSettingsSheet(
                 checked = state.preferences.showTimestamps,
                 onCheckedChange = { value -> update { it.copy(showTimestamps = value) } },
             )
+            QuickModerationSettingsSection()
             SettingsSwitchRow(
                 label = stringResource(Res.string.settings_wrap_messages),
                 checked = state.preferences.wrapMessageLines,

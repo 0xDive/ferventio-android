@@ -84,7 +84,9 @@ import io.ferventio.shared.generated.resources.message_rules_collapsed
 import io.ferventio.shared.generated.resources.message_rules_tap_hidden
 import io.ferventio.shared.runtime.LocalFerventioRuntimeState
 import io.ferventio.shared.settings.SharedAppPreferences
+import io.ferventio.shared.settings.SharedLocalUiPreferences
 import io.ferventio.shared.ui.color.colorFromArgb
+import io.ferventio.shared.ui.moderation.quickModerationAvailability
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -97,14 +99,19 @@ private const val AUTHOR_ANNOTATION_TAG = "author"
 fun FerventioChatTimeline(
     channel: ChatChannel,
     modifier: Modifier = Modifier,
+    canModerate: Boolean = false,
     onAuthorClick: ((ChatMessage) -> Unit)? = null,
     onReplyRequest: ((ChatMessage) -> Unit)? = null,
     onRetryMessage: ((ChatMessage) -> Unit)? = null,
+    onQuickBan: ((ChatMessage) -> Unit)? = null,
+    onQuickDelete: ((ChatMessage) -> Unit)? = null,
 ) {
     val runtime = LocalFerventioRuntimeState.current
     val chat = runtime.chat
     val attention = runtime.attention
     val preferences = runtime.settings.preferences
+    val localUiPreferences = runtime.localUiPreferences.preferences
+    val ownUserId = runtime.authentication.state.authentication?.accessLease?.session?.userId
     val decorations = runtime.messageRules.decorationsByMessageId
     val canonicalMessages = chat.messages(channel.id)
     val sourceMessages = remember(
@@ -141,8 +148,6 @@ fun FerventioChatTimeline(
     }
 
     DisposableEffect(channel.id, attention) {
-        // Do not declare the channel read before LazyColumn has a real layout. The flow below owns
-        // live-tail detection, while this effect only owns visible/not-visible lifecycle.
         attention.updateViewport(
             channelId = channel.id,
             visible = true,
@@ -238,6 +243,9 @@ fun FerventioChatTimeline(
                     ChatMessageRow(
                         message = message,
                         preferences = preferences,
+                        localUiPreferences = localUiPreferences,
+                        ownUserId = ownUserId,
+                        canModerate = canModerate,
                         repeatSummary = collapsePlan.summaryFor(message.id),
                         decoration = decorations[message.id] ?: MessageDecoration(),
                         thirdPartyEmotes = thirdPartyEmotes,
@@ -245,6 +253,8 @@ fun FerventioChatTimeline(
                         onAuthorClick = onAuthorClick,
                         onReplyRequest = onReplyRequest,
                         onRetryMessage = onRetryMessage,
+                        onQuickBan = onQuickBan,
+                        onQuickDelete = onQuickDelete,
                     )
                 }
             }
@@ -382,6 +392,9 @@ private fun IgnoredMessageRow(
 private fun ChatMessageRow(
     message: ChatMessage,
     preferences: SharedAppPreferences,
+    localUiPreferences: SharedLocalUiPreferences,
+    ownUserId: String?,
+    canModerate: Boolean,
     repeatSummary: ChatRepeatSummary?,
     decoration: MessageDecoration,
     thirdPartyEmotes: Map<String, ThirdPartyEmoteAsset>,
@@ -389,6 +402,8 @@ private fun ChatMessageRow(
     onAuthorClick: ((ChatMessage) -> Unit)?,
     onReplyRequest: ((ChatMessage) -> Unit)?,
     onRetryMessage: ((ChatMessage) -> Unit)?,
+    onQuickBan: ((ChatMessage) -> Unit)?,
+    onQuickDelete: ((ChatMessage) -> Unit)?,
 ) {
     var revealIgnored by remember(message.id, decoration.ignoreDisplayMode) { mutableStateOf(false) }
     if (decoration.isIgnored && !revealIgnored) {
@@ -443,6 +458,15 @@ private fun ChatMessageRow(
         !message.isSystem &&
         !message.isDeleted &&
         !replyMessageId.startsWith("local-")
+    val quickAvailability = quickModerationAvailability(
+        message = message,
+        ownUserId = ownUserId,
+        canModerate = canModerate,
+        preferences = localUiPreferences,
+    )
+    val canQuickBan = quickAvailability.canBan && onQuickBan != null
+    val canQuickDelete = quickAvailability.canDelete && onQuickDelete != null
+    val showQuickActionStrip = preferences.showTimestamps && (canQuickBan || canQuickDelete)
     var textLayoutResult by remember(message.id) { mutableStateOf<TextLayoutResult?>(null) }
     val rowModifier = decoration.highlightColorArgb?.let { argb ->
         Modifier
@@ -476,7 +500,7 @@ private fun ChatMessageRow(
         }
 
         val text = buildAnnotatedString {
-            if (preferences.showTimestamps) {
+            if (preferences.showTimestamps && !showQuickActionStrip) {
                 withStyle(SpanStyle(color = metadataColor)) {
                     append("[")
                     append(formatChatTimestamp(message.timestampMillis))
@@ -620,6 +644,17 @@ private fun ChatMessageRow(
                     },
                 )
             }
+        }
+
+        if (showQuickActionStrip) {
+            QuickModerationActionStrip(
+                message = message,
+                canBan = canQuickBan,
+                canDelete = canQuickDelete,
+                confirmActions = localUiPreferences.confirmModerationActions,
+                onBan = onQuickBan?.let { callback -> { callback(message) } },
+                onDelete = onQuickDelete?.let { callback -> { callback(message) } },
+            )
         }
 
         BasicText(

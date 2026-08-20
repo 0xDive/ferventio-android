@@ -13,6 +13,7 @@ import io.ferventio.shared.moderation.TwitchModerationRuntime
 import io.ferventio.shared.push.PushNavigationInbox
 import io.ferventio.shared.push.PushRegistrationStateHolder
 import io.ferventio.shared.settings.SharedAppSettingsStateHolder
+import io.ferventio.shared.settings.SharedLocalUiPreferencesStateHolder
 import io.ferventio.shared.settings.SharedMessageRulesStateHolder
 import io.ferventio.shared.workspace.WorkspaceRuntimeStateHolder
 
@@ -27,12 +28,16 @@ class FerventioRuntimeState(
     val pushRegistration: PushRegistrationStateHolder,
     val pushNavigation: PushNavigationInbox,
     val history: ChatHistoryStore? = null,
+    val localUiPreferences: SharedLocalUiPreferencesStateHolder = SharedLocalUiPreferencesStateHolder(),
 ) {
     val moderation: TwitchModerationRuntime by lazy { TwitchModerationRuntime(chat) }
     val interactive: TwitchInteractiveRuntime by lazy { TwitchInteractiveRuntime(chat) }
     val chatMessages: TwitchChatMessageRuntime by lazy { TwitchChatMessageRuntime(chat) }
 
-    constructor(history: ChatHistoryStore? = null) : this(
+    constructor(
+        history: ChatHistoryStore? = null,
+        localUiPreferences: SharedLocalUiPreferencesStateHolder = SharedLocalUiPreferencesStateHolder(),
+    ) : this(
         lifecycle = AppLifecycleStateHolder(),
         authentication = MobileAuthenticationStateHolder(),
         workspace = WorkspaceRuntimeStateHolder(),
@@ -43,6 +48,7 @@ class FerventioRuntimeState(
         pushRegistration = PushRegistrationStateHolder(),
         pushNavigation = PushNavigationInbox(),
         history = history,
+        localUiPreferences = localUiPreferences,
     )
 }
 

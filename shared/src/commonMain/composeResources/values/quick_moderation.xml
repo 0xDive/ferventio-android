@@ -1,0 +1,17 @@
+<resources>
+    <string name="quick_moderation_settings_title">Quick moderation</string>
+    <string name="quick_moderation_show_ban">Show quick ban button</string>
+    <string name="quick_moderation_show_delete">Show quick delete button</string>
+    <string name="quick_moderation_confirm_actions">Confirm quick moderation actions</string>
+    <string name="quick_moderation_ban">Ban</string>
+    <string name="quick_moderation_delete">Delete</string>
+    <string name="quick_moderation_ban_title">Ban user?</string>
+    <string name="quick_moderation_ban_body">Ban this user from the channel?</string>
+    <string name="quick_moderation_delete_title">Delete message?</string>
+    <string name="quick_moderation_delete_body">Delete this message from the channel?</string>
+    <string name="quick_moderation_cancel">Cancel</string>
+    <string name="quick_moderation_error_title">Moderation failed</string>
+    <string name="quick_moderation_failed">Moderation failed: %1$s</string>
+    <string name="quick_moderation_auth_required">Twitch authentication is unavailable.</string>
+    <string name="quick_moderation_ok">OK</string>
+</resources>
