@@ -8,6 +8,8 @@ import io.ferventio.shared.auth.createPlatformMobileAuthenticationHttpClient
 import io.ferventio.shared.settings.SharedAppPreferences
 import io.ferventio.shared.settings.SharedMessageRulesPayloadCodec
 import io.ferventio.shared.settings.SharedMessageRulesSnapshot
+import io.ferventio.shared.settings.SharedSavedFiltersPayloadCodec
+import io.ferventio.shared.settings.SharedSavedFiltersSnapshot
 import io.ferventio.shared.settings.SharedSettingsPayloadCodec
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
@@ -33,6 +35,7 @@ data class WorkspaceSettingsSnapshot(
     val channels: PersistedWorkspaceChannels,
     val preferences: SharedAppPreferences,
     val messageRules: SharedMessageRulesSnapshot,
+    val savedFilters: SharedSavedFiltersSnapshot,
     val payload: String,
 )
 
@@ -128,6 +131,25 @@ class WorkspaceSettingsSyncClient(
         )
     }
 
+    /**
+     * Applies a saved-filter mutation to the freshest snapshot so concurrent device edits are
+     * rebased by filter id instead of replacing a stale list after a revision conflict.
+     */
+    @Throws(Exception::class)
+    suspend fun updateSavedFilters(
+        identity: MobileDeviceIdentity,
+        authentication: StoredAuthentication,
+        mutate: (SharedSavedFiltersSnapshot) -> SharedSavedFiltersSnapshot,
+    ): WorkspaceSettingsSnapshot = updateSnapshot(
+        identity = identity,
+        authentication = authentication,
+    ) { snapshot ->
+        SharedSavedFiltersPayloadCodec.replace(
+            payload = snapshot.payload,
+            snapshot = mutate(snapshot.savedFilters),
+        )
+    }
+
     private suspend fun updateSnapshot(
         identity: MobileDeviceIdentity,
         authentication: StoredAuthentication,
@@ -207,6 +229,7 @@ class WorkspaceSettingsSyncClient(
             channels = WorkspaceSettingsPayloadParser.parse(payloadText),
             preferences = SharedSettingsPayloadCodec.parsePreferences(payloadText),
             messageRules = SharedMessageRulesPayloadCodec.parse(payloadText),
+            savedFilters = SharedSavedFiltersPayloadCodec.parse(payloadText),
             payload = payloadText,
         )
     }
