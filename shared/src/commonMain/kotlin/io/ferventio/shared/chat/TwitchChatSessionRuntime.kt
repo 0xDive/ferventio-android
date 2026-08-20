@@ -1,5 +1,6 @@
 package io.ferventio.shared.chat
 
+import io.ferventio.app.domain.HighlightAlert
 import io.ferventio.app.domain.MessageRuleEvaluator
 import io.ferventio.app.domain.StoredAuthentication
 import io.ferventio.shared.history.ChatHistoryPersistenceRuntime
@@ -20,6 +21,7 @@ internal class TwitchChatSessionRuntime(
     private val history: ChatHistoryPersistenceRuntime? = null,
     private val messageRules: SharedMessageRulesStateHolder? = null,
     private val bootstrapCoordinator: TwitchEventSubBootstrapCoordinator = TwitchEventSubBootstrapCoordinator(),
+    private val onHighlightAlert: (HighlightAlert) -> Unit = {},
     private val onFatalSessionError: (Throwable) -> Unit = {},
 ) {
     private var supplementalSubscriptionsJob: Job? = null
@@ -98,12 +100,33 @@ internal class TwitchChatSessionRuntime(
 
         val message = runCatching { TwitchChatMessageEventParser.parse(envelope) }.getOrNull()
             ?: return false
+        val evaluator = currentMessageRuleEvaluator()
+        val decoration = evaluator.evaluate(message)
+
+        // Persist the one-time decision before the message becomes visible to Compose. This keeps
+        // Ignore -> Highlight precedence stable even if rules are edited on the next frame.
+        messageRules?.recordDecoration(message.id, decoration)
         state.append(message)
         attention.recordIncoming(
             message = message,
             session = session,
-            evaluator = currentMessageRuleEvaluator(),
+            decoration = decoration,
+            directMention = evaluator.isDirectMention(message),
         )
+        if (
+            decoration.isHighlighted &&
+            !decoration.isIgnored &&
+            (decoration.playSound || decoration.push)
+        ) {
+            onHighlightAlert(
+                HighlightAlert(
+                    message = message,
+                    reasons = decoration.highlightReasons,
+                    playSound = decoration.playSound,
+                    push = decoration.push,
+                ),
+            )
+        }
         history?.saveMessage(message)
         return true
     }

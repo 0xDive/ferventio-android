@@ -2,10 +2,12 @@ package io.ferventio.shared.chat
 
 import io.ferventio.app.domain.ChatHistoryStore
 import io.ferventio.app.domain.ConnectionStatus
+import io.ferventio.app.domain.HighlightAlert
 import io.ferventio.app.domain.StoredAuthentication
 import io.ferventio.shared.history.ChatHistoryPersistenceRuntime
 import io.ferventio.shared.history.toChatHistoryConfig
 import io.ferventio.shared.settings.SharedAppSettingsStateHolder
+import io.ferventio.shared.settings.SharedMessageRulesStateHolder
 import io.ferventio.shared.workspace.WorkspaceRuntimeSnapshot
 import kotlin.Throws
 import kotlinx.coroutines.CancellationException
@@ -40,6 +42,8 @@ class AuthenticatedChatRuntimeCoordinator(
     val attention: ChatAttentionStateHolder,
     private val historyStore: ChatHistoryStore?,
     private val settings: SharedAppSettingsStateHolder?,
+    private val messageRules: SharedMessageRulesStateHolder? = null,
+    private val onHighlightAlert: (HighlightAlert) -> Unit = {},
 ) {
     constructor() : this(
         ChatRuntimeStateHolder(),
@@ -112,6 +116,8 @@ class AuthenticatedChatRuntimeCoordinator(
                 state = state,
                 attention = attention,
                 history = sessionHistory,
+                messageRules = messageRules,
+                onHighlightAlert = onHighlightAlert,
                 onFatalSessionError = { client.close() },
             )
             client = TwitchEventSubSocketClient(

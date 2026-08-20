@@ -5,30 +5,35 @@ import Foundation
 final class WorkspaceRuntimeBridge {
     private let stateHolder: WorkspaceRuntimeStateHolder
     private let settingsState: SharedAppSettingsStateHolder
+    private let rulesState: SharedMessageRulesStateHolder
     private let identityStore: DeviceIdentityStore
     private let coordinator: WorkspaceBootstrapCoordinator
 
     init(
         stateHolder: WorkspaceRuntimeStateHolder,
         settingsState: SharedAppSettingsStateHolder,
+        rulesState: SharedMessageRulesStateHolder = MainViewControllerKt.IosRuntimeState().messageRules,
         identityStore: DeviceIdentityStore,
         coordinator: WorkspaceBootstrapCoordinator = WorkspaceBootstrapCoordinator()
     ) {
         self.stateHolder = stateHolder
         self.settingsState = settingsState
+        self.rulesState = rulesState
         self.identityStore = identityStore
         self.coordinator = coordinator
     }
 
     static func live(
         stateHolder: WorkspaceRuntimeStateHolder,
-        settingsState: SharedAppSettingsStateHolder
+        settingsState: SharedAppSettingsStateHolder,
+        rulesState: SharedMessageRulesStateHolder = MainViewControllerKt.IosRuntimeState().messageRules
     ) throws -> WorkspaceRuntimeBridge {
         let configuration = try AppConfiguration.live()
         let keychain = KeychainStore(service: configuration.keychainService)
         return WorkspaceRuntimeBridge(
             stateHolder: stateHolder,
             settingsState: settingsState,
+            rulesState: rulesState,
             identityStore: DeviceIdentityStore(store: keychain)
         )
     }
@@ -37,6 +42,7 @@ final class WorkspaceRuntimeBridge {
         guard let authentication else {
             stateHolder.clear()
             settingsState.clear()
+            rulesState.clear()
             return false
         }
 
@@ -49,6 +55,7 @@ final class WorkspaceRuntimeBridge {
                 state: stateHolder,
                 settingsState: settingsState
             )
+            rulesState.restore(snapshot: outcome.messageRules)
             stateHolder.markLoadReady(settingsRevision: outcome.settingsRevision)
             return true
         } catch {
@@ -75,6 +82,94 @@ final class WorkspaceRuntimeBridge {
             )
         } catch {
             // The shared coordinator already records a user-visible save failure.
+        }
+    }
+
+    func upsertHighlightRule(
+        authentication: StoredAuthentication?,
+        rule: HighlightRule
+    ) async -> Bool {
+        guard let authentication else {
+            rulesState.markSaveFailed(message: "Authentication is unavailable")
+            return false
+        }
+        do {
+            let identity = try identityStore.loadOrCreate()
+            _ = try await coordinator.upsertHighlightRule(
+                identity: identity,
+                authentication: authentication,
+                rule: rule,
+                rulesState: rulesState
+            )
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func deleteHighlightRule(
+        authentication: StoredAuthentication?,
+        ruleId: String
+    ) async -> Bool {
+        guard let authentication else {
+            rulesState.markSaveFailed(message: "Authentication is unavailable")
+            return false
+        }
+        do {
+            let identity = try identityStore.loadOrCreate()
+            _ = try await coordinator.deleteHighlightRule(
+                identity: identity,
+                authentication: authentication,
+                ruleId: ruleId,
+                rulesState: rulesState
+            )
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func upsertIgnoreRule(
+        authentication: StoredAuthentication?,
+        rule: IgnoreRule
+    ) async -> Bool {
+        guard let authentication else {
+            rulesState.markSaveFailed(message: "Authentication is unavailable")
+            return false
+        }
+        do {
+            let identity = try identityStore.loadOrCreate()
+            _ = try await coordinator.upsertIgnoreRule(
+                identity: identity,
+                authentication: authentication,
+                rule: rule,
+                rulesState: rulesState
+            )
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func deleteIgnoreRule(
+        authentication: StoredAuthentication?,
+        ruleId: String
+    ) async -> Bool {
+        guard let authentication else {
+            rulesState.markSaveFailed(message: "Authentication is unavailable")
+            return false
+        }
+        do {
+            let identity = try identityStore.loadOrCreate()
+            _ = try await coordinator.deleteIgnoreRule(
+                identity: identity,
+                authentication: authentication,
+                ruleId: ruleId,
+                rulesState: rulesState
+            )
+            return true
+        } catch {
+            return false
         }
     }
 

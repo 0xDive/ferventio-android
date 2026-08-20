@@ -17,15 +17,21 @@ final class AuthenticatedChatRuntimeBridge {
         attentionHolder: ChatAttentionStateHolder = MainViewControllerKt.IosRuntimeState().attention,
         historyStore: (any ChatHistoryStore)? = MainViewControllerKt.IosRuntimeState().history,
         settingsState: SharedAppSettingsStateHolder = MainViewControllerKt.IosRuntimeState().settings,
+        messageRulesState: SharedMessageRulesStateHolder = MainViewControllerKt.IosRuntimeState().messageRules,
         onAuthenticationRequired: @escaping () -> Void = {}
     ) {
         self.stateHolder = stateHolder
         self.attentionHolder = attentionHolder
+        let highlightAlerts = HighlightAlertRuntimeBridge()
         self.coordinator = AuthenticatedChatRuntimeCoordinator(
             state: stateHolder,
             attention: attentionHolder,
             historyStore: historyStore,
-            settings: settingsState
+            settings: settingsState,
+            messageRules: messageRulesState,
+            onHighlightAlert: { alert in
+                highlightAlerts.handle(alert: alert)
+            }
         )
         self.onAuthenticationRequired = onAuthenticationRequired
     }

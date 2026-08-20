@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import io.ferventio.app.domain.HighlightRule
 import io.ferventio.app.domain.IgnoreRule
+import io.ferventio.app.domain.MessageDecoration
 
 class SharedMessageRulesStateHolder(
     initial: SharedMessageRulesSnapshot = SharedMessageRulesSnapshot(),
@@ -13,6 +14,15 @@ class SharedMessageRulesStateHolder(
         private set
 
     var ignoreRules by mutableStateOf(initial.ignoreRules)
+        private set
+
+    /**
+     * One-time live decorations keyed by Twitch message id.
+     *
+     * Rules are evaluated when an EventSub message is accepted, not while Compose renders it. This
+     * keeps already-received messages stable when the user edits rules and matches Android 0.0.5.
+     */
+    var decorationsByMessageId by mutableStateOf(emptyMap<String, MessageDecoration>())
         private set
 
     var saveStatus by mutableStateOf(SharedSettingsSaveStatus.IDLE)
@@ -68,6 +78,25 @@ class SharedMessageRulesStateHolder(
         saveErrorMessage = null
     }
 
+    fun recordDecoration(messageId: String, decoration: MessageDecoration) {
+        val id = requireMessageId(messageId)
+        val updated = LinkedHashMap(decorationsByMessageId)
+        updated.remove(id)
+        updated[id] = decoration
+        while (updated.size > MAX_LIVE_DECORATIONS) {
+            val oldest = updated.keys.firstOrNull() ?: break
+            updated.remove(oldest)
+        }
+        decorationsByMessageId = updated
+    }
+
+    fun decoration(messageId: String): MessageDecoration =
+        decorationsByMessageId[messageId.trim()] ?: MessageDecoration()
+
+    fun clearDecorations() {
+        decorationsByMessageId = emptyMap()
+    }
+
     fun markSaveStarted() {
         saveStatus = SharedSettingsSaveStatus.SAVING
         saveErrorMessage = null
@@ -85,9 +114,18 @@ class SharedMessageRulesStateHolder(
 
     fun clear() {
         restore(SharedMessageRulesSnapshot())
+        clearDecorations()
     }
 
     private fun requireRuleId(value: String): String =
         value.trim().takeIf(String::isNotEmpty)
             ?: throw IllegalArgumentException("Message rule id must not be blank")
+
+    private fun requireMessageId(value: String): String =
+        value.trim().takeIf(String::isNotEmpty)
+            ?: throw IllegalArgumentException("Message id must not be blank")
+
+    private companion object {
+        const val MAX_LIVE_DECORATIONS = 100_000
+    }
 }

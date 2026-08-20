@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import io.ferventio.app.domain.AttentionEntry
 import io.ferventio.app.domain.ChatMessage
+import io.ferventio.app.domain.MessageDecoration
 import io.ferventio.app.domain.MessageRuleEvaluator
 import io.ferventio.app.domain.TwitchSession
 
@@ -80,17 +81,37 @@ class ChatAttentionStateHolder {
         if (visible && isAtLiveTail) markChannelRead(normalizedChannelId)
     }
 
+    /** Convenience overload retained for callers that own only the evaluator. */
     fun recordIncoming(
         message: ChatMessage,
         session: TwitchSession?,
         evaluator: MessageRuleEvaluator,
     ) {
+        val decoration = evaluator.evaluate(message)
+        recordIncoming(
+            message = message,
+            session = session,
+            decoration = decoration,
+            directMention = evaluator.isDirectMention(message),
+        )
+    }
+
+    /**
+     * Records attention using the one-time decoration computed by the live transport.
+     *
+     * Passing the same result to timeline, Mentions and alert hooks prevents rule edits from
+     * changing the meaning of messages that were already received.
+     */
+    fun recordIncoming(
+        message: ChatMessage,
+        session: TwitchSession?,
+        decoration: MessageDecoration,
+        directMention: Boolean,
+    ) {
         val channelId = requireChannelId(message.channelId)
         val isSystemMessage = message.isSystem
         val isOwnMessage = session?.userId?.isNotBlank() == true && message.userId == session.userId
         val isVisibleLive = channelId in visibleChannelIds && channelId in channelsAtLiveTail
-        val decoration = evaluator.evaluate(message)
-        val directMention = evaluator.isDirectMention(message)
         val addHighlightToMentions = decoration.isHighlighted && decoration.addToMentions
         val shouldRecordAttention = !isSystemMessage && !decoration.isIgnored &&
             (directMention || addHighlightToMentions)
