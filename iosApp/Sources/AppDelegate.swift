@@ -31,7 +31,8 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         UNUserNotificationCenter.current().delegate = self
         runtimeState.lifecycle.markInactive()
         authenticatedChatRuntimeBridge = AuthenticatedChatRuntimeBridge(
-            stateHolder: runtimeState.chat
+            stateHolder: runtimeState.chat,
+            messageRulesState: runtimeState.messageRules
         )
         Task {
             await pushRuntimeBridge.refreshAuthorizationAndRestoreRemoteRegistration()
@@ -51,7 +52,8 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         do {
             workspaceRuntimeBridge = try WorkspaceRuntimeBridge.live(
                 stateHolder: runtimeState.workspace,
-                settingsState: runtimeState.settings
+                settingsState: runtimeState.settings,
+                rulesState: runtimeState.messageRules
             )
         } catch {
             runtimeState.workspace.markLoadFailed(
@@ -171,6 +173,42 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
                     await workspaceRuntimeBridge?.savePreferences(
                         authentication: runtimeState.authentication.state.authentication,
                         preferences: preferences
+                    )
+                }
+            },
+            onUpsertHighlightRule: { [weak self] rule in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    _ = await workspaceRuntimeBridge?.upsertHighlightRule(
+                        authentication: runtimeState.authentication.state.authentication,
+                        rule: rule
+                    )
+                }
+            },
+            onDeleteHighlightRule: { [weak self] ruleId in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    _ = await workspaceRuntimeBridge?.deleteHighlightRule(
+                        authentication: runtimeState.authentication.state.authentication,
+                        ruleId: ruleId
+                    )
+                }
+            },
+            onUpsertIgnoreRule: { [weak self] rule in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    _ = await workspaceRuntimeBridge?.upsertIgnoreRule(
+                        authentication: runtimeState.authentication.state.authentication,
+                        rule: rule
+                    )
+                }
+            },
+            onDeleteIgnoreRule: { [weak self] ruleId in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    _ = await workspaceRuntimeBridge?.deleteIgnoreRule(
+                        authentication: runtimeState.authentication.state.authentication,
+                        ruleId: ruleId
                     )
                 }
             },
@@ -388,6 +426,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     private func clearAuthenticatedWorkspaceState() {
         runtimeState.workspace.clear()
         runtimeState.settings.clear()
+        runtimeState.messageRules.clear()
     }
 
     private func synchronizePushBackendRegistration() async {

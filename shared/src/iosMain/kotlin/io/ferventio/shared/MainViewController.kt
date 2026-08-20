@@ -3,6 +3,8 @@ package io.ferventio.shared
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.window.ComposeUIViewController
 import io.ferventio.app.domain.AppThemeMode
+import io.ferventio.app.domain.HighlightRule
+import io.ferventio.app.domain.IgnoreRule
 import io.ferventio.shared.history.IosChatHistoryStore
 import io.ferventio.shared.runtime.FerventioRuntimeState
 import io.ferventio.shared.runtime.ProvideFerventioRuntimeState
@@ -23,6 +25,10 @@ fun MainViewController(
     onRequestNotificationPermission: () -> Unit = {},
     onOpenNotificationSettings: () -> Unit = {},
     onSaveSettings: (SharedAppPreferences) -> Unit = {},
+    onUpsertHighlightRule: (HighlightRule) -> Unit = {},
+    onDeleteHighlightRule: (String) -> Unit = {},
+    onUpsertIgnoreRule: (IgnoreRule) -> Unit = {},
+    onDeleteIgnoreRule: (String) -> Unit = {},
     onSelectChannel: (String) -> Unit = {},
     onAddChannel: (String) -> Unit = {},
     onSetChannelPinned: (String, Boolean) -> Unit = { _, _ -> },
@@ -53,6 +59,10 @@ fun MainViewController(
                 onRequestNotificationPermission = onRequestNotificationPermission,
                 onOpenNotificationSettings = onOpenNotificationSettings,
                 onSaveSettings = onSaveSettings,
+                onUpsertHighlightRule = onUpsertHighlightRule,
+                onDeleteHighlightRule = onDeleteHighlightRule,
+                onUpsertIgnoreRule = onUpsertIgnoreRule,
+                onDeleteIgnoreRule = onDeleteIgnoreRule,
                 onSelectChannel = onSelectChannel,
                 onAddChannel = onAddChannel,
                 onSetChannelPinned = onSetChannelPinned,

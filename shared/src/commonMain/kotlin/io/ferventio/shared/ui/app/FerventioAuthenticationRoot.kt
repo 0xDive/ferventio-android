@@ -13,6 +13,8 @@ import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import io.ferventio.app.domain.HighlightRule
+import io.ferventio.app.domain.IgnoreRule
 import io.ferventio.shared.auth.MobileAuthenticationState
 import io.ferventio.shared.auth.MobileAuthenticationStatus
 import io.ferventio.shared.generated.resources.Res
@@ -33,6 +35,10 @@ fun FerventioAuthenticationRoot(
     onRequestNotificationPermission: () -> Unit = {},
     onOpenNotificationSettings: () -> Unit = {},
     onSaveSettings: (SharedAppPreferences) -> Unit = {},
+    onUpsertHighlightRule: (HighlightRule) -> Unit = {},
+    onDeleteHighlightRule: (String) -> Unit = {},
+    onUpsertIgnoreRule: (IgnoreRule) -> Unit = {},
+    onDeleteIgnoreRule: (String) -> Unit = {},
     onSelectChannel: (String) -> Unit = {},
     onAddChannel: (String) -> Unit = {},
     onSetChannelPinned: (String, Boolean) -> Unit = { _, _ -> },
@@ -61,6 +67,10 @@ fun FerventioAuthenticationRoot(
             onRequestNotificationPermission = onRequestNotificationPermission,
             onOpenNotificationSettings = onOpenNotificationSettings,
             onSaveSettings = onSaveSettings,
+            onUpsertHighlightRule = onUpsertHighlightRule,
+            onDeleteHighlightRule = onDeleteHighlightRule,
+            onUpsertIgnoreRule = onUpsertIgnoreRule,
+            onDeleteIgnoreRule = onDeleteIgnoreRule,
             onSelectChannel = onSelectChannel,
             onAddChannel = onAddChannel,
             onSetChannelPinned = onSetChannelPinned,

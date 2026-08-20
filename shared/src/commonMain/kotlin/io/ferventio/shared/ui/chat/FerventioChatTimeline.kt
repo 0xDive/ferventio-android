@@ -1,6 +1,8 @@
 package io.ferventio.shared.ui.chat
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -59,6 +61,8 @@ import io.ferventio.app.domain.ChatRepeatCollapser
 import io.ferventio.app.domain.ChatRepeatSummary
 import io.ferventio.app.domain.CheermoteAsset
 import io.ferventio.app.domain.ConnectionStatus
+import io.ferventio.app.domain.IgnoreDisplayMode
+import io.ferventio.app.domain.MessageDecoration
 import io.ferventio.app.domain.MessageDensity
 import io.ferventio.app.domain.OutgoingMessageState
 import io.ferventio.app.domain.ThirdPartyEmoteAsset
@@ -76,8 +80,11 @@ import io.ferventio.shared.generated.resources.chat_status_failed
 import io.ferventio.shared.generated.resources.chat_status_reconnecting
 import io.ferventio.shared.generated.resources.chat_status_waiting_welcome
 import io.ferventio.shared.generated.resources.chat_waiting_for_messages
+import io.ferventio.shared.generated.resources.message_rules_collapsed
+import io.ferventio.shared.generated.resources.message_rules_tap_hidden
 import io.ferventio.shared.runtime.LocalFerventioRuntimeState
 import io.ferventio.shared.settings.SharedAppPreferences
+import io.ferventio.shared.ui.color.colorFromArgb
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -98,12 +105,17 @@ fun FerventioChatTimeline(
     val chat = runtime.chat
     val attention = runtime.attention
     val preferences = runtime.settings.preferences
+    val decorations = runtime.messageRules.decorationsByMessageId
     val canonicalMessages = chat.messages(channel.id)
-    val sourceMessages = remember(canonicalMessages, preferences.showSystemMessages) {
-        if (preferences.showSystemMessages) {
-            canonicalMessages
-        } else {
-            canonicalMessages.filterNot { message -> message.isSystem }
+    val sourceMessages = remember(
+        canonicalMessages,
+        preferences.showSystemMessages,
+        decorations,
+    ) {
+        canonicalMessages.filter { message ->
+            val systemVisible = preferences.showSystemMessages || !message.isSystem
+            val ignoreMode = decorations[message.id]?.ignoreDisplayMode
+            systemVisible && ignoreMode != IgnoreDisplayMode.HIDE
         }
     }
     val collapsePlan = remember(sourceMessages, preferences.repeatCollapseEnabled) {
@@ -227,6 +239,7 @@ fun FerventioChatTimeline(
                         message = message,
                         preferences = preferences,
                         repeatSummary = collapsePlan.summaryFor(message.id),
+                        decoration = decorations[message.id] ?: MessageDecoration(),
                         thirdPartyEmotes = thirdPartyEmotes,
                         cheermoteAssets = cheermoteAssets,
                         onAuthorClick = onAuthorClick,
@@ -310,16 +323,93 @@ private fun ChatConnectionBanner(chat: ChatRuntimeStateHolder) {
 }
 
 @Composable
+private fun IgnoredMessageRow(
+    message: ChatMessage,
+    preferences: SharedAppPreferences,
+    decoration: MessageDecoration,
+    onReveal: () -> Unit,
+) {
+    val mode = decoration.ignoreDisplayMode ?: return
+    val masked = mode == IgnoreDisplayMode.TAP_TO_REVEAL
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 1.dp)
+            .clickable(onClick = onReveal),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (masked) 0.72f else 0.42f),
+        shape = MaterialTheme.shapes.small,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = if (masked) 7.dp else 3.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            if (preferences.showTimestamps && !masked) {
+                Text(
+                    text = formatChatTimestamp(message.timestampMillis),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (!masked) {
+                Text(
+                    text = message.authorLabel(preferences.nameStyle),
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Text(
+                text = if (masked) {
+                    stringResource(Res.string.message_rules_tap_hidden)
+                } else {
+                    stringResource(
+                        Res.string.message_rules_collapsed,
+                        decoration.ignoreReason.orEmpty(),
+                    )
+                },
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+@Composable
 private fun ChatMessageRow(
     message: ChatMessage,
     preferences: SharedAppPreferences,
     repeatSummary: ChatRepeatSummary?,
+    decoration: MessageDecoration,
     thirdPartyEmotes: Map<String, ThirdPartyEmoteAsset>,
     cheermoteAssets: Map<String, List<CheermoteAsset>>,
     onAuthorClick: ((ChatMessage) -> Unit)?,
     onReplyRequest: ((ChatMessage) -> Unit)?,
     onRetryMessage: ((ChatMessage) -> Unit)?,
 ) {
+    var revealIgnored by remember(message.id, decoration.ignoreDisplayMode) { mutableStateOf(false) }
+    if (decoration.isIgnored && !revealIgnored) {
+        when (decoration.ignoreDisplayMode) {
+            IgnoreDisplayMode.COLLAPSE,
+            IgnoreDisplayMode.TAP_TO_REVEAL,
+            -> {
+                IgnoredMessageRow(
+                    message = message,
+                    preferences = preferences,
+                    decoration = decoration,
+                    onReveal = { revealIgnored = true },
+                )
+                return
+            }
+            IgnoreDisplayMode.HIDE,
+            null,
+            -> return
+        }
+    }
+
     val chat = LocalFerventioRuntimeState.current.chat
     val deletedPlaceholder = stringResource(Res.string.chat_message_deleted)
     val presentation = projectChatMessage(
@@ -354,8 +444,16 @@ private fun ChatMessageRow(
         !message.isDeleted &&
         !replyMessageId.startsWith("local-")
     var textLayoutResult by remember(message.id) { mutableStateOf<TextLayoutResult?>(null) }
+    val rowModifier = decoration.highlightColorArgb?.let { argb ->
+        Modifier
+            .fillMaxWidth()
+            .background(
+                color = colorFromArgb(argb).copy(alpha = 0.24f),
+                shape = MaterialTheme.shapes.small,
+            )
+    } ?: Modifier.fillMaxWidth()
 
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column(modifier = rowModifier) {
         presentation.reply?.let { reply ->
             Column(
                 modifier = Modifier.padding(start = 12.dp, top = 4.dp, end = 12.dp),

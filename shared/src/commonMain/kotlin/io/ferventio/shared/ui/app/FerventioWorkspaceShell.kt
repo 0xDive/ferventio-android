@@ -36,10 +36,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.ferventio.app.domain.ChatChannel
+import io.ferventio.app.domain.HighlightRule
+import io.ferventio.app.domain.IgnoreRule
 import io.ferventio.shared.generated.resources.Res
 import io.ferventio.shared.generated.resources.attention_open
 import io.ferventio.shared.generated.resources.auth_sign_out
 import io.ferventio.shared.generated.resources.history_search_open
+import io.ferventio.shared.generated.resources.message_rules_open
 import io.ferventio.shared.generated.resources.notifications_enable
 import io.ferventio.shared.generated.resources.notifications_enabled
 import io.ferventio.shared.generated.resources.notifications_open_settings
@@ -70,6 +73,10 @@ fun FerventioWorkspaceShell(
     onRequestNotificationPermission: () -> Unit = {},
     onOpenNotificationSettings: () -> Unit = {},
     onSaveSettings: (SharedAppPreferences) -> Unit = {},
+    onUpsertHighlightRule: (HighlightRule) -> Unit = {},
+    onDeleteHighlightRule: (String) -> Unit = {},
+    onUpsertIgnoreRule: (IgnoreRule) -> Unit = {},
+    onDeleteIgnoreRule: (String) -> Unit = {},
     onSelectChannel: (String) -> Unit = {},
     onAddChannel: (String) -> Unit = {},
     onSetChannelPinned: (String, Boolean) -> Unit = { _, _ -> },
@@ -83,6 +90,7 @@ fun FerventioWorkspaceShell(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     var settingsVisible by remember { mutableStateOf(false) }
+    var messageRulesVisible by remember { mutableStateOf(false) }
     var attentionVisible by remember { mutableStateOf(false) }
     var historySearchVisible by remember { mutableStateOf(false) }
     val selectedChannel = state.channels.firstOrNull { it.id == state.selectedChannelId }
@@ -152,6 +160,17 @@ fun FerventioWorkspaceShell(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
                     ) {
                         Text(stringResource(Res.string.settings_open))
+                    }
+                    TextButton(
+                        onClick = {
+                            scope.launch {
+                                drawerState.close()
+                                messageRulesVisible = true
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                    ) {
+                        Text(stringResource(Res.string.message_rules_open))
                     }
                     TextButton(
                         onClick = onSignOut,
@@ -279,6 +298,17 @@ fun FerventioWorkspaceShell(
             onOpenNotificationSettings = onOpenNotificationSettings,
             onSave = onSaveSettings,
             onDismiss = { settingsVisible = false },
+        )
+    }
+
+    if (messageRulesVisible) {
+        FerventioMessageRulesSheet(
+            state = runtime.messageRules,
+            onUpsertHighlightRule = onUpsertHighlightRule,
+            onDeleteHighlightRule = onDeleteHighlightRule,
+            onUpsertIgnoreRule = onUpsertIgnoreRule,
+            onDeleteIgnoreRule = onDeleteIgnoreRule,
+            onDismiss = { messageRulesVisible = false },
         )
     }
 
