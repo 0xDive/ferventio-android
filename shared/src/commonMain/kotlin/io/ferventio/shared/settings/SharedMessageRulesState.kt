@@ -35,7 +35,13 @@ class SharedMessageRulesStateHolder(
     }
 
     fun upsertHighlight(rule: HighlightRule) {
-        highlightRules = highlightRules.upsertById(rule.id, rule)
+        val id = requireRuleId(rule.id)
+        val existingIndex = highlightRules.indexOfFirst { it.id == id }
+        highlightRules = if (existingIndex < 0) {
+            highlightRules + rule
+        } else {
+            highlightRules.toMutableList().apply { this[existingIndex] = rule }
+        }
         saveErrorMessage = null
     }
 
@@ -46,7 +52,13 @@ class SharedMessageRulesStateHolder(
     }
 
     fun upsertIgnore(rule: IgnoreRule) {
-        ignoreRules = ignoreRules.upsertById(rule.id, rule)
+        val id = requireRuleId(rule.id)
+        val existingIndex = ignoreRules.indexOfFirst { it.id == id }
+        ignoreRules = if (existingIndex < 0) {
+            ignoreRules + rule
+        } else {
+            ignoreRules.toMutableList().apply { this[existingIndex] = rule }
+        }
         saveErrorMessage = null
     }
 
@@ -78,20 +90,4 @@ class SharedMessageRulesStateHolder(
     private fun requireRuleId(value: String): String =
         value.trim().takeIf(String::isNotEmpty)
             ?: throw IllegalArgumentException("Message rule id must not be blank")
-
-    private fun <T> List<T>.upsertById(
-        id: String,
-        value: T,
-    ): List<T> where T : Any {
-        val normalizedId = requireRuleId(id)
-        val existingIndex = indexOfFirst { item ->
-            when (item) {
-                is HighlightRule -> item.id == normalizedId
-                is IgnoreRule -> item.id == normalizedId
-                else -> false
-            }
-        }
-        if (existingIndex < 0) return this + value
-        return toMutableList().apply { this[existingIndex] = value }
-    }
 }
