@@ -42,7 +42,6 @@ import io.ferventio.shared.generated.resources.Res
 import io.ferventio.shared.generated.resources.attention_open
 import io.ferventio.shared.generated.resources.auth_sign_out
 import io.ferventio.shared.generated.resources.history_search_open
-import io.ferventio.shared.generated.resources.message_rules_open
 import io.ferventio.shared.generated.resources.notifications_enable
 import io.ferventio.shared.generated.resources.notifications_enabled
 import io.ferventio.shared.generated.resources.notifications_open_settings
@@ -162,17 +161,6 @@ fun FerventioWorkspaceShell(
                         Text(stringResource(Res.string.settings_open))
                     }
                     TextButton(
-                        onClick = {
-                            scope.launch {
-                                drawerState.close()
-                                messageRulesVisible = true
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-                    ) {
-                        Text(stringResource(Res.string.message_rules_open))
-                    }
-                    TextButton(
                         onClick = onSignOut,
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
                     ) {
@@ -260,9 +248,7 @@ fun FerventioWorkspaceShell(
                 )
             },
         ) { padding ->
-            Column(
-                modifier = Modifier.fillMaxSize().padding(padding),
-            ) {
+            Column(modifier = Modifier.fillMaxSize().padding(padding)) {
                 if (state.loadStatus == WorkspaceLoadStatus.FAILED && state.channels.isNotEmpty()) {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
@@ -297,6 +283,7 @@ fun FerventioWorkspaceShell(
             onRequestNotificationPermission = onRequestNotificationPermission,
             onOpenNotificationSettings = onOpenNotificationSettings,
             onSave = onSaveSettings,
+            onOpenMessageRules = { messageRulesVisible = true },
             onDismiss = { settingsVisible = false },
         )
     }
@@ -333,8 +320,6 @@ fun FerventioWorkspaceShell(
             navigableChannelIds = state.channelIds.toSet(),
             onOpenMessage = { message ->
                 scope.launch {
-                    // The workspace can change while search results are visible. Do not leave a
-                    // navigation target pending for a channel that disappeared after the search.
                     if (message.channelId !in state.channelIds) return@launch
                     val contextMessages = runCatching {
                         history.loadMessageContext(message.id)

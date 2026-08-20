@@ -1,0 +1,14 @@
+<resources>
+    <string name="settings_home_chat_group">Chat</string>
+    <string name="settings_home_features_group">Features</string>
+    <string name="settings_home_data_group">Data</string>
+    <string name="settings_messages_appearance">Messages &amp; appearance</string>
+    <string name="settings_messages_appearance_summary">Theme, text, names and message presentation</string>
+    <string name="settings_input_behavior">Input &amp; behavior</string>
+    <string name="settings_input_behavior_summary">Auto-scroll, quick moderation and message composer</string>
+    <string name="settings_user_card_summary">Moderation actions and timeout presets</string>
+    <string name="settings_message_rules_summary">Highlights, Ignore and notification actions</string>
+    <string name="settings_notifications_summary">Permissions and message alerts</string>
+    <string name="settings_history_summary">Recent messages and local retention</string>
+    <string name="settings_back">Back</string>
+</resources>
