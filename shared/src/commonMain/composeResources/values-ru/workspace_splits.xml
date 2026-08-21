@@ -1,0 +1,13 @@
+<resources>
+    <string name="workspace_split_filter_title">Фильтр split</string>
+    <string name="workspace_split_filter_choose_saved">Выбрать сохранённый фильтр</string>
+    <string name="workspace_split_filter_linked">Связан с сохранённым фильтром: %1$s</string>
+    <string name="workspace_split_filter_expression">Выражение; пусто — без фильтра</string>
+    <string name="workspace_split_filter_highlights">Специальный split Highlights</string>
+    <string name="workspace_split_filter_preview">Предпросмотр: %1$d из %2$d</string>
+    <string name="workspace_split_filter_apply">Применить</string>
+    <string name="workspace_split_filter_reset">Сбросить</string>
+    <string name="workspace_split_filter_cancel">Отмена</string>
+    <string name="workspace_split_filter_invalid">Выражение некорректно.</string>
+    <string name="workspace_split_filter_no_matches">В текущем предпросмотре совпадений нет.</string>
+</resources>
