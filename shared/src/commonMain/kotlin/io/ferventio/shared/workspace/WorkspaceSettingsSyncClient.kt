@@ -4,6 +4,7 @@ import io.ferventio.app.domain.AuthenticationPersistenceValidation
 import io.ferventio.app.domain.MobileDeviceIdentity
 import io.ferventio.app.domain.MobileDeviceIdentityValidation
 import io.ferventio.app.domain.StoredAuthentication
+import io.ferventio.app.domain.WorkspaceLayout
 import io.ferventio.shared.auth.createPlatformMobileAuthenticationHttpClient
 import io.ferventio.shared.settings.SharedAppPreferences
 import io.ferventio.shared.settings.SharedMessageRulesPayloadCodec
@@ -147,6 +148,30 @@ class WorkspaceSettingsSyncClient(
         SharedSavedFiltersPayloadCodec.replace(
             payload = snapshot.payload,
             snapshot = mutate(snapshot.savedFilters),
+        )
+    }
+
+    /**
+     * Applies a workspace-layout mutation to the freshest remote layout. Conflict retries re-run
+     * the operation against that remote layout so unrelated tabs/splits created elsewhere survive.
+     */
+    @Throws(Exception::class)
+    suspend fun updateWorkspaceLayout(
+        identity: MobileDeviceIdentity,
+        authentication: StoredAuthentication,
+        fallbackChannelId: String? = null,
+        mutate: (WorkspaceLayout) -> WorkspaceLayout,
+    ): WorkspaceSettingsSnapshot = updateSnapshot(
+        identity = identity,
+        authentication = authentication,
+    ) { snapshot ->
+        val remote = SharedWorkspaceLayoutPayloadCodec.parse(
+            payload = snapshot.payload,
+            fallbackChannelId = fallbackChannelId,
+        )
+        SharedWorkspaceLayoutPayloadCodec.replace(
+            payload = snapshot.payload,
+            layout = mutate(remote),
         )
     }
 
