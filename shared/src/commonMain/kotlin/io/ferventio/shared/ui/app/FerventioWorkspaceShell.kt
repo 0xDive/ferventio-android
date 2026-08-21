@@ -79,6 +79,7 @@ fun FerventioWorkspaceShell(
     onDeleteIgnoreRule: (String) -> Unit = {},
     onUpsertSavedFilter: (SavedMessageFilter) -> Unit = {},
     onDeleteSavedFilter: (String) -> Unit = {},
+    onImportSavedFilters: (String) -> Unit = {},
     onSelectChannel: (String) -> Unit = {},
     onAddChannel: (String) -> Unit = {},
     onSetChannelPinned: (String, Boolean) -> Unit = { _, _ -> },
@@ -309,6 +310,7 @@ fun FerventioWorkspaceShell(
             state = runtime.savedFilters,
             onUpsert = onUpsertSavedFilter,
             onDelete = onDeleteSavedFilter,
+            onImport = onImportSavedFilters,
             onDismiss = { savedFiltersVisible = false },
         )
     }

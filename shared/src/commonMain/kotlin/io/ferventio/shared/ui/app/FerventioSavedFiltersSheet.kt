@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -16,6 +17,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -47,9 +49,16 @@ import io.ferventio.shared.generated.resources.saved_filters_diagnostic_warning
 import io.ferventio.shared.generated.resources.saved_filters_edit
 import io.ferventio.shared.generated.resources.saved_filters_edit_title
 import io.ferventio.shared.generated.resources.saved_filters_empty
+import io.ferventio.shared.generated.resources.saved_filters_export
+import io.ferventio.shared.generated.resources.saved_filters_export_hint
+import io.ferventio.shared.generated.resources.saved_filters_export_title
 import io.ferventio.shared.generated.resources.saved_filters_expression
 import io.ferventio.shared.generated.resources.saved_filters_expression_invalid
 import io.ferventio.shared.generated.resources.saved_filters_expression_valid
+import io.ferventio.shared.generated.resources.saved_filters_import
+import io.ferventio.shared.generated.resources.saved_filters_import_error
+import io.ferventio.shared.generated.resources.saved_filters_import_json
+import io.ferventio.shared.generated.resources.saved_filters_import_title
 import io.ferventio.shared.generated.resources.saved_filters_intro
 import io.ferventio.shared.generated.resources.saved_filters_name
 import io.ferventio.shared.generated.resources.saved_filters_new_title
@@ -61,6 +70,7 @@ import io.ferventio.shared.generated.resources.settings_save_failed
 import io.ferventio.shared.generated.resources.settings_saving
 import io.ferventio.shared.runtime.LocalFerventioRuntimeState
 import io.ferventio.shared.settings.SharedSavedFiltersStateHolder
+import io.ferventio.shared.settings.SharedSavedFiltersTransferCodec
 import io.ferventio.shared.settings.SharedSettingsSaveStatus
 import org.jetbrains.compose.resources.stringResource
 
@@ -69,11 +79,14 @@ internal fun FerventioSavedFiltersSheet(
     state: SharedSavedFiltersStateHolder,
     onUpsert: (SavedMessageFilter) -> Unit,
     onDelete: (String) -> Unit,
+    onImport: (String) -> Unit = {},
     onDismiss: () -> Unit,
 ) {
     val runtime = LocalFerventioRuntimeState.current
     var editing by remember { mutableStateOf<SavedMessageFilter?>(null) }
     var creating by remember { mutableStateOf(false) }
+    var exporting by remember { mutableStateOf(false) }
+    var importing by remember { mutableStateOf(false) }
     val previewMessages = remember(runtime.chat.messagesByChannel) {
         runtime.chat.messagesByChannel.values
             .asSequence()
@@ -125,6 +138,23 @@ internal fun FerventioSavedFiltersSheet(
             ) {
                 Text(stringResource(Res.string.saved_filters_add))
             }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                OutlinedButton(
+                    onClick = { exporting = true },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(stringResource(Res.string.saved_filters_export))
+                }
+                OutlinedButton(
+                    onClick = { importing = true },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text(stringResource(Res.string.saved_filters_import))
+                }
+            }
 
             when (state.saveStatus) {
                 SharedSettingsSaveStatus.SAVING -> Row(
@@ -168,6 +198,24 @@ internal fun FerventioSavedFiltersSheet(
                 onUpsert(filter)
                 creating = false
                 editing = null
+            },
+        )
+    }
+
+    if (exporting) {
+        SavedFiltersExportDialog(
+            raw = SharedSavedFiltersTransferCodec.export(state.filters),
+            onDismiss = { exporting = false },
+        )
+    }
+
+    if (importing) {
+        SavedFiltersImportDialog(
+            existing = state.filters,
+            onDismiss = { importing = false },
+            onImport = { raw ->
+                onImport(raw)
+                importing = false
             },
         )
     }
@@ -328,6 +376,92 @@ private fun SavedFilterEditorDialog(
 }
 
 @Composable
+private fun SavedFiltersExportDialog(
+    raw: String,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(Res.string.saved_filters_export_title)) },
+        text = {
+            Column(
+                modifier = Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Text(
+                    text = stringResource(Res.string.saved_filters_export_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                SelectionContainer {
+                    Text(
+                        text = raw,
+                        style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(Res.string.saved_filters_close))
+            }
+        },
+    )
+}
+
+@Composable
+private fun SavedFiltersImportDialog(
+    existing: List<SavedMessageFilter>,
+    onDismiss: () -> Unit,
+    onImport: (String) -> Unit,
+) {
+    var raw by remember { mutableStateOf("") }
+    val validation = remember(raw, existing) {
+        if (raw.isBlank()) null
+        else runCatching { SharedSavedFiltersTransferCodec.importAndMerge(raw, existing) }
+    }
+    val error = validation?.exceptionOrNull()?.message
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(Res.string.saved_filters_import_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = raw,
+                    onValueChange = { raw = it.take(MAX_IMPORT_CHARS) },
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 240.dp),
+                    label = { Text(stringResource(Res.string.saved_filters_import_json)) },
+                    textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                    minLines = 10,
+                    isError = error != null,
+                )
+                if (error != null) {
+                    Text(
+                        text = stringResource(Res.string.saved_filters_import_error, error),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                enabled = validation?.isSuccess == true,
+                onClick = { onImport(raw) },
+            ) {
+                Text(stringResource(Res.string.saved_filters_import))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(Res.string.saved_filters_cancel))
+            }
+        },
+    )
+}
+
+@Composable
 private fun FilterDiagnostics(diagnostics: List<FilterDiagnostic>) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         diagnostics.take(MAX_VISIBLE_DIAGNOSTICS).forEach { diagnostic ->
@@ -396,3 +530,4 @@ private fun preview(
 private const val MAX_PREVIEW_MESSAGES = 1_500
 private const val MAX_PREVIEW_SAMPLES = 8
 private const val MAX_VISIBLE_DIAGNOSTICS = 6
+private const val MAX_IMPORT_CHARS = 200_000

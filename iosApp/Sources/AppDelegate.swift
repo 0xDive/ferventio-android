@@ -231,6 +231,16 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
                     )
                 }
             },
+            onImportSavedFilters: { [weak self] raw in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    _ = await SavedFiltersTransferRuntimeBridge.importFilters(
+                        authentication: runtimeState.authentication.state.authentication,
+                        state: runtimeState.savedFilters,
+                        raw: raw
+                    )
+                }
+            },
             onSelectChannel: { [weak self] channelId in
                 Task { @MainActor [weak self] in
                     guard let self else { return }

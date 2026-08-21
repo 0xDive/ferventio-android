@@ -15,6 +15,13 @@
     <string name="saved_filters_preview_empty">No recent live messages are available for preview.</string>
     <string name="saved_filters_diagnostic_error">Error</string>
     <string name="saved_filters_diagnostic_warning">Warning</string>
+    <string name="saved_filters_export">Export</string>
+    <string name="saved_filters_export_title">Export saved filters</string>
+    <string name="saved_filters_export_hint">Select and copy this Android-compatible JSON to move filters between devices.</string>
+    <string name="saved_filters_import">Import</string>
+    <string name="saved_filters_import_title">Import saved filters</string>
+    <string name="saved_filters_import_json">Saved filters JSON</string>
+    <string name="saved_filters_import_error">Import error: %1$s</string>
     <string name="saved_filters_save">Save</string>
     <string name="saved_filters_cancel">Cancel</string>
     <string name="saved_filters_close">Close</string>

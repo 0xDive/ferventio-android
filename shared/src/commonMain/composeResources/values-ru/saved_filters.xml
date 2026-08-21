@@ -15,6 +15,13 @@
     <string name="saved_filters_preview_empty">Для предпросмотра пока нет последних live-сообщений.</string>
     <string name="saved_filters_diagnostic_error">Ошибка</string>
     <string name="saved_filters_diagnostic_warning">Предупреждение</string>
+    <string name="saved_filters_export">Экспорт</string>
+    <string name="saved_filters_export_title">Экспорт сохранённых фильтров</string>
+    <string name="saved_filters_export_hint">Выделите и скопируйте этот совместимый с Android JSON, чтобы перенести фильтры между устройствами.</string>
+    <string name="saved_filters_import">Импорт</string>
+    <string name="saved_filters_import_title">Импорт сохранённых фильтров</string>
+    <string name="saved_filters_import_json">JSON сохранённых фильтров</string>
+    <string name="saved_filters_import_error">Ошибка импорта: %1$s</string>
     <string name="saved_filters_save">Сохранить</string>
     <string name="saved_filters_cancel">Отмена</string>
     <string name="saved_filters_close">Закрыть</string>
