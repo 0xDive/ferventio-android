@@ -10,4 +10,9 @@
     <string name="workspace_split_filter_cancel">Cancel</string>
     <string name="workspace_split_filter_invalid">Expression is invalid.</string>
     <string name="workspace_split_filter_no_matches">No matching messages in the current preview.</string>
+    <string name="workspace_split_choose_channel">Choose channel</string>
+    <string name="workspace_split_filter_action">Filter</string>
+    <string name="workspace_split_remove">Remove split</string>
+    <string name="workspace_split_add">Add split</string>
+    <string name="workspace_split_unassigned">No channel</string>
 </resources>

@@ -10,4 +10,9 @@
     <string name="workspace_split_filter_cancel">Отмена</string>
     <string name="workspace_split_filter_invalid">Выражение некорректно.</string>
     <string name="workspace_split_filter_no_matches">В текущем предпросмотре совпадений нет.</string>
+    <string name="workspace_split_choose_channel">Выбрать канал</string>
+    <string name="workspace_split_filter_action">Фильтр</string>
+    <string name="workspace_split_remove">Удалить split</string>
+    <string name="workspace_split_add">Добавить split</string>
+    <string name="workspace_split_unassigned">Канал не выбран</string>
 </resources>
