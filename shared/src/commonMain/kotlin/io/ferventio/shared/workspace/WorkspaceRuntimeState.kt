@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import io.ferventio.app.domain.ChannelOrder
 import io.ferventio.app.domain.ChatChannel
+import io.ferventio.app.domain.WorkspaceLayout
 
 enum class WorkspaceLoadStatus {
     IDLE,
@@ -20,6 +21,7 @@ data class WorkspaceRuntimeSnapshot(
     val channelTabTitles: Map<String, String> = emptyMap(),
     val moderatorChannelIds: Set<String> = emptySet(),
     val pushContextRevision: Long = 0L,
+    val workspaceLayout: WorkspaceLayout? = null,
 ) {
     val channelIds: List<String>
         get() = channels.map { it.id }
@@ -42,6 +44,9 @@ class WorkspaceRuntimeStateHolder(
         private set
 
     var moderatorChannelIds by mutableStateOf(emptySet<String>())
+        private set
+
+    var workspaceLayout by mutableStateOf(WorkspaceLayout.default())
         private set
 
     var pushContextRevision by mutableStateOf(0L)
@@ -76,11 +81,13 @@ class WorkspaceRuntimeStateHolder(
             channelTabTitles = channelTabTitles,
             moderatorChannelIds = moderatorChannelIds,
             pushContextRevision = pushContextRevision,
+            workspaceLayout = workspaceLayout,
         )
 
     init {
         replaceChannels(initialSnapshot.channels)
         selectInitialChannel(initialSnapshot.selectedChannelId)
+        initialSnapshot.workspaceLayout?.let(::restoreWorkspaceLayout)
         updatePinnedChannelIds(initialSnapshot.pinnedChannelIds)
         updateChannelTabTitles(initialSnapshot.channelTabTitles)
         updateModeratorChannelIds(initialSnapshot.moderatorChannelIds)
@@ -203,6 +210,10 @@ class WorkspaceRuntimeStateHolder(
         }
     }
 
+    fun restoreWorkspaceLayout(layout: WorkspaceLayout) {
+        workspaceLayout = layout.normalized(channelIds.toSet())
+    }
+
     fun clear() {
         val affectedPushContext = channels.isNotEmpty() || moderatorChannelIds.isNotEmpty()
         channels = emptyList()
@@ -210,6 +221,7 @@ class WorkspaceRuntimeStateHolder(
         pinnedChannelIds = emptyList()
         channelTabTitles = emptyMap()
         moderatorChannelIds = emptySet()
+        workspaceLayout = WorkspaceLayout.default()
         loadStatus = WorkspaceLoadStatus.IDLE
         loadErrorMessage = null
         settingsRevision = 0L
@@ -231,6 +243,7 @@ class WorkspaceRuntimeStateHolder(
         pinnedChannelIds = pinnedChannelIds.filter(available::contains)
         channelTabTitles = channelTabTitles.filterKeys(available::contains)
         moderatorChannelIds = moderatorChannelIds.filterTo(linkedSetOf(), available::contains)
+        workspaceLayout = workspaceLayout.normalized(available)
     }
 
     private fun normalizeChannels(value: List<ChatChannel>): List<ChatChannel> {
