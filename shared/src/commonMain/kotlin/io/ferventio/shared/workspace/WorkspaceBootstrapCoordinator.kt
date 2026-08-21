@@ -393,6 +393,12 @@ class WorkspaceBootstrapCoordinator(
         resolved.selectedChannelId?.let(state::selectChannel)
         state.updatePinnedChannelIds(snapshot.channels.pinnedChannelIds)
         state.updateChannelTabTitles(snapshot.channels.tabTitles)
+        state.restoreWorkspaceLayout(
+            SharedWorkspaceLayoutPayloadCodec.parse(
+                payload = snapshot.payload,
+                fallbackChannelId = state.selectedChannelId,
+            ),
+        )
 
         val session = authentication.accessLease?.session
             ?: error("Workspace update requires a Twitch access lease")
