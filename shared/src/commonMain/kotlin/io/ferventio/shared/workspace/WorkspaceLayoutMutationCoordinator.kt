@@ -65,9 +65,25 @@ class WorkspaceLayoutMutationCoordinator(
         splitId: String,
         channelId: String,
     ): WorkspaceSettingsSnapshot {
-        require(channelId.trim() in state.channelIds) { "Channel is not in the workspace" }
-        return mutateLayout(identity, authentication, state) { remote ->
-            updateWorkspaceSplitChannel(remote, splitId, channelId)
+        val channel = state.channels.firstOrNull { it.id == channelId.trim() }
+            ?: throw IllegalArgumentException("Channel is not in the workspace")
+        state.markMutationStarted()
+        return try {
+            settings.updateWorkspaceLayoutAndSelectedChannel(
+                identity = identity,
+                authentication = authentication,
+                selectedLogin = channel.login,
+                fallbackChannelId = state.selectedChannelId,
+            ) { remote ->
+                updateWorkspaceSplitChannel(remote, splitId, channel.id)
+            }.also { snapshot ->
+                restoreMutationSnapshot(state, snapshot)
+                state.selectChannel(channel.id)
+                state.markMutationSucceeded()
+            }
+        } catch (error: Throwable) {
+            state.markMutationFailed(error.message)
+            throw error
         }
     }
 
@@ -131,18 +147,25 @@ class WorkspaceLayoutMutationCoordinator(
                 fallbackChannelId = state.selectedChannelId,
                 mutate = mutate,
             ).also { snapshot ->
-                state.restoreWorkspaceLayout(
-                    SharedWorkspaceLayoutPayloadCodec.parse(
-                        payload = snapshot.payload,
-                        fallbackChannelId = state.selectedChannelId,
-                    ),
-                )
-                state.markLoadReady(snapshot.revision)
+                restoreMutationSnapshot(state, snapshot)
                 state.markMutationSucceeded()
             }
         } catch (error: Throwable) {
             state.markMutationFailed(error.message)
             throw error
         }
+    }
+
+    private fun restoreMutationSnapshot(
+        state: WorkspaceRuntimeStateHolder,
+        snapshot: WorkspaceSettingsSnapshot,
+    ) {
+        state.restoreWorkspaceLayout(
+            SharedWorkspaceLayoutPayloadCodec.parse(
+                payload = snapshot.payload,
+                fallbackChannelId = state.selectedChannelId,
+            ),
+        )
+        state.markLoadReady(snapshot.revision)
     }
 }

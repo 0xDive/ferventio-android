@@ -175,6 +175,43 @@ class WorkspaceSettingsSyncClient(
         )
     }
 
+    /** Atomically changes a split channel and the legacy selectedLogin projection. */
+    @Throws(Exception::class)
+    suspend fun updateWorkspaceLayoutAndSelectedChannel(
+        identity: MobileDeviceIdentity,
+        authentication: StoredAuthentication,
+        selectedLogin: String,
+        fallbackChannelId: String? = null,
+        mutate: (WorkspaceLayout) -> WorkspaceLayout,
+    ): WorkspaceSettingsSnapshot {
+        val login = selectedLogin.trim().removePrefix("#").lowercase()
+            .takeIf(String::isNotEmpty)
+            ?: throw IllegalArgumentException("Selected channel login must not be blank")
+        return updateSnapshot(
+            identity = identity,
+            authentication = authentication,
+        ) { snapshot ->
+            require(login in snapshot.channels.logins) {
+                "Channel is not in the synced workspace"
+            }
+            val remote = SharedWorkspaceLayoutPayloadCodec.parse(
+                payload = snapshot.payload,
+                fallbackChannelId = fallbackChannelId,
+            )
+            val withLayout = SharedWorkspaceLayoutPayloadCodec.replace(
+                payload = snapshot.payload,
+                layout = mutate(remote),
+            )
+            SharedSettingsPayloadCodec.replaceChannels(
+                payload = withLayout,
+                logins = snapshot.channels.logins,
+                selectedLogin = login,
+                pinnedChannelIds = snapshot.channels.pinnedChannelIds,
+                tabTitles = snapshot.channels.tabTitles,
+            )
+        }
+    }
+
     private suspend fun updateSnapshot(
         identity: MobileDeviceIdentity,
         authentication: StoredAuthentication,
