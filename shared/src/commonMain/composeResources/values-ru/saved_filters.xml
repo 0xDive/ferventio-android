@@ -10,7 +10,11 @@
     <string name="saved_filters_name">Название</string>
     <string name="saved_filters_expression">Выражение</string>
     <string name="saved_filters_expression_valid">Выражение корректно.</string>
-    <string name="saved_filters_expression_invalid">Выражение некорректно. Проверьте поля, операторы, кавычки и скобки.</string>
+    <string name="saved_filters_expression_invalid">Компилятор нашёл замечания в выражении.</string>
+    <string name="saved_filters_preview">Предпросмотр: совпало %1$d из %2$d последних сообщений</string>
+    <string name="saved_filters_preview_empty">Для предпросмотра пока нет последних live-сообщений.</string>
+    <string name="saved_filters_diagnostic_error">Ошибка</string>
+    <string name="saved_filters_diagnostic_warning">Предупреждение</string>
     <string name="saved_filters_save">Сохранить</string>
     <string name="saved_filters_cancel">Отмена</string>
     <string name="saved_filters_close">Закрыть</string>
