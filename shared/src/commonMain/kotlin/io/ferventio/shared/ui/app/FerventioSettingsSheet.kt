@@ -54,6 +54,7 @@ private enum class SharedSettingsPage {
     USER_CARD,
     NOTIFICATIONS,
     HISTORY,
+    LANGUAGE,
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -109,6 +110,7 @@ internal fun FerventioSettingsSheet(
 
             when (page) {
                 SharedSettingsPage.ROOT -> SettingsHome(
+                    preferences = state.preferences,
                     onOpen = { page = it },
                     onOpenMessageRules = ::openMessageRules,
                     onOpenSavedFilters = ::openSavedFilters,
@@ -133,6 +135,10 @@ internal fun FerventioSettingsSheet(
                     update = ::update,
                 )
                 SharedSettingsPage.HISTORY -> HistorySettingsPage(
+                    preferences = state.preferences,
+                    update = ::update,
+                )
+                SharedSettingsPage.LANGUAGE -> FerventioLanguageSettingsPage(
                     preferences = state.preferences,
                     update = ::update,
                 )
@@ -169,6 +175,7 @@ private fun SettingsPageHeader(page: SharedSettingsPage, onBack: () -> Unit) {
                 SharedSettingsPage.USER_CARD -> stringResource(Res.string.settings_user_card)
                 SharedSettingsPage.NOTIFICATIONS -> stringResource(Res.string.notifications_title)
                 SharedSettingsPage.HISTORY -> stringResource(Res.string.settings_history)
+                SharedSettingsPage.LANGUAGE -> stringResource(Res.string.settings_language)
             },
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
@@ -178,6 +185,7 @@ private fun SettingsPageHeader(page: SharedSettingsPage, onBack: () -> Unit) {
 
 @Composable
 private fun SettingsHome(
+    preferences: SharedAppPreferences,
     onOpen: (SharedSettingsPage) -> Unit,
     onOpenMessageRules: () -> Unit,
     onOpenSavedFilters: () -> Unit,
@@ -228,6 +236,14 @@ private fun SettingsHome(
                 title = stringResource(Res.string.settings_history),
                 summary = stringResource(Res.string.settings_history_summary),
                 onClick = { onOpen(SharedSettingsPage.HISTORY) },
+            )
+        }
+
+        SettingsHomeGroup(stringResource(Res.string.settings_home_app_group)) {
+            SettingsMenuRow(
+                title = stringResource(Res.string.settings_language),
+                summary = sharedLanguageLabel(preferences.appLanguage),
+                onClick = { onOpen(SharedSettingsPage.LANGUAGE) },
             )
         }
     }
@@ -281,16 +297,6 @@ private fun AppearanceSettingsPage(
     update: ((SharedAppPreferences) -> SharedAppPreferences) -> Unit,
 ) {
     SettingsSectionTitle(stringResource(Res.string.settings_appearance))
-    SettingsChoiceGroup(
-        title = stringResource(Res.string.settings_language),
-        options = listOf(
-            AppLanguage.SYSTEM to stringResource(Res.string.settings_language_system),
-            AppLanguage.RUSSIAN to stringResource(Res.string.settings_language_russian),
-            AppLanguage.ENGLISH to stringResource(Res.string.settings_language_english),
-        ),
-        selected = preferences.appLanguage,
-        onSelected = { value -> update { it.copy(appLanguage = value) } },
-    )
     SettingsChoiceGroup(
         title = stringResource(Res.string.settings_theme),
         options = listOf(

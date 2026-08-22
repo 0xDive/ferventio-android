@@ -2,6 +2,7 @@
     <string name="settings_home_chat_group">Чат</string>
     <string name="settings_home_features_group">Функции</string>
     <string name="settings_home_data_group">Данные</string>
+    <string name="settings_home_app_group">Приложение</string>
     <string name="settings_messages_appearance">Сообщения и внешний вид</string>
     <string name="settings_messages_appearance_summary">Тема, текст, имена и отображение сообщений</string>
     <string name="settings_input_behavior">Ввод и поведение</string>
@@ -10,5 +11,10 @@
     <string name="settings_message_rules_summary">Highlights, Ignore и действия уведомлений</string>
     <string name="settings_notifications_summary">Разрешения и уведомления о сообщениях</string>
     <string name="settings_history_summary">Недавние сообщения и локальное хранение</string>
+    <string name="settings_language_search">Поиск языка</string>
+    <string name="settings_language_no_results">Языки не найдены.</string>
+    <string name="settings_language_system_summary">Использовать язык устройства</string>
+    <string name="settings_language_russian_summary">Русский</string>
+    <string name="settings_language_english_summary">English</string>
     <string name="settings_back">Назад</string>
 </resources>

@@ -2,6 +2,7 @@
     <string name="settings_home_chat_group">Chat</string>
     <string name="settings_home_features_group">Features</string>
     <string name="settings_home_data_group">Data</string>
+    <string name="settings_home_app_group">App</string>
     <string name="settings_messages_appearance">Messages &amp; appearance</string>
     <string name="settings_messages_appearance_summary">Theme, text, names and message presentation</string>
     <string name="settings_input_behavior">Input &amp; behavior</string>
@@ -10,5 +11,10 @@
     <string name="settings_message_rules_summary">Highlights, Ignore and notification actions</string>
     <string name="settings_notifications_summary">Permissions and message alerts</string>
     <string name="settings_history_summary">Recent messages and local retention</string>
+    <string name="settings_language_search">Search languages</string>
+    <string name="settings_language_no_results">No languages found.</string>
+    <string name="settings_language_system_summary">Follow the device language</string>
+    <string name="settings_language_russian_summary">Русский</string>
+    <string name="settings_language_english_summary">English</string>
     <string name="settings_back">Back</string>
 </resources>
