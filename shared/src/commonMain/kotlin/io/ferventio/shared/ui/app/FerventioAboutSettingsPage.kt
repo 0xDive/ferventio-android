@@ -44,7 +44,7 @@ import org.jetbrains.compose.resources.stringResource
 @Composable
 internal fun FerventioAboutSettingsPage(
     info: FerventioAboutInfo,
-    onOpenPrivacyPolicy: () -> Unit,
+    onOpenPrivacyPolicy: (() -> Unit)? = null,
     onOpenLicenses: () -> Unit,
 ) {
     val uriHandler = LocalUriHandler.current
@@ -122,7 +122,7 @@ internal fun FerventioAboutSettingsPage(
         }
 
         AboutSection(title = stringResource(Res.string.about_legal_information)) {
-            if (info.showPrivacyPolicyInApp) {
+            if (info.showPrivacyPolicyInApp && onOpenPrivacyPolicy != null) {
                 AboutActionRow(
                     title = stringResource(Res.string.about_privacy_policy),
                     onClick = onOpenPrivacyPolicy,
