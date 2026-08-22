@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import io.ferventio.app.domain.ChatChannel
 import io.ferventio.app.domain.HighlightRule
 import io.ferventio.app.domain.IgnoreRule
+import io.ferventio.app.domain.MAX_SPLITS_PER_TAB
 import io.ferventio.app.domain.SavedMessageFilter
 import io.ferventio.shared.generated.resources.Res
 import io.ferventio.shared.generated.resources.attention_open
@@ -82,6 +83,7 @@ fun FerventioWorkspaceShell(
     onUpsertSavedFilter: (SavedMessageFilter) -> Unit = {},
     onDeleteSavedFilter: (String) -> Unit = {},
     onImportSavedFilters: (String) -> Unit = {},
+    onAddSavedFilterSplit: (String) -> Unit = {},
     onSelectChannel: (String) -> Unit = {},
     onAddChannel: (String) -> Unit = {},
     onSetChannelPinned: (String, Boolean) -> Unit = { _, _ -> },
@@ -340,6 +342,12 @@ fun FerventioWorkspaceShell(
             onUpsert = onUpsertSavedFilter,
             onDelete = onDeleteSavedFilter,
             onImport = onImportSavedFilters,
+            canAddToSplit = (state.workspaceLayout.activeTab?.splits?.size ?: MAX_SPLITS_PER_TAB) < MAX_SPLITS_PER_TAB,
+            onAddToSplit = { filterId ->
+                onAddSavedFilterSplit(filterId)
+                savedFiltersVisible = false
+                settingsVisible = false
+            },
             onDismiss = { savedFiltersVisible = false },
         )
     }

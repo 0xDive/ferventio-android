@@ -244,6 +244,15 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
                     )
                 }
             },
+            onAddSavedFilterSplit: { [weak self] filterId in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    _ = await workspaceLayoutRuntimeBridge?.addSavedFilterSplit(
+                        authentication: runtimeState.authentication.state.authentication,
+                        filterId: filterId
+                    )
+                }
+            },
             onSelectChannel: { [weak self] channelId in
                 Task { @MainActor [weak self] in
                     guard let self else { return }
