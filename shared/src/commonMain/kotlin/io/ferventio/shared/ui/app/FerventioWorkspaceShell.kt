@@ -60,6 +60,8 @@ import io.ferventio.shared.runtime.LocalFerventioRuntimeState
 import io.ferventio.shared.settings.SharedAppPreferences
 import io.ferventio.shared.workspace.WorkspaceLoadStatus
 import io.ferventio.shared.workspace.WorkspaceRuntimeStateHolder
+import io.ferventio.shared.workspace.activeWorkspaceSplitIdForChannelSelection
+import io.ferventio.shared.workspace.resolveWorkspaceActiveChannelId
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 
@@ -86,8 +88,14 @@ fun FerventioWorkspaceShell(
     onRenameChannel: (String, String?) -> Unit = { _, _ -> },
     onRemoveChannel: (String) -> Unit = {},
     onMoveChannel: (String, Int) -> Unit = { _, _ -> },
+    onSetSplitFilterQuery: (String, String) -> Unit = { _, _ -> },
+    onSetSplitChannel: (String, String) -> Unit = { _, _ -> },
+    onFocusSplit: (String) -> Unit = {},
+    onAddSplit: () -> Unit = {},
+    onRemoveSplit: (String) -> Unit = {},
+    onSetPrimaryFraction: (Float) -> Unit = {},
     modifier: Modifier = Modifier,
-    content: @Composable (ChatChannel) -> Unit,
+    content: @Composable (ChatChannel, String, Modifier) -> Unit,
 ) {
     val runtime = LocalFerventioRuntimeState.current
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
@@ -97,8 +105,12 @@ fun FerventioWorkspaceShell(
     var savedFiltersVisible by remember { mutableStateOf(false) }
     var attentionVisible by remember { mutableStateOf(false) }
     var historySearchVisible by remember { mutableStateOf(false) }
-    val selectedChannel = state.channels.firstOrNull { it.id == state.selectedChannelId }
-        ?: state.channels.firstOrNull()
+    val selectedChannelId = resolveWorkspaceActiveChannelId(
+        layout = state.workspaceLayout,
+        selectedChannelId = state.selectedChannelId,
+        channelIds = state.channelIds,
+    )
+    val selectedChannel = state.channels.firstOrNull { it.id == selectedChannelId }
     val menuDescription = stringResource(Res.string.workspace_menu)
     val attentionDescription = stringResource(Res.string.attention_open)
     val historySearchDescription = stringResource(Res.string.history_search_open)
@@ -115,8 +127,13 @@ fun FerventioWorkspaceShell(
                         state = state,
                         selectedChannel = selectedChannel,
                         onSelectChannel = { channelId ->
+                            val splitId = activeWorkspaceSplitIdForChannelSelection(state.workspaceLayout)
                             state.selectChannel(channelId)
-                            onSelectChannel(channelId)
+                            if (splitId != null) {
+                                onSetSplitChannel(splitId, channelId)
+                            } else {
+                                onSelectChannel(channelId)
+                            }
                             scope.launch { drawerState.close() }
                         },
                         onAddChannel = onAddChannel,
@@ -274,7 +291,19 @@ fun FerventioWorkspaceShell(
                             state.loadStatus == WorkspaceLoadStatus.LOADING -> WorkspaceLoadingState()
                         state.loadStatus == WorkspaceLoadStatus.FAILED && state.channels.isEmpty() -> WorkspaceFailureState()
                         selectedChannel == null -> WorkspaceEmptyState()
-                        else -> content(selectedChannel)
+                        else -> FerventioWorkspaceResponsiveContent(
+                            state = state,
+                            savedFilters = runtime.savedFilters.filters,
+                            decorations = runtime.messageRules.decorationsByMessageId,
+                            onSetSplitFilterQuery = onSetSplitFilterQuery,
+                            onSetSplitChannel = onSetSplitChannel,
+                            onFocusSplit = onFocusSplit,
+                            onAddSplit = onAddSplit,
+                            onRemoveSplit = onRemoveSplit,
+                            onSetPrimaryFraction = onSetPrimaryFraction,
+                            modifier = Modifier.fillMaxSize(),
+                            content = content,
+                        )
                     }
                 }
             }

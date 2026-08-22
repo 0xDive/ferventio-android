@@ -46,6 +46,7 @@ import io.ferventio.shared.generated.resources.workspace_split_remove
 import io.ferventio.shared.generated.resources.workspace_split_unassigned
 import io.ferventio.shared.runtime.LocalFerventioRuntimeState
 import io.ferventio.shared.workspace.WorkspaceRuntimeStateHolder
+import io.ferventio.shared.workspace.resolveWorkspaceActiveChannelId
 import org.jetbrains.compose.resources.stringResource
 
 /** Android-parity responsive workspace content: compact channel view or wide split layout. */
@@ -63,8 +64,12 @@ internal fun FerventioWorkspaceResponsiveContent(
     modifier: Modifier = Modifier,
     content: @Composable (ChatChannel, String, Modifier) -> Unit,
 ) {
-    val selectedChannel = state.channels.firstOrNull { it.id == state.selectedChannelId }
-        ?: state.channels.firstOrNull()
+    val selectedChannelId = resolveWorkspaceActiveChannelId(
+        layout = state.workspaceLayout,
+        selectedChannelId = state.selectedChannelId,
+        channelIds = state.channelIds,
+    )
+    val selectedChannel = state.channels.firstOrNull { it.id == selectedChannelId }
     val activeTab = state.workspaceLayout.activeTab
     val splits = activeTab?.splits.orEmpty().take(MAX_SPLITS_PER_TAB)
 

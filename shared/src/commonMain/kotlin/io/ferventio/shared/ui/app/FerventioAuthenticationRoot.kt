@@ -49,6 +49,12 @@ fun FerventioAuthenticationRoot(
     onRenameChannel: (String, String?) -> Unit = { _, _ -> },
     onRemoveChannel: (String) -> Unit = {},
     onMoveChannel: (String, Int) -> Unit = { _, _ -> },
+    onSetSplitFilterQuery: (String, String) -> Unit = { _, _ -> },
+    onSetSplitChannel: (String, String) -> Unit = { _, _ -> },
+    onFocusSplit: (String) -> Unit = {},
+    onAddSplit: () -> Unit = {},
+    onRemoveSplit: (String) -> Unit = {},
+    onSetPrimaryFraction: (Float) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     when (state.status) {
@@ -84,12 +90,20 @@ fun FerventioAuthenticationRoot(
             onRenameChannel = onRenameChannel,
             onRemoveChannel = onRemoveChannel,
             onMoveChannel = onMoveChannel,
+            onSetSplitFilterQuery = onSetSplitFilterQuery,
+            onSetSplitChannel = onSetSplitChannel,
+            onFocusSplit = onFocusSplit,
+            onAddSplit = onAddSplit,
+            onRemoveSplit = onRemoveSplit,
+            onSetPrimaryFraction = onSetPrimaryFraction,
             modifier = modifier,
-        ) { channel ->
+        ) { channel, filterQuery, contentModifier ->
             key(channel.id) {
                 FerventioModeratedChatScreen(
                     channel = channel,
                     moderatorChannelIds = workspace.moderatorChannelIds,
+                    filterQuery = filterQuery,
+                    modifier = contentModifier,
                 )
             }
         }
