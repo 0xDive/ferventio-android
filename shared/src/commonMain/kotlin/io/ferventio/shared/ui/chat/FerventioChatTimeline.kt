@@ -98,6 +98,7 @@ private const val AUTHOR_ANNOTATION_TAG = "author"
 @Composable
 fun FerventioChatTimeline(
     channel: ChatChannel,
+    filterQuery: String = "",
     modifier: Modifier = Modifier,
     canModerate: Boolean = false,
     onAuthorClick: ((ChatMessage) -> Unit)? = null,
@@ -113,17 +114,22 @@ fun FerventioChatTimeline(
     val localUiPreferences = runtime.localUiPreferences.preferences
     val ownUserId = runtime.authentication.state.authentication?.accessLease?.session?.userId
     val decorations = runtime.messageRules.decorationsByMessageId
+    val savedFilters = runtime.savedFilters.filters
     val canonicalMessages = chat.messages(channel.id)
     val sourceMessages = remember(
         canonicalMessages,
+        filterQuery,
+        savedFilters,
         preferences.showSystemMessages,
         decorations,
     ) {
-        canonicalMessages.filter { message ->
-            val systemVisible = preferences.showSystemMessages || !message.isSystem
-            val ignoreMode = decorations[message.id]?.ignoreDisplayMode
-            systemVisible && ignoreMode != IgnoreDisplayMode.HIDE
-        }
+        filterWorkspaceSplitMessages(
+            messages = canonicalMessages,
+            filterQuery = filterQuery,
+            savedFilters = savedFilters,
+            decorations = decorations,
+            showSystemMessages = preferences.showSystemMessages,
+        )
     }
     val collapsePlan = remember(sourceMessages, preferences.repeatCollapseEnabled) {
         ChatRepeatCollapser.build(

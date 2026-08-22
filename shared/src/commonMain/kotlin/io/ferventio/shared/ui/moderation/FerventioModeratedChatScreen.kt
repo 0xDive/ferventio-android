@@ -42,6 +42,7 @@ import org.jetbrains.compose.resources.stringResource
 fun FerventioModeratedChatScreen(
     channel: ChatChannel,
     moderatorChannelIds: Set<String>,
+    filterQuery: String = "",
     modifier: Modifier = Modifier,
 ) {
     val runtime = LocalFerventioRuntimeState.current
@@ -75,6 +76,7 @@ fun FerventioModeratedChatScreen(
 
         FerventioChatTimeline(
             channel = channel,
+            filterQuery = filterQuery,
             modifier = Modifier.weight(1f),
             canModerate = canModerateChannel,
             onAuthorClick = { message -> selectedUserMessage = message },
