@@ -12,6 +12,9 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     private var authenticatedChatRuntimeBridge: AuthenticatedChatRuntimeBridge?
     private var authenticationLeaseRefreshTask: Task<Void, Never>?
     private var isPrimarySceneActive = false
+    private lazy var workspaceLayoutRuntimeBridge = try? WorkspaceLayoutRuntimeBridge.live(
+        stateHolder: runtimeState.workspace
+    )
     private lazy var networkRecoveryObserver = NetworkRecoveryObserver(
         onReachable: { [weak self] in
             await self?.recoverAfterNetworkAvailable()
@@ -302,6 +305,61 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
                         authentication: runtimeState.authentication.state.authentication,
                         channelId: channelId,
                         targetIndex: targetIndex
+                    )
+                }
+            },
+            onSetSplitFilterQuery: { [weak self] splitId, filterQuery in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    _ = await workspaceLayoutRuntimeBridge?.setSplitFilterQuery(
+                        authentication: runtimeState.authentication.state.authentication,
+                        splitId: splitId,
+                        filterQuery: filterQuery
+                    )
+                }
+            },
+            onSetSplitChannel: { [weak self] splitId, channelId in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    _ = await workspaceLayoutRuntimeBridge?.setSplitChannel(
+                        authentication: runtimeState.authentication.state.authentication,
+                        splitId: splitId,
+                        channelId: channelId
+                    )
+                }
+            },
+            onFocusSplit: { [weak self] splitId in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    _ = await workspaceLayoutRuntimeBridge?.focusSplit(
+                        authentication: runtimeState.authentication.state.authentication,
+                        splitId: splitId
+                    )
+                }
+            },
+            onAddSplit: { [weak self] in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    _ = await workspaceLayoutRuntimeBridge?.addSplit(
+                        authentication: runtimeState.authentication.state.authentication
+                    )
+                }
+            },
+            onRemoveSplit: { [weak self] splitId in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    _ = await workspaceLayoutRuntimeBridge?.removeSplit(
+                        authentication: runtimeState.authentication.state.authentication,
+                        splitId: splitId
+                    )
+                }
+            },
+            onSetPrimaryFraction: { [weak self] fraction in
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    _ = await workspaceLayoutRuntimeBridge?.setPrimaryFraction(
+                        authentication: runtimeState.authentication.state.authentication,
+                        fraction: fraction
                     )
                 }
             }

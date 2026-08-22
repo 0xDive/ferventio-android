@@ -44,6 +44,12 @@ fun MainViewController(
     onRenameChannel: (String, String?) -> Unit = { _, _ -> },
     onRemoveChannel: (String) -> Unit = {},
     onMoveChannel: (String, Int) -> Unit = { _, _ -> },
+    onSetSplitFilterQuery: (String, String) -> Unit = { _, _ -> },
+    onSetSplitChannel: (String, String) -> Unit = { _, _ -> },
+    onFocusSplit: (String) -> Unit = {},
+    onAddSplit: () -> Unit = {},
+    onRemoveSplit: (String) -> Unit = {},
+    onSetPrimaryFraction: (Float) -> Unit = {},
 ): UIViewController = ComposeUIViewController {
     val preferences = iosRuntimeState.settings.preferences
     val authenticationRequired = iosRuntimeState.chat.authenticationRequired
@@ -81,6 +87,12 @@ fun MainViewController(
                 onRenameChannel = onRenameChannel,
                 onRemoveChannel = onRemoveChannel,
                 onMoveChannel = onMoveChannel,
+                onSetSplitFilterQuery = onSetSplitFilterQuery,
+                onSetSplitChannel = onSetSplitChannel,
+                onFocusSplit = onFocusSplit,
+                onAddSplit = onAddSplit,
+                onRemoveSplit = onRemoveSplit,
+                onSetPrimaryFraction = onSetPrimaryFraction,
             )
         }
     }
