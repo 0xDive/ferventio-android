@@ -121,7 +121,7 @@ final class WorkspaceLayoutRuntimeBridge {
 
     func setPrimaryFraction(
         authentication: StoredAuthentication?,
-        fraction: Float
+        fraction: KotlinFloat
     ) async -> Bool {
         guard let authentication else { return authenticationUnavailable() }
         do {
@@ -129,7 +129,7 @@ final class WorkspaceLayoutRuntimeBridge {
                 identity: identityStore.loadOrCreate(),
                 authentication: authentication,
                 state: stateHolder,
-                fraction: fraction
+                fraction: fraction.floatValue
             )
             return true
         } catch {
