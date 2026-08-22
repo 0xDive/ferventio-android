@@ -101,6 +101,24 @@ final class WorkspaceLayoutRuntimeBridge {
         }
     }
 
+    func addSavedFilterSplit(
+        authentication: StoredAuthentication?,
+        filterId: String
+    ) async -> Bool {
+        guard let authentication else { return authenticationUnavailable() }
+        do {
+            _ = try await coordinator.addSavedFilterSplit(
+                identity: identityStore.loadOrCreate(),
+                authentication: authentication,
+                state: stateHolder,
+                filterId: filterId
+            )
+            return true
+        } catch {
+            return false
+        }
+    }
+
     func removeSplit(
         authentication: StoredAuthentication?,
         splitId: String
