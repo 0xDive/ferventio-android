@@ -1,6 +1,7 @@
 package io.ferventio.shared
 
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.window.ComposeUIViewController
 import io.ferventio.app.domain.AppThemeMode
 import io.ferventio.app.domain.HighlightRule
@@ -12,7 +13,6 @@ import io.ferventio.shared.runtime.ProvideFerventioRuntimeState
 import io.ferventio.shared.settings.IosLocalUiPreferencesStore
 import io.ferventio.shared.settings.SharedAppPreferences
 import io.ferventio.shared.settings.SharedLocalUiPreferencesStateHolder
-import io.ferventio.shared.ui.app.FerventioAboutInfo
 import io.ferventio.shared.ui.app.FerventioAuthenticationRoot
 import io.ferventio.shared.ui.app.ProvideFerventioAboutInfo
 import io.ferventio.shared.ui.locale.FerventioLocaleEnvironment
@@ -54,31 +54,10 @@ fun MainViewController(
     onAddSplit: () -> Unit = {},
     onRemoveSplit: (String) -> Unit = {},
     onSetPrimaryFraction: (Float) -> Unit = {},
-    aboutVersionName: String = "",
-    aboutWebsiteUrl: String = "",
-    aboutGithubUrl: String = "",
-    aboutTelegramChannelUrl: String = "",
-    aboutTelegramChatUrl: String = "",
-    aboutTranslationsUrl: String = "",
-    aboutPrivacyOperatorName: String = "",
-    aboutPrivacyContact: String = "",
-    aboutPrivacyPolicyUrl: String = "",
-    aboutShowPrivacyPolicyInApp: Boolean = false,
 ): UIViewController = ComposeUIViewController {
     val preferences = iosRuntimeState.settings.preferences
     val authenticationRequired = iosRuntimeState.chat.authenticationRequired
-    val aboutInfo = FerventioAboutInfo(
-        versionName = aboutVersionName,
-        websiteUrl = aboutWebsiteUrl,
-        githubUrl = aboutGithubUrl,
-        telegramChannelUrl = aboutTelegramChannelUrl,
-        telegramChatUrl = aboutTelegramChatUrl,
-        translationsUrl = aboutTranslationsUrl,
-        privacyOperatorName = aboutPrivacyOperatorName,
-        privacyContact = aboutPrivacyContact,
-        privacyPolicyUrl = aboutPrivacyPolicyUrl,
-        showPrivacyPolicyInApp = aboutShowPrivacyPolicyInApp,
-    )
+    val aboutInfo = remember { currentIosAboutInfo() }
     LaunchedEffect(authenticationRequired) {
         if (authenticationRequired) onAuthenticationRequired()
     }
