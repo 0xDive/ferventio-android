@@ -69,6 +69,47 @@ class WorkspaceLayoutMutationsTest {
     }
 
     @Test
+    fun filteredSplitUsesCurrentActiveChannelAndBecomesActive() {
+        val withSecond = addWorkspaceChatSplit(layout(), "channel-2")
+
+        val result = addWorkspaceFilteredSplit(
+            layout = withSecond,
+            filterQuery = savedFilterReference("filter-1"),
+            fallbackChannelId = "fallback-channel",
+        )
+
+        val split = assertIs<FilteredSplit>(result.activeTab?.activeSplit)
+        assertEquals("channel-2", split.channelId)
+        assertEquals(savedFilterReference("filter-1"), split.filterQuery)
+        assertEquals(3, result.activeTab?.splits?.size)
+    }
+
+    @Test
+    fun filteredSplitFallsBackToSelectedChannelAndRejectsBlankQuery() {
+        val noChannel = layout().copy(
+            workspaces = layout().workspaces.mapIndexed { index, workspace ->
+                if (index != 0) workspace
+                else workspace.copy(
+                    tabs = workspace.tabs.map { tab ->
+                        tab.copy(splits = listOf(ChatSplit("split-1", null)), activeSplitId = "split-1")
+                    },
+                )
+            },
+        )
+
+        val result = addWorkspaceFilteredSplit(
+            layout = noChannel,
+            filterQuery = "message.length > 80",
+            fallbackChannelId = "selected-channel",
+        )
+        assertEquals("selected-channel", result.activeTab?.activeSplit?.channelId)
+
+        assertFailsWith<IllegalArgumentException> {
+            addWorkspaceFilteredSplit(layout(), "   ", "channel-1")
+        }
+    }
+
+    @Test
     fun focusAndRemoveMirrorAndroidSplitSemantics() {
         val withSecond = addWorkspaceChatSplit(layout(), "channel-2")
         val secondId = withSecond.activeTab?.activeSplitId.orEmpty()
@@ -93,6 +134,13 @@ class WorkspaceLayoutMutationsTest {
         }
         assertEquals(MAX_SPLITS_PER_TAB, value.activeTab?.splits?.size)
         assertNotEquals("split-1", value.activeTab?.activeSplitId)
+
+        val filteredAtCap = addWorkspaceFilteredSplit(
+            layout = value,
+            filterQuery = savedFilterReference("filter-1"),
+            fallbackChannelId = "channel-1",
+        )
+        assertEquals(value, filteredAtCap)
 
         assertEquals(0.25f, updateWorkspaceSplitPrimaryFraction(value, 0.1f).activeTab?.primaryFraction)
         assertEquals(0.75f, updateWorkspaceSplitPrimaryFraction(value, 0.9f).activeTab?.primaryFraction)

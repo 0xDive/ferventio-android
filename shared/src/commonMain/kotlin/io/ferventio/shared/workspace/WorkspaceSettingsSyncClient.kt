@@ -5,6 +5,7 @@ import io.ferventio.app.domain.MobileDeviceIdentity
 import io.ferventio.app.domain.MobileDeviceIdentityValidation
 import io.ferventio.app.domain.StoredAuthentication
 import io.ferventio.app.domain.WorkspaceLayout
+import io.ferventio.app.domain.savedFilterReference
 import io.ferventio.shared.auth.createPlatformMobileAuthenticationHttpClient
 import io.ferventio.shared.settings.SharedAppPreferences
 import io.ferventio.shared.settings.SharedMessageRulesPayloadCodec
@@ -173,6 +174,42 @@ class WorkspaceSettingsSyncClient(
             payload = snapshot.payload,
             layout = mutate(remote),
         )
+    }
+
+    /**
+     * Creates a filtered split only while the referenced saved filter still exists in the freshest
+     * remote snapshot. A 409 retry therefore cannot persist a dangling @filter reference after a
+     * concurrent filter deletion on another device.
+     */
+    @Throws(Exception::class)
+    suspend fun addSavedFilterWorkspaceSplit(
+        identity: MobileDeviceIdentity,
+        authentication: StoredAuthentication,
+        filterId: String,
+        fallbackChannelId: String? = null,
+    ): WorkspaceSettingsSnapshot {
+        val id = filterId.trim().takeIf(String::isNotEmpty)
+            ?: throw IllegalArgumentException("Saved message filter id must not be blank")
+        return updateSnapshot(
+            identity = identity,
+            authentication = authentication,
+        ) { snapshot ->
+            require(snapshot.savedFilters.filters.any { it.id == id }) {
+                "Saved message filter was not found"
+            }
+            val remote = SharedWorkspaceLayoutPayloadCodec.parse(
+                payload = snapshot.payload,
+                fallbackChannelId = fallbackChannelId,
+            )
+            SharedWorkspaceLayoutPayloadCodec.replace(
+                payload = snapshot.payload,
+                layout = addWorkspaceFilteredSplit(
+                    layout = remote,
+                    filterQuery = savedFilterReference(id),
+                    fallbackChannelId = fallbackChannelId,
+                ),
+            )
+        }
     }
 
     /** Atomically changes a split channel and the legacy selectedLogin projection. */

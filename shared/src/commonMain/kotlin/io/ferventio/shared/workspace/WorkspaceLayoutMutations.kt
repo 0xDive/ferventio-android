@@ -1,7 +1,9 @@
 package io.ferventio.shared.workspace
 
 import io.ferventio.app.domain.ChatSplit
+import io.ferventio.app.domain.FilteredSplit
 import io.ferventio.app.domain.HIGHLIGHTS_FILTER_QUERY
+import io.ferventio.app.domain.MAX_FILTER_EXPRESSION_LENGTH
 import io.ferventio.app.domain.MAX_SPLITS_PER_TAB
 import io.ferventio.app.domain.SplitLayout
 import io.ferventio.app.domain.WorkspaceLayout
@@ -80,6 +82,31 @@ fun addWorkspaceChatSplit(
             splits = tab.splits + split,
             activeSplitId = split.id,
         )
+    }
+}
+
+fun addWorkspaceFilteredSplit(
+    layout: WorkspaceLayout,
+    filterQuery: String,
+    fallbackChannelId: String?,
+): WorkspaceLayout {
+    val query = filterQuery.trim().take(MAX_FILTER_EXPRESSION_LENGTH)
+    require(query.isNotEmpty()) { "Workspace split filter query must not be blank" }
+    val fallback = fallbackChannelId?.trim()?.takeIf(String::isNotEmpty)
+    return mapActiveWorkspaceTab(layout) { tab ->
+        if (tab.splits.size >= MAX_SPLITS_PER_TAB) {
+            tab
+        } else {
+            val split = FilteredSplit(
+                id = newLayoutId("split"),
+                channelId = tab.activeSplit?.channelId ?: fallback,
+                filterQuery = query,
+            )
+            tab.copy(
+                splits = tab.splits + split,
+                activeSplitId = split.id,
+            )
+        }
     }
 }
 
