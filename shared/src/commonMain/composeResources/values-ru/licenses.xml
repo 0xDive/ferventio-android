@@ -1,0 +1,10 @@
+<resources>
+    <string name="licenses_runtime_title">Компоненты shared runtime</string>
+    <string name="licenses_intro">Ferventio включает перечисленные runtime-компоненты общего Android/iOS-клиента. Test-only инструменты не входят в список. Полные тексты лицензий встроены в приложение и доступны без сети.</string>
+    <string name="licenses_license_format">Лицензия: %1$s</string>
+    <string name="licenses_open_project">Открыть страницу проекта</string>
+    <string name="licenses_full_texts_title">Тексты лицензий</string>
+    <string name="licenses_full_text_available">Полный текст лицензии встроен в Ferventio и доступен без подключения к сети.</string>
+    <string name="licenses_show_text">Показать текст лицензии</string>
+    <string name="licenses_hide_text">Скрыть текст лицензии</string>
+</resources>

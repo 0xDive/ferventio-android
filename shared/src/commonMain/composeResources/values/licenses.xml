@@ -1,0 +1,10 @@
+<resources>
+    <string name="licenses_runtime_title">Shared runtime components</string>
+    <string name="licenses_intro">Ferventio includes the runtime components below in the shared Android/iOS client. Test-only tools are excluded. Full license texts are bundled with the app and remain available offline.</string>
+    <string name="licenses_license_format">License: %1$s</string>
+    <string name="licenses_open_project">Open project page</string>
+    <string name="licenses_full_texts_title">License texts</string>
+    <string name="licenses_full_text_available">The full license text is bundled with Ferventio and available without a network connection.</string>
+    <string name="licenses_show_text">Show license text</string>
+    <string name="licenses_hide_text">Hide license text</string>
+</resources>
