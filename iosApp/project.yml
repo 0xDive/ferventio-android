@@ -28,6 +28,11 @@ targets:
               - $(PRODUCT_BUNDLE_IDENTIFIER)
         CADisableMinimumFrameDurationOnPhone: true
         FerventioServerURL: $(FERVENTIO_SERVER_URL)
+        FerventioAppWebsiteURL: $(FERVENTIO_APP_WEBSITE_URL)
+        FerventioAppGitHubURL: $(FERVENTIO_APP_GITHUB_URL)
+        FerventioAppTelegramChannelURL: $(FERVENTIO_APP_TELEGRAM_CHANNEL_URL)
+        FerventioAppTelegramChatURL: $(FERVENTIO_APP_TELEGRAM_CHAT_URL)
+        FerventioAppTranslationsURL: $(FERVENTIO_APP_TRANSLATIONS_URL)
         ITSAppUsesNonExemptEncryption: false
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
@@ -52,6 +57,11 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.ferventio.app
         FERVENTIO_SERVER_URL: https://ferventio.godive.dev
+        FERVENTIO_APP_WEBSITE_URL: https://ferventio.godive.dev
+        FERVENTIO_APP_GITHUB_URL: https://github.com/0xDive/ferventio-android
+        FERVENTIO_APP_TELEGRAM_CHANNEL_URL: ""
+        FERVENTIO_APP_TELEGRAM_CHAT_URL: ""
+        FERVENTIO_APP_TRANSLATIONS_URL: ""
         MARKETING_VERSION: 0.0.5
         CURRENT_PROJECT_VERSION: 1
         SWIFT_VERSION: "6.0"
