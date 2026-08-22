@@ -8,6 +8,11 @@ enum ForegroundAuthenticationRefreshDisposition {
     case deferred
 }
 
+enum MobileAuthenticationRuntimeBridgeError: Error {
+    case noActiveAuthentication
+    case noDeviceIdentity
+}
+
 @MainActor
 final class MobileAuthenticationRuntimeBridge {
     private enum AuthenticationRefreshReason: Equatable {
@@ -155,6 +160,41 @@ final class MobileAuthenticationRuntimeBridge {
             stateHolder.markFailed(errorMessage: String(describing: error))
             return true
         }
+    }
+
+    @discardableResult
+    func revokeAllSessions() async throws -> Bool {
+        guard !signOutInFlight, !authorizationInFlight else {
+            return false
+        }
+        signOutInFlight = true
+        defer { signOutInFlight = false }
+
+        invalidateRefreshFlight()
+
+        guard let authentication = stateHolder.state.authentication else {
+            throw MobileAuthenticationRuntimeBridgeError.noActiveAuthentication
+        }
+        guard let identity = try identityStore.loadExisting() else {
+            throw MobileAuthenticationRuntimeBridgeError.noDeviceIdentity
+        }
+
+        // Unlike ordinary sign-out, account-wide revocation is not best-effort: keep the local
+        // authenticated session intact when the server rejects or cannot complete the mutation.
+        try await coordinator.revokeAllSessions(
+            identity: identity,
+            authentication: authentication
+        )
+
+        // Once the server has revoked every session, this process must stop authenticated work even
+        // if Keychain cleanup itself fails. A stale persisted record will be rejected on next restore.
+        do {
+            try sessionStore.clear()
+            stateHolder.signOut()
+        } catch {
+            stateHolder.markFailed(errorMessage: String(describing: error))
+        }
+        return true
     }
 
     private func refreshAuthentication(
