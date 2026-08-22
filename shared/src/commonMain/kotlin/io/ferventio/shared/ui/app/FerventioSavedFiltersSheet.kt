@@ -41,6 +41,7 @@ import io.ferventio.app.domain.MessageFilterLanguage
 import io.ferventio.app.domain.SavedMessageFilter
 import io.ferventio.shared.generated.resources.Res
 import io.ferventio.shared.generated.resources.saved_filters_add
+import io.ferventio.shared.generated.resources.saved_filters_add_to_split
 import io.ferventio.shared.generated.resources.saved_filters_cancel
 import io.ferventio.shared.generated.resources.saved_filters_close
 import io.ferventio.shared.generated.resources.saved_filters_delete
@@ -80,6 +81,8 @@ internal fun FerventioSavedFiltersSheet(
     onUpsert: (SavedMessageFilter) -> Unit,
     onDelete: (String) -> Unit,
     onImport: (String) -> Unit = {},
+    canAddToSplit: Boolean = false,
+    onAddToSplit: (String) -> Unit = {},
     onDismiss: () -> Unit,
 ) {
     val runtime = LocalFerventioRuntimeState.current
@@ -125,6 +128,8 @@ internal fun FerventioSavedFiltersSheet(
                 state.filters.forEachIndexed { index, filter ->
                     SavedFilterRow(
                         filter = filter,
+                        canAddToSplit = canAddToSplit,
+                        onAddToSplit = { onAddToSplit(filter.id) },
                         onEdit = { editing = filter },
                         onDelete = { onDelete(filter.id) },
                     )
@@ -224,6 +229,8 @@ internal fun FerventioSavedFiltersSheet(
 @Composable
 private fun SavedFilterRow(
     filter: SavedMessageFilter,
+    canAddToSplit: Boolean,
+    onAddToSplit: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
 ) {
@@ -248,6 +255,12 @@ private fun SavedFilterRow(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.End,
         ) {
+            TextButton(
+                enabled = canAddToSplit,
+                onClick = onAddToSplit,
+            ) {
+                Text(stringResource(Res.string.saved_filters_add_to_split))
+            }
             TextButton(onClick = onEdit) {
                 Text(stringResource(Res.string.saved_filters_edit))
             }

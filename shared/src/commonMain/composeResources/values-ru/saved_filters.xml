@@ -3,6 +3,7 @@
     <string name="saved_filters_intro">Сохранённые фильтры используют тот же компилируемый язык фильтрации сообщений, что и Android. Сравнения без regex не учитывают регистр.</string>
     <string name="saved_filters_empty">Сохранённых фильтров пока нет.</string>
     <string name="saved_filters_add">Создать фильтр</string>
+    <string name="saved_filters_add_to_split">Добавить в split</string>
     <string name="saved_filters_edit">Изменить</string>
     <string name="saved_filters_delete">Удалить</string>
     <string name="saved_filters_new_title">Новый фильтр</string>
