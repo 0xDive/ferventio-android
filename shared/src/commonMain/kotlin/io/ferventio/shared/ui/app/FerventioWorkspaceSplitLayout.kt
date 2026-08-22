@@ -39,6 +39,8 @@ import io.ferventio.app.domain.SavedMessageFilter
 import io.ferventio.app.domain.SplitLayout
 import io.ferventio.app.domain.WorkspaceTab
 import io.ferventio.shared.generated.resources.Res
+import io.ferventio.shared.generated.resources.workspace_mutation_dismiss
+import io.ferventio.shared.generated.resources.workspace_mutation_failed
 import io.ferventio.shared.generated.resources.workspace_split_add
 import io.ferventio.shared.generated.resources.workspace_split_choose_channel
 import io.ferventio.shared.generated.resources.workspace_split_filter_action
@@ -73,27 +75,54 @@ internal fun FerventioWorkspaceResponsiveContent(
     val activeTab = state.workspaceLayout.activeTab
     val splits = activeTab?.splits.orEmpty().take(MAX_SPLITS_PER_TAB)
 
-    BoxWithConstraints(modifier.fillMaxSize()) {
-        val useWideLayout =
-            (maxWidth >= 600.dp || maxWidth > maxHeight) && splits.size > 1
-        if (!useWideLayout) {
-            selectedChannel?.let { channel ->
-                content(channel, "", Modifier.fillMaxSize())
+    Column(modifier.fillMaxSize()) {
+        state.mutationErrorMessage?.let { message ->
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = MaterialTheme.colorScheme.errorContainer,
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = stringResource(Res.string.workspace_mutation_failed, message),
+                        modifier = Modifier.weight(1f).padding(vertical = 8.dp),
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    TextButton(onClick = state::clearMutationError) {
+                        Text(
+                            text = stringResource(Res.string.workspace_mutation_dismiss),
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                        )
+                    }
+                }
             }
-        } else {
-            WideWorkspaceSplitLayout(
-                state = state,
-                tab = activeTab ?: WorkspaceTab.default(state.selectedChannelId),
-                savedFilters = savedFilters,
-                decorations = decorations,
-                onSetSplitFilterQuery = onSetSplitFilterQuery,
-                onSetSplitChannel = onSetSplitChannel,
-                onFocusSplit = onFocusSplit,
-                onAddSplit = onAddSplit,
-                onRemoveSplit = onRemoveSplit,
-                onSetPrimaryFraction = onSetPrimaryFraction,
-                content = content,
-            )
+        }
+
+        BoxWithConstraints(Modifier.fillMaxWidth().weight(1f)) {
+            val useWideLayout =
+                (maxWidth >= 600.dp || maxWidth > maxHeight) && splits.size > 1
+            if (!useWideLayout) {
+                selectedChannel?.let { channel ->
+                    content(channel, "", Modifier.fillMaxSize())
+                }
+            } else {
+                WideWorkspaceSplitLayout(
+                    state = state,
+                    tab = activeTab ?: WorkspaceTab.default(state.selectedChannelId),
+                    savedFilters = savedFilters,
+                    decorations = decorations,
+                    onSetSplitFilterQuery = onSetSplitFilterQuery,
+                    onSetSplitChannel = onSetSplitChannel,
+                    onFocusSplit = onFocusSplit,
+                    onAddSplit = onAddSplit,
+                    onRemoveSplit = onRemoveSplit,
+                    onSetPrimaryFraction = onSetPrimaryFraction,
+                    content = content,
+                )
+            }
         }
     }
 }
