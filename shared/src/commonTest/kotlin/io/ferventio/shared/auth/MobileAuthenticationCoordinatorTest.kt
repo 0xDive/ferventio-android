@@ -241,6 +241,19 @@ class MobileAuthenticationCoordinatorTest {
         assertEquals("access_denied", error.errorCode)
     }
 
+    @Test
+    fun revokeAllSessionsDelegatesThroughValidatedIdentity() = runTest {
+        val coordinator = coordinatorResponding(
+            body = "",
+            status = HttpStatusCode.NoContent,
+        )
+
+        coordinator.revokeAllSessions(
+            identity = identity,
+            authentication = authenticationWithFreshLease(),
+        )
+    }
+
     private fun authenticationWithFreshLease() = StoredAuthentication(
         backendCredential = BackendSessionCredential(
             serverUrl = "https://example.test",

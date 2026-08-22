@@ -288,6 +288,22 @@ class MobileAuthenticationCoordinator(
         )
     }
 
+    @Throws(Exception::class)
+    suspend fun revokeAllSessions(
+        identity: MobileDeviceIdentity,
+        authentication: StoredAuthentication,
+    ) {
+        MobileDeviceIdentityValidation.requireValid(identity)
+        AuthenticationPersistenceValidation.requireValidBackendCredential(
+            authentication.backendCredential,
+        )
+        backend.revokeAllSessions(
+            storedAuthentication = authentication,
+            installationId = identity.installationId,
+            deviceSecret = identity.deviceSecret,
+        )
+    }
+
     private fun outageFallback(
         authentication: StoredAuthentication,
         cachedLease: TwitchAccessLease?,
