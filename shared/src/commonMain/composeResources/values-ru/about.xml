@@ -1,0 +1,22 @@
+<resources>
+    <string name="settings_about">О приложении</string>
+    <string name="settings_about_summary">Ferventio %1$s</string>
+    <string name="about_project_title">Ferventio</string>
+    <string name="about_summary">Клиент Twitch-чата и модерации, адаптирующий механику Chatterino под мобильный интерфейс.</string>
+    <string name="about_project_description">Версия, ссылки сообщества, перевод и правовая информация собраны на одном экране.</string>
+    <string name="about_links_title">Ссылки</string>
+    <string name="about_website">Сайт</string>
+    <string name="about_website_summary">Новости проекта и полезные страницы</string>
+    <string name="about_github">GitHub</string>
+    <string name="about_github_summary">Исходный код, issue tracker и история изменений</string>
+    <string name="about_telegram_channel">Telegram-канал</string>
+    <string name="about_telegram_channel_summary">Анонсы релизов и важные обновления</string>
+    <string name="about_telegram_chat">Telegram-чат</string>
+    <string name="about_telegram_chat_summary">Обсуждение, помощь и обратная связь</string>
+    <string name="about_translation_project">Перевод</string>
+    <string name="about_translation_project_summary">Платформа для перевода и предложений по локализации</string>
+    <string name="about_legal_information">Правовая информация</string>
+    <string name="about_privacy_policy">Политика конфиденциальности</string>
+    <string name="about_open_source_licenses">Лицензии open-source</string>
+    <string name="about_version">Версия %1$s</string>
+</resources>
