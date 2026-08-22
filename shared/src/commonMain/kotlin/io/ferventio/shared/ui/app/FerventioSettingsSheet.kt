@@ -69,7 +69,7 @@ internal fun FerventioSettingsSheet(
     onOpenSavedFilters: () -> Unit = {},
     onDismiss: () -> Unit,
 ) {
-    val initialPreferences = remember { state.preferences }
+    var persistedPreferences by remember { mutableStateOf(state.preferences) }
     val notificationAction = notificationPermissionAction(notificationAuthorizationStatus)
     var page by remember { mutableStateOf(SharedSettingsPage.ROOT) }
 
@@ -78,7 +78,10 @@ internal fun FerventioSettingsSheet(
     }
 
     fun persistIfChanged() {
-        if (state.preferences != initialPreferences) onSave(state.preferences)
+        if (state.preferences != persistedPreferences) {
+            persistedPreferences = state.preferences
+            onSave(state.preferences)
+        }
     }
 
     fun saveAndDismiss() {
@@ -140,7 +143,15 @@ internal fun FerventioSettingsSheet(
                 )
                 SharedSettingsPage.LANGUAGE -> FerventioLanguageSettingsPage(
                     preferences = state.preferences,
-                    update = ::update,
+                    onLanguageSelected = { language ->
+                        val updated = state.updateLocally { current ->
+                            current.copy(appLanguage = language)
+                        }
+                        if (updated != persistedPreferences) {
+                            persistedPreferences = updated
+                            onSave(updated)
+                        }
+                    },
                 )
             }
 

@@ -42,7 +42,7 @@ private data class SharedLanguageOption(
 @Composable
 internal fun FerventioLanguageSettingsPage(
     preferences: SharedAppPreferences,
-    update: ((SharedAppPreferences) -> SharedAppPreferences) -> Unit,
+    onLanguageSelected: (AppLanguage) -> Unit,
 ) {
     var query by remember { mutableStateOf("") }
     val options = AppLanguage.entries.map { language ->
@@ -94,9 +94,7 @@ internal fun FerventioLanguageSettingsPage(
                 SharedLanguageRow(
                     option = option,
                     selected = option.language == preferences.appLanguage,
-                    onClick = {
-                        update { current -> current.copy(appLanguage = option.language) }
-                    },
+                    onClick = { onLanguageSelected(option.language) },
                 )
                 if (index != visibleOptions.lastIndex) HorizontalDivider()
             }
