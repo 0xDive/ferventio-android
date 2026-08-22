@@ -33,6 +33,10 @@ targets:
         FerventioAppTelegramChannelURL: $(FERVENTIO_APP_TELEGRAM_CHANNEL_URL)
         FerventioAppTelegramChatURL: $(FERVENTIO_APP_TELEGRAM_CHAT_URL)
         FerventioAppTranslationsURL: $(FERVENTIO_APP_TRANSLATIONS_URL)
+        FerventioPrivacyOperatorName: $(FERVENTIO_PRIVACY_OPERATOR_NAME)
+        FerventioPrivacyContact: $(FERVENTIO_PRIVACY_CONTACT)
+        FerventioPrivacyPolicyURL: $(FERVENTIO_PRIVACY_POLICY_URL)
+        FerventioShowPrivacyPolicyInApp: $(FERVENTIO_SHOW_PRIVACY_POLICY_IN_APP)
         ITSAppUsesNonExemptEncryption: false
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
@@ -62,6 +66,10 @@ targets:
         FERVENTIO_APP_TELEGRAM_CHANNEL_URL: ""
         FERVENTIO_APP_TELEGRAM_CHAT_URL: ""
         FERVENTIO_APP_TRANSLATIONS_URL: ""
+        FERVENTIO_PRIVACY_OPERATOR_NAME: ""
+        FERVENTIO_PRIVACY_CONTACT: ""
+        FERVENTIO_PRIVACY_POLICY_URL: ""
+        FERVENTIO_SHOW_PRIVACY_POLICY_IN_APP: NO
         MARKETING_VERSION: 0.0.5
         CURRENT_PROJECT_VERSION: 1
         SWIFT_VERSION: "6.0"

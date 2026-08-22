@@ -10,6 +10,10 @@ data class FerventioAboutInfo(
     val telegramChannelUrl: String = "",
     val telegramChatUrl: String = "",
     val translationsUrl: String = "",
+    val privacyOperatorName: String = "",
+    val privacyContact: String = "",
+    val privacyPolicyUrl: String = "",
+    val showPrivacyPolicyInApp: Boolean = false,
 ) {
     val hasConfiguredLinks: Boolean
         get() = websiteUrl.isNotBlank() ||
