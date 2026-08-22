@@ -7,4 +7,12 @@
     <string name="licenses_full_text_available">Полный текст лицензии встроен в Ferventio и доступен без подключения к сети.</string>
     <string name="licenses_show_text">Показать текст лицензии</string>
     <string name="licenses_hide_text">Скрыть текст лицензии</string>
+    <string name="licenses_desc_compose_multiplatform">Общий интерфейс, ресурсы и инфраструктура Compose для iOS.</string>
+    <string name="licenses_desc_kotlin">Среда выполнения Kotlin, используемая общим Android/iOS-клиентом.</string>
+    <string name="licenses_desc_coroutines">Структурированная конкурентность, Flow и асинхронные задачи runtime.</string>
+    <string name="licenses_desc_serialization">Кодирование и декодирование JSON для общих сетевых и persistence-контрактов.</string>
+    <string name="licenses_desc_ktor">HTTP- и WebSocket-транспорт, включая Darwin engine на iOS.</string>
+    <string name="licenses_desc_coil">Мультиплатформенная загрузка изображений для аватаров, badges и emotes.</string>
+    <string name="licenses_desc_skiko">Kotlin Multiplatform bindings и rendering bridge, используемые Compose на iOS.</string>
+    <string name="licenses_desc_skia">Нативный 2D-графический движок, используемый стеком рендеринга Compose.</string>
 </resources>

@@ -21,6 +21,14 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.ferventio.shared.generated.resources.Res
+import io.ferventio.shared.generated.resources.licenses_desc_coil
+import io.ferventio.shared.generated.resources.licenses_desc_compose_multiplatform
+import io.ferventio.shared.generated.resources.licenses_desc_coroutines
+import io.ferventio.shared.generated.resources.licenses_desc_kotlin
+import io.ferventio.shared.generated.resources.licenses_desc_ktor
+import io.ferventio.shared.generated.resources.licenses_desc_serialization
+import io.ferventio.shared.generated.resources.licenses_desc_skia
+import io.ferventio.shared.generated.resources.licenses_desc_skiko
 import io.ferventio.shared.generated.resources.licenses_full_text_available
 import io.ferventio.shared.generated.resources.licenses_full_texts_title
 import io.ferventio.shared.generated.resources.licenses_hide_text
@@ -59,7 +67,7 @@ internal fun FerventioLicensesSettingsPage() {
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text(
-                        text = notice.description,
+                        text = noticeDescription(notice.id),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -90,6 +98,21 @@ internal fun FerventioLicensesSettingsPage() {
         }
     }
 }
+
+@Composable
+private fun noticeDescription(id: String): String = stringResource(
+    when (id) {
+        "compose-multiplatform" -> Res.string.licenses_desc_compose_multiplatform
+        "kotlin" -> Res.string.licenses_desc_kotlin
+        "coroutines" -> Res.string.licenses_desc_coroutines
+        "serialization" -> Res.string.licenses_desc_serialization
+        "ktor" -> Res.string.licenses_desc_ktor
+        "coil" -> Res.string.licenses_desc_coil
+        "skiko" -> Res.string.licenses_desc_skiko
+        "skia" -> Res.string.licenses_desc_skia
+        else -> error("Unknown open-source notice: $id")
+    },
+)
 
 @Composable
 private fun LicenseTextRow(license: FerventioLicenseText) {

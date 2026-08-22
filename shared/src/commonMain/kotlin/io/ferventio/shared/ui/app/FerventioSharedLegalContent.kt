@@ -5,7 +5,6 @@ internal data class FerventioOpenSourceNotice(
     val name: String,
     val version: String,
     val licenseId: String,
-    val description: String,
     val projectUrl: String,
 )
 
@@ -25,7 +24,6 @@ internal object FerventioSharedLegalContent {
             name = "Compose Multiplatform",
             version = "1.11.1",
             licenseId = APACHE_2_0,
-            description = "Shared UI, resources, and iOS Compose hosting infrastructure.",
             projectUrl = "https://github.com/JetBrains/compose-multiplatform",
         ),
         FerventioOpenSourceNotice(
@@ -33,7 +31,6 @@ internal object FerventioSharedLegalContent {
             name = "Kotlin Standard Library",
             version = "2.4.10",
             licenseId = APACHE_2_0,
-            description = "Kotlin runtime used by the shared Android and iOS client.",
             projectUrl = "https://github.com/JetBrains/kotlin",
         ),
         FerventioOpenSourceNotice(
@@ -41,7 +38,6 @@ internal object FerventioSharedLegalContent {
             name = "kotlinx.coroutines",
             version = "1.11.0",
             licenseId = APACHE_2_0,
-            description = "Structured concurrency, flows, and asynchronous runtime work.",
             projectUrl = "https://github.com/Kotlin/kotlinx.coroutines",
         ),
         FerventioOpenSourceNotice(
@@ -49,7 +45,6 @@ internal object FerventioSharedLegalContent {
             name = "kotlinx.serialization",
             version = "1.11.0",
             licenseId = APACHE_2_0,
-            description = "JSON encoding and decoding for shared network and persistence contracts.",
             projectUrl = "https://github.com/Kotlin/kotlinx.serialization",
         ),
         FerventioOpenSourceNotice(
@@ -57,7 +52,6 @@ internal object FerventioSharedLegalContent {
             name = "Ktor Client",
             version = "3.5.2",
             licenseId = APACHE_2_0,
-            description = "HTTP and WebSocket transport, including the Darwin engine on iOS.",
             projectUrl = "https://github.com/ktorio/ktor",
         ),
         FerventioOpenSourceNotice(
@@ -65,23 +59,20 @@ internal object FerventioSharedLegalContent {
             name = "Coil",
             version = "3.5.0",
             licenseId = APACHE_2_0,
-            description = "Multiplatform image loading for avatars, badges, and emotes.",
             projectUrl = "https://github.com/coil-kt/coil",
         ),
         FerventioOpenSourceNotice(
             id = "skiko",
             name = "Skiko",
-            version = "bundled with Compose Multiplatform 1.11.1",
+            version = "Compose Multiplatform 1.11.1",
             licenseId = APACHE_2_0,
-            description = "Kotlin Multiplatform bindings and rendering bridge used by Compose on iOS.",
             projectUrl = "https://github.com/JetBrains/skiko",
         ),
         FerventioOpenSourceNotice(
             id = "skia",
             name = "Skia",
-            version = "bundled by the Compose/Skiko graphics runtime",
+            version = "Compose / Skiko",
             licenseId = BSD_3_CLAUSE,
-            description = "Native 2D graphics engine used by the Compose rendering stack.",
             projectUrl = "https://skia.org/",
         ),
     )
