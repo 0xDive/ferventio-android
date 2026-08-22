@@ -55,6 +55,8 @@ private enum class SharedSettingsPage {
     NOTIFICATIONS,
     HISTORY,
     LANGUAGE,
+    ABOUT,
+    LICENSES,
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -71,6 +73,7 @@ internal fun FerventioSettingsSheet(
 ) {
     var persistedPreferences by remember { mutableStateOf(state.preferences) }
     val notificationAction = notificationPermissionAction(notificationAuthorizationStatus)
+    val aboutInfo = LocalFerventioAboutInfo.current
     var page by remember { mutableStateOf(SharedSettingsPage.ROOT) }
 
     fun update(transform: (SharedAppPreferences) -> SharedAppPreferences) {
@@ -108,12 +111,21 @@ internal fun FerventioSettingsSheet(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp),
         ) {
-            SettingsPageHeader(page = page, onBack = { page = SharedSettingsPage.ROOT })
+            SettingsPageHeader(
+                page = page,
+                onBack = {
+                    page = when (page) {
+                        SharedSettingsPage.LICENSES -> SharedSettingsPage.ABOUT
+                        else -> SharedSettingsPage.ROOT
+                    }
+                },
+            )
             Spacer(Modifier.height(16.dp))
 
             when (page) {
                 SharedSettingsPage.ROOT -> SettingsHome(
                     preferences = state.preferences,
+                    aboutInfo = aboutInfo,
                     onOpen = { page = it },
                     onOpenMessageRules = ::openMessageRules,
                     onOpenSavedFilters = ::openSavedFilters,
@@ -153,6 +165,11 @@ internal fun FerventioSettingsSheet(
                         }
                     },
                 )
+                SharedSettingsPage.ABOUT -> FerventioAboutSettingsPage(
+                    info = aboutInfo,
+                    onOpenLicenses = { page = SharedSettingsPage.LICENSES },
+                )
+                SharedSettingsPage.LICENSES -> FerventioLicensesSettingsPage()
             }
 
             SettingsSaveState(state)
@@ -187,6 +204,8 @@ private fun SettingsPageHeader(page: SharedSettingsPage, onBack: () -> Unit) {
                 SharedSettingsPage.NOTIFICATIONS -> stringResource(Res.string.notifications_title)
                 SharedSettingsPage.HISTORY -> stringResource(Res.string.settings_history)
                 SharedSettingsPage.LANGUAGE -> stringResource(Res.string.settings_language)
+                SharedSettingsPage.ABOUT -> stringResource(Res.string.settings_about)
+                SharedSettingsPage.LICENSES -> stringResource(Res.string.about_open_source_licenses)
             },
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
@@ -197,6 +216,7 @@ private fun SettingsPageHeader(page: SharedSettingsPage, onBack: () -> Unit) {
 @Composable
 private fun SettingsHome(
     preferences: SharedAppPreferences,
+    aboutInfo: FerventioAboutInfo,
     onOpen: (SharedSettingsPage) -> Unit,
     onOpenMessageRules: () -> Unit,
     onOpenSavedFilters: () -> Unit,
@@ -255,6 +275,15 @@ private fun SettingsHome(
                 title = stringResource(Res.string.settings_language),
                 summary = sharedLanguageLabel(preferences.appLanguage),
                 onClick = { onOpen(SharedSettingsPage.LANGUAGE) },
+            )
+            HorizontalDivider()
+            SettingsMenuRow(
+                title = stringResource(Res.string.settings_about),
+                summary = stringResource(
+                    Res.string.settings_about_summary,
+                    aboutInfo.versionName.ifBlank { "—" },
+                ),
+                onClick = { onOpen(SharedSettingsPage.ABOUT) },
             )
         }
     }
