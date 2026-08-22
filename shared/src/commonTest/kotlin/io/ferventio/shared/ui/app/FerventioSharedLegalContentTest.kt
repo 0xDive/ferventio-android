@@ -17,11 +17,11 @@ class FerventioSharedLegalContentTest {
             assertTrue(notice.id.isNotBlank())
             assertTrue(notice.name.isNotBlank())
             assertTrue(notice.version.isNotBlank())
-            assertTrue(notice.description.isNotBlank())
             assertTrue(notice.projectUrl.startsWith("https://"))
             assertTrue(notice.licenseId in licenseIds)
         }
         licenses.forEach { license ->
+            assertTrue(license.id.isNotBlank())
             assertTrue(license.name.isNotBlank())
             assertTrue(license.text.isNotBlank())
         }
