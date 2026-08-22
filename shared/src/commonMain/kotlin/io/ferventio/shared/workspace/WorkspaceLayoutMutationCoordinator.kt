@@ -114,6 +114,30 @@ class WorkspaceLayoutMutationCoordinator(
     }
 
     @Throws(Exception::class)
+    suspend fun addSavedFilterSplit(
+        identity: MobileDeviceIdentity,
+        authentication: StoredAuthentication,
+        state: WorkspaceRuntimeStateHolder,
+        filterId: String,
+    ): WorkspaceSettingsSnapshot {
+        state.markMutationStarted()
+        return try {
+            settings.addSavedFilterWorkspaceSplit(
+                identity = identity,
+                authentication = authentication,
+                filterId = filterId,
+                fallbackChannelId = state.selectedChannelId,
+            ).also { snapshot ->
+                restoreMutationSnapshot(state, snapshot)
+                state.markMutationSucceeded()
+            }
+        } catch (error: Throwable) {
+            state.markMutationFailed(error.message)
+            throw error
+        }
+    }
+
+    @Throws(Exception::class)
     suspend fun removeSplit(
         identity: MobileDeviceIdentity,
         authentication: StoredAuthentication,
