@@ -54,6 +54,7 @@ private enum class SharedSettingsPage {
     USER_CARD,
     NOTIFICATIONS,
     HISTORY,
+    ACCOUNT,
     LANGUAGE,
     ABOUT,
     LICENSES,
@@ -74,6 +75,7 @@ internal fun FerventioSettingsSheet(
     var persistedPreferences by remember { mutableStateOf(state.preferences) }
     val notificationAction = notificationPermissionAction(notificationAuthorizationStatus)
     val aboutInfo = LocalFerventioAboutInfo.current
+    val accountActions = LocalFerventioAccountActions.current
     var page by remember { mutableStateOf(SharedSettingsPage.ROOT) }
 
     fun update(transform: (SharedAppPreferences) -> SharedAppPreferences) {
@@ -126,6 +128,7 @@ internal fun FerventioSettingsSheet(
                 SharedSettingsPage.ROOT -> SettingsHome(
                     preferences = state.preferences,
                     aboutInfo = aboutInfo,
+                    accountManagementAvailable = accountActions.accountManagementAvailable,
                     onOpen = { page = it },
                     onOpenMessageRules = ::openMessageRules,
                     onOpenSavedFilters = ::openSavedFilters,
@@ -153,6 +156,7 @@ internal fun FerventioSettingsSheet(
                     preferences = state.preferences,
                     update = ::update,
                 )
+                SharedSettingsPage.ACCOUNT -> FerventioAccountSettingsPage()
                 SharedSettingsPage.LANGUAGE -> FerventioLanguageSettingsPage(
                     preferences = state.preferences,
                     onLanguageSelected = { language ->
@@ -203,6 +207,7 @@ private fun SettingsPageHeader(page: SharedSettingsPage, onBack: () -> Unit) {
                 SharedSettingsPage.USER_CARD -> stringResource(Res.string.settings_user_card)
                 SharedSettingsPage.NOTIFICATIONS -> stringResource(Res.string.notifications_title)
                 SharedSettingsPage.HISTORY -> stringResource(Res.string.settings_history)
+                SharedSettingsPage.ACCOUNT -> stringResource(Res.string.settings_account)
                 SharedSettingsPage.LANGUAGE -> stringResource(Res.string.settings_language)
                 SharedSettingsPage.ABOUT -> stringResource(Res.string.settings_about)
                 SharedSettingsPage.LICENSES -> stringResource(Res.string.about_open_source_licenses)
@@ -217,6 +222,7 @@ private fun SettingsPageHeader(page: SharedSettingsPage, onBack: () -> Unit) {
 private fun SettingsHome(
     preferences: SharedAppPreferences,
     aboutInfo: FerventioAboutInfo,
+    accountManagementAvailable: Boolean,
     onOpen: (SharedSettingsPage) -> Unit,
     onOpenMessageRules: () -> Unit,
     onOpenSavedFilters: () -> Unit,
@@ -271,6 +277,14 @@ private fun SettingsHome(
         }
 
         SettingsHomeGroup(stringResource(Res.string.settings_home_app_group)) {
+            if (accountManagementAvailable) {
+                SettingsMenuRow(
+                    title = stringResource(Res.string.settings_account),
+                    summary = stringResource(Res.string.settings_account_summary),
+                    onClick = { onOpen(SharedSettingsPage.ACCOUNT) },
+                )
+                HorizontalDivider()
+            }
             SettingsMenuRow(
                 title = stringResource(Res.string.settings_language),
                 summary = sharedLanguageLabel(preferences.appLanguage),

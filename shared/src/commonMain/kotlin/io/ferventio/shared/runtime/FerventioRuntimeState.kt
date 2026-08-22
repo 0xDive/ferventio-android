@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
 import io.ferventio.app.domain.ChatHistoryStore
+import io.ferventio.shared.auth.AccountMutationStateHolder
 import io.ferventio.shared.auth.MobileAuthenticationStateHolder
 import io.ferventio.shared.chat.ChatAttentionStateHolder
 import io.ferventio.shared.chat.ChatRuntimeStateHolder
@@ -31,6 +32,7 @@ class FerventioRuntimeState(
     val pushNavigation: PushNavigationInbox,
     val history: ChatHistoryStore? = null,
     val localUiPreferences: SharedLocalUiPreferencesStateHolder = SharedLocalUiPreferencesStateHolder(),
+    val account: AccountMutationStateHolder = AccountMutationStateHolder(),
 ) {
     val moderation: TwitchModerationRuntime by lazy { TwitchModerationRuntime(chat) }
     val interactive: TwitchInteractiveRuntime by lazy { TwitchInteractiveRuntime(chat) }
