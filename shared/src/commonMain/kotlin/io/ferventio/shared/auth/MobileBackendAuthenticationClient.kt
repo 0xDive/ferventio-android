@@ -154,6 +154,33 @@ class MobileBackendAuthenticationClient(
         installationId: String,
         deviceSecret: String,
     ) {
+        revokeBoundSessionEndpoint(
+            storedAuthentication = storedAuthentication,
+            installationId = installationId,
+            deviceSecret = deviceSecret,
+            path = "/v1/auth/device",
+        )
+    }
+
+    suspend fun revokeAllSessions(
+        storedAuthentication: StoredAuthentication,
+        installationId: String,
+        deviceSecret: String,
+    ) {
+        revokeBoundSessionEndpoint(
+            storedAuthentication = storedAuthentication,
+            installationId = installationId,
+            deviceSecret = deviceSecret,
+            path = "/v1/auth/sessions",
+        )
+    }
+
+    private suspend fun revokeBoundSessionEndpoint(
+        storedAuthentication: StoredAuthentication,
+        installationId: String,
+        deviceSecret: String,
+        path: String,
+    ) {
         AuthenticationPersistenceValidation.requireValidBackendCredential(
             storedAuthentication.backendCredential,
         )
@@ -161,7 +188,7 @@ class MobileBackendAuthenticationClient(
         require(deviceSecret.isNotBlank()) { "Device secret must not be blank" }
         val credential = storedAuthentication.backendCredential
         val response = client.delete(
-            "${validateServerUrl(credential.serverUrl)}/v1/auth/device",
+            "${validateServerUrl(credential.serverUrl)}$path",
         ) {
             header(HttpHeaders.Authorization, "Bearer ${credential.token}")
             header(INSTALLATION_ID_HEADER, installationId)

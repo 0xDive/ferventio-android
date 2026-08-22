@@ -132,14 +132,28 @@ class MobileBackendAuthenticationClientTest {
         val api = MobileBackendAuthenticationClient(client) { 1_000L }
 
         api.revokeDevice(
-            storedAuthentication = StoredAuthentication(
-                backendCredential = BackendSessionCredential(
-                    serverUrl = "https://example.test",
-                    token = "backend-session",
-                    expiresAtEpochMillis = 4_600_000L,
-                ),
-                accessLease = null,
-            ),
+            storedAuthentication = storedAuthentication(),
+            installationId = "installation",
+            deviceSecret = "secret",
+        )
+    }
+
+    @Test
+    fun revokeAllSessionsUsesBoundSessionCredentials() = runTest {
+        val client = clientResponding(
+            body = "",
+            status = HttpStatusCode.NoContent,
+        ) { request ->
+            assertEquals(HttpMethod.Delete, request.method)
+            assertEquals("/v1/auth/sessions", request.url.encodedPath)
+            assertEquals("Bearer backend-session", request.headers[HttpHeaders.Authorization])
+            assertEquals("installation", request.headers["X-Installation-ID"])
+            assertEquals("secret", request.headers["X-Device-Secret"])
+        }
+        val api = MobileBackendAuthenticationClient(client) { 1_000L }
+
+        api.revokeAllSessions(
+            storedAuthentication = storedAuthentication(),
             installationId = "installation",
             deviceSecret = "secret",
         )
@@ -167,6 +181,15 @@ class MobileBackendAuthenticationClientTest {
             assertEquals("authorization expired", error.backendMessage)
         }
     }
+
+    private fun storedAuthentication(): StoredAuthentication = StoredAuthentication(
+        backendCredential = BackendSessionCredential(
+            serverUrl = "https://example.test",
+            token = "backend-session",
+            expiresAtEpochMillis = 4_600_000L,
+        ),
+        accessLease = null,
+    )
 
     private fun assertStoredAuthentication(stored: StoredAuthentication) {
         assertEquals("https://example.test", stored.backendCredential.serverUrl)
