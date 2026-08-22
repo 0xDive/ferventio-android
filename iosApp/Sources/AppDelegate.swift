@@ -371,6 +371,21 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
                         fraction: fraction
                     )
                 }
+            },
+            onReauthorize: { [weak self] in
+                Task { @MainActor [weak self] in
+                    await self?.reauthorizeAndSynchronize()
+                }
+            },
+            onRevokeDevice: { [weak self] in
+                Task { @MainActor [weak self] in
+                    await self?.revokeCurrentDeviceAndCleanup()
+                }
+            },
+            onRevokeAllSessions: { [weak self] in
+                Task { @MainActor [weak self] in
+                    await self?.revokeAllSessionsAndCleanup()
+                }
             }
         )
     }
@@ -422,11 +437,80 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     }
 
     private func signOutAndCleanup() async {
-        cancelAuthenticationLeaseRefresh()
         guard let authenticationRuntimeBridge else { return }
         guard await authenticationRuntimeBridge.signOut() else { return }
+        await cleanupAfterAuthenticatedSessionEnded()
+    }
+
+    private func reauthorizeAndSynchronize() async {
+        guard let authenticationRuntimeBridge else {
+            runtimeState.account.finishMutation()
+            return
+        }
+        let previousUserId = runtimeState.authentication.state.authentication?.accessLease?.session?.userId
+        cancelAuthenticationLeaseRefresh()
+        do {
+            guard try await authenticationRuntimeBridge.reauthorize() else {
+                runtimeState.account.finishMutation()
+                scheduleAuthenticationLeaseRefresh()
+                return
+            }
+            runtimeState.account.finishMutation()
+            let currentUserId = runtimeState.authentication.state.authentication?.accessLease?.session?.userId
+            if previousUserId != currentUserId {
+                authenticatedChatRuntimeBridge?.stop(clearState: true)
+                await pushBackendRegistrationRuntimeBridge?.unregister()
+                clearAuthenticatedWorkspaceState()
+                await restoreWorkspaceAndSynchronizePush()
+            } else {
+                await synchronizeReadyAuthenticatedRuntime()
+            }
+            scheduleAuthenticationLeaseRefresh()
+        } catch {
+            runtimeState.account.failMutation(errorMessage: String(describing: error))
+            scheduleAuthenticationLeaseRefresh()
+        }
+    }
+
+    private func revokeCurrentDeviceAndCleanup() async {
+        guard let authenticationRuntimeBridge else {
+            runtimeState.account.finishMutation()
+            return
+        }
+        do {
+            guard try await authenticationRuntimeBridge.revokeCurrentDevice() else {
+                runtimeState.account.finishMutation()
+                return
+            }
+            runtimeState.account.finishMutation()
+            await cleanupAfterAuthenticatedSessionEnded()
+        } catch {
+            runtimeState.account.failMutation(errorMessage: String(describing: error))
+        }
+    }
+
+    private func revokeAllSessionsAndCleanup() async {
+        guard let authenticationRuntimeBridge else {
+            runtimeState.account.finishMutation()
+            return
+        }
+        do {
+            guard try await authenticationRuntimeBridge.revokeAllSessions() else {
+                runtimeState.account.finishMutation()
+                return
+            }
+            runtimeState.account.finishMutation()
+            await cleanupAfterAuthenticatedSessionEnded()
+        } catch {
+            runtimeState.account.failMutation(errorMessage: String(describing: error))
+        }
+    }
+
+    private func cleanupAfterAuthenticatedSessionEnded() async {
+        cancelAuthenticationLeaseRefresh()
         authenticatedChatRuntimeBridge?.stop(clearState: true)
         clearAuthenticatedWorkspaceState()
+        runtimeState.account.clear()
         await synchronizePushBackendRegistration()
     }
 

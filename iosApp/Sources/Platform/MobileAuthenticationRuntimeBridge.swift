@@ -124,8 +124,40 @@ final class MobileAuthenticationRuntimeBridge {
     }
 
     @discardableResult
+    func reauthorize() async throws -> Bool {
+        guard !authorizationInFlight, !signOutInFlight else {
+            return false
+        }
+        guard stateHolder.state.authentication != nil else {
+            throw MobileAuthenticationRuntimeBridgeError.noActiveAuthentication
+        }
+
+        // Reauthorization is transactional from the user's perspective. Keep the current
+        // authenticated state untouched until the replacement authorization has completed and
+        // persisted successfully; cancellation or network/backend failure leaves it reusable.
+        invalidateRefreshFlight()
+        authorizationInFlight = true
+        defer { authorizationInFlight = false }
+
+        let identity = try identityStore.loadOrCreate()
+        let request = try await coordinator.startAuthorization(
+            serverUrl: configuration.serverURL,
+            identity: identity,
+            callbackScheme: configuration.callbackScheme
+        )
+        let callback = try await browser.authenticate(request: request)
+        let authentication = try await coordinator.completeAuthorization(
+            identity: identity,
+            callback: callback
+        )
+        try sessionStore.save(authentication)
+        stateHolder.markSignedIn(authentication: authentication)
+        return true
+    }
+
+    @discardableResult
     func signOut() async -> Bool {
-        guard !signOutInFlight else {
+        guard !signOutInFlight, !authorizationInFlight else {
             return false
         }
         signOutInFlight = true
@@ -160,6 +192,41 @@ final class MobileAuthenticationRuntimeBridge {
             stateHolder.markFailed(errorMessage: String(describing: error))
             return true
         }
+    }
+
+    @discardableResult
+    func revokeCurrentDevice() async throws -> Bool {
+        guard !signOutInFlight, !authorizationInFlight else {
+            return false
+        }
+        signOutInFlight = true
+        defer { signOutInFlight = false }
+
+        invalidateRefreshFlight()
+
+        guard let authentication = stateHolder.state.authentication else {
+            throw MobileAuthenticationRuntimeBridgeError.noActiveAuthentication
+        }
+        guard let identity = try identityStore.loadExisting() else {
+            throw MobileAuthenticationRuntimeBridgeError.noDeviceIdentity
+        }
+
+        // Explicit device revocation is transactional from the user's perspective: a server or
+        // network failure keeps the local authenticated session intact so the action can be retried.
+        try await coordinator.revokeDevice(
+            identity: identity,
+            authentication: authentication
+        )
+
+        do {
+            try sessionStore.clear()
+            stateHolder.signOut()
+        } catch {
+            // The server-side device session is already gone, so authenticated work must stop even
+            // when secure-storage cleanup fails. A stale record will be rejected during restore.
+            stateHolder.markFailed(errorMessage: String(describing: error))
+        }
+        return true
     }
 
     @discardableResult

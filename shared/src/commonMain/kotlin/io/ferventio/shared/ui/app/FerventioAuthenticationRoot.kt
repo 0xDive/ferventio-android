@@ -79,43 +79,48 @@ fun FerventioAuthenticationRoot(
             modifier = modifier,
         )
 
-        MobileAuthenticationStatus.SIGNED_IN -> FerventioWorkspaceShell(
-            state = workspace,
-            login = state.authentication?.accessLease?.session?.login,
-            onSignOut = onSignOut,
-            notificationAuthorizationStatus = pushAuthorizationStatus,
-            onRequestNotificationPermission = onRequestNotificationPermission,
-            onOpenNotificationSettings = onOpenNotificationSettings,
-            onSaveSettings = onSaveSettings,
-            onUpsertHighlightRule = onUpsertHighlightRule,
-            onDeleteHighlightRule = onDeleteHighlightRule,
-            onUpsertIgnoreRule = onUpsertIgnoreRule,
-            onDeleteIgnoreRule = onDeleteIgnoreRule,
-            onUpsertSavedFilter = onUpsertSavedFilter,
-            onDeleteSavedFilter = onDeleteSavedFilter,
-            onImportSavedFilters = onImportSavedFilters,
-            onAddSavedFilterSplit = onAddSavedFilterSplit,
-            onSelectChannel = onSelectChannel,
-            onAddChannel = onAddChannel,
-            onSetChannelPinned = onSetChannelPinned,
-            onRenameChannel = onRenameChannel,
-            onRemoveChannel = onRemoveChannel,
-            onMoveChannel = onMoveChannel,
-            onSetSplitFilterQuery = onSetSplitFilterQuery,
-            onSetSplitChannel = onSetSplitChannel,
-            onFocusSplit = onFocusSplit,
-            onAddSplit = onAddSplit,
-            onRemoveSplit = onRemoveSplit,
-            onSetPrimaryFraction = onSetPrimaryFraction,
-            modifier = modifier,
-        ) { channel, filterQuery, contentModifier ->
-            key(channel.id) {
-                FerventioModeratedChatScreen(
-                    channel = channel,
-                    moderatorChannelIds = workspace.moderatorChannelIds,
-                    filterQuery = filterQuery,
-                    modifier = contentModifier,
-                )
+        MobileAuthenticationStatus.SIGNED_IN -> {
+            val authenticatedUserId = state.authentication?.accessLease?.session?.userId.orEmpty()
+            key(authenticatedUserId) {
+                FerventioWorkspaceShell(
+                    state = workspace,
+                    login = state.authentication?.accessLease?.session?.login,
+                    onSignOut = onSignOut,
+                    notificationAuthorizationStatus = pushAuthorizationStatus,
+                    onRequestNotificationPermission = onRequestNotificationPermission,
+                    onOpenNotificationSettings = onOpenNotificationSettings,
+                    onSaveSettings = onSaveSettings,
+                    onUpsertHighlightRule = onUpsertHighlightRule,
+                    onDeleteHighlightRule = onDeleteHighlightRule,
+                    onUpsertIgnoreRule = onUpsertIgnoreRule,
+                    onDeleteIgnoreRule = onDeleteIgnoreRule,
+                    onUpsertSavedFilter = onUpsertSavedFilter,
+                    onDeleteSavedFilter = onDeleteSavedFilter,
+                    onImportSavedFilters = onImportSavedFilters,
+                    onAddSavedFilterSplit = onAddSavedFilterSplit,
+                    onSelectChannel = onSelectChannel,
+                    onAddChannel = onAddChannel,
+                    onSetChannelPinned = onSetChannelPinned,
+                    onRenameChannel = onRenameChannel,
+                    onRemoveChannel = onRemoveChannel,
+                    onMoveChannel = onMoveChannel,
+                    onSetSplitFilterQuery = onSetSplitFilterQuery,
+                    onSetSplitChannel = onSetSplitChannel,
+                    onFocusSplit = onFocusSplit,
+                    onAddSplit = onAddSplit,
+                    onRemoveSplit = onRemoveSplit,
+                    onSetPrimaryFraction = onSetPrimaryFraction,
+                    modifier = modifier,
+                ) { channel, filterQuery, contentModifier ->
+                    key(channel.id) {
+                        FerventioModeratedChatScreen(
+                            channel = channel,
+                            moderatorChannelIds = workspace.moderatorChannelIds,
+                            filterQuery = filterQuery,
+                            modifier = contentModifier,
+                        )
+                    }
+                }
             }
         }
     }
