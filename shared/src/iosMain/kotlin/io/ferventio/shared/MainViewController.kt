@@ -13,6 +13,7 @@ import io.ferventio.shared.settings.IosLocalUiPreferencesStore
 import io.ferventio.shared.settings.SharedAppPreferences
 import io.ferventio.shared.settings.SharedLocalUiPreferencesStateHolder
 import io.ferventio.shared.ui.app.FerventioAuthenticationRoot
+import io.ferventio.shared.ui.locale.FerventioLocaleEnvironment
 import io.ferventio.shared.ui.theme.FerventioTheme
 import io.ferventio.shared.ui.theme.FerventioThemeMode
 import platform.UIKit.UIViewController
@@ -58,44 +59,46 @@ fun MainViewController(
         if (authenticationRequired) onAuthenticationRequired()
     }
     ProvideFerventioRuntimeState(iosRuntimeState) {
-        FerventioTheme(
-            themeMode = when (preferences.themeMode) {
-                AppThemeMode.LIGHT -> FerventioThemeMode.LIGHT
-                AppThemeMode.DARK -> FerventioThemeMode.DARK
-                AppThemeMode.AMOLED -> FerventioThemeMode.AMOLED
-            },
-            fontScalePercent = preferences.fontScalePercent,
-        ) {
-            FerventioAuthenticationRoot(
-                state = iosRuntimeState.authentication.state,
-                workspace = iosRuntimeState.workspace,
-                onAuthenticate = onAuthenticate,
-                onSignOut = onSignOut,
-                pushAuthorizationStatus = iosRuntimeState.pushRegistration.authorizationStatus,
-                onRequestNotificationPermission = onRequestNotificationPermission,
-                onOpenNotificationSettings = onOpenNotificationSettings,
-                onSaveSettings = onSaveSettings,
-                onUpsertHighlightRule = onUpsertHighlightRule,
-                onDeleteHighlightRule = onDeleteHighlightRule,
-                onUpsertIgnoreRule = onUpsertIgnoreRule,
-                onDeleteIgnoreRule = onDeleteIgnoreRule,
-                onUpsertSavedFilter = onUpsertSavedFilter,
-                onDeleteSavedFilter = onDeleteSavedFilter,
-                onImportSavedFilters = onImportSavedFilters,
-                onAddSavedFilterSplit = onAddSavedFilterSplit,
-                onSelectChannel = onSelectChannel,
-                onAddChannel = onAddChannel,
-                onSetChannelPinned = onSetChannelPinned,
-                onRenameChannel = onRenameChannel,
-                onRemoveChannel = onRemoveChannel,
-                onMoveChannel = onMoveChannel,
-                onSetSplitFilterQuery = onSetSplitFilterQuery,
-                onSetSplitChannel = onSetSplitChannel,
-                onFocusSplit = onFocusSplit,
-                onAddSplit = onAddSplit,
-                onRemoveSplit = onRemoveSplit,
-                onSetPrimaryFraction = onSetPrimaryFraction,
-            )
+        FerventioLocaleEnvironment(preferences.appLanguage) {
+            FerventioTheme(
+                themeMode = when (preferences.themeMode) {
+                    AppThemeMode.LIGHT -> FerventioThemeMode.LIGHT
+                    AppThemeMode.DARK -> FerventioThemeMode.DARK
+                    AppThemeMode.AMOLED -> FerventioThemeMode.AMOLED
+                },
+                fontScalePercent = preferences.fontScalePercent,
+            ) {
+                FerventioAuthenticationRoot(
+                    state = iosRuntimeState.authentication.state,
+                    workspace = iosRuntimeState.workspace,
+                    onAuthenticate = onAuthenticate,
+                    onSignOut = onSignOut,
+                    pushAuthorizationStatus = iosRuntimeState.pushRegistration.authorizationStatus,
+                    onRequestNotificationPermission = onRequestNotificationPermission,
+                    onOpenNotificationSettings = onOpenNotificationSettings,
+                    onSaveSettings = onSaveSettings,
+                    onUpsertHighlightRule = onUpsertHighlightRule,
+                    onDeleteHighlightRule = onDeleteHighlightRule,
+                    onUpsertIgnoreRule = onUpsertIgnoreRule,
+                    onDeleteIgnoreRule = onDeleteIgnoreRule,
+                    onUpsertSavedFilter = onUpsertSavedFilter,
+                    onDeleteSavedFilter = onDeleteSavedFilter,
+                    onImportSavedFilters = onImportSavedFilters,
+                    onAddSavedFilterSplit = onAddSavedFilterSplit,
+                    onSelectChannel = onSelectChannel,
+                    onAddChannel = onAddChannel,
+                    onSetChannelPinned = onSetChannelPinned,
+                    onRenameChannel = onRenameChannel,
+                    onRemoveChannel = onRemoveChannel,
+                    onMoveChannel = onMoveChannel,
+                    onSetSplitFilterQuery = onSetSplitFilterQuery,
+                    onSetSplitChannel = onSetSplitChannel,
+                    onFocusSplit = onFocusSplit,
+                    onAddSplit = onAddSplit,
+                    onRemoveSplit = onRemoveSplit,
+                    onSetPrimaryFraction = onSetPrimaryFraction,
+                )
+            }
         }
     }
 }
