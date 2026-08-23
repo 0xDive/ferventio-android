@@ -57,6 +57,7 @@ private enum class SharedSettingsPage {
     ACCOUNT,
     LANGUAGE,
     ABOUT,
+    PRIVACY,
     LICENSES,
 }
 
@@ -76,6 +77,7 @@ internal fun FerventioSettingsSheet(
     val notificationAction = notificationPermissionAction(notificationAuthorizationStatus)
     val aboutInfo = LocalFerventioAboutInfo.current
     val accountActions = LocalFerventioAccountActions.current
+    val privacyPlatformInfo = LocalFerventioPrivacyPlatformInfo.current
     var page by remember { mutableStateOf(SharedSettingsPage.ROOT) }
 
     fun update(transform: (SharedAppPreferences) -> SharedAppPreferences) {
@@ -117,7 +119,9 @@ internal fun FerventioSettingsSheet(
                 page = page,
                 onBack = {
                     page = when (page) {
-                        SharedSettingsPage.LICENSES -> SharedSettingsPage.ABOUT
+                        SharedSettingsPage.PRIVACY,
+                        SharedSettingsPage.LICENSES,
+                        -> SharedSettingsPage.ABOUT
                         else -> SharedSettingsPage.ROOT
                     }
                 },
@@ -171,8 +175,19 @@ internal fun FerventioSettingsSheet(
                 )
                 SharedSettingsPage.ABOUT -> FerventioAboutSettingsPage(
                     info = aboutInfo,
+                    onOpenPrivacyPolicy = if (privacyPlatformInfo != null) {
+                        { page = SharedSettingsPage.PRIVACY }
+                    } else {
+                        null
+                    },
                     onOpenLicenses = { page = SharedSettingsPage.LICENSES },
                 )
+                SharedSettingsPage.PRIVACY -> privacyPlatformInfo?.let { platformInfo ->
+                    FerventioPrivacySettingsPage(
+                        info = aboutInfo,
+                        platformInfo = platformInfo,
+                    )
+                }
                 SharedSettingsPage.LICENSES -> FerventioLicensesSettingsPage()
             }
 
@@ -210,6 +225,7 @@ private fun SettingsPageHeader(page: SharedSettingsPage, onBack: () -> Unit) {
                 SharedSettingsPage.ACCOUNT -> stringResource(Res.string.settings_account)
                 SharedSettingsPage.LANGUAGE -> stringResource(Res.string.settings_language)
                 SharedSettingsPage.ABOUT -> stringResource(Res.string.settings_about)
+                SharedSettingsPage.PRIVACY -> stringResource(Res.string.about_privacy_policy)
                 SharedSettingsPage.LICENSES -> stringResource(Res.string.about_open_source_licenses)
             },
             style = MaterialTheme.typography.headlineSmall,
