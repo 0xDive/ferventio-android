@@ -447,7 +447,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
             runtimeState.account.finishMutation()
             return
         }
-        let previousUserId = runtimeState.authentication.state.authentication?.accessLease?.session?.userId
+        let previousUserId = runtimeState.authentication.state.authentication?.accessLease?.session.userId
         cancelAuthenticationLeaseRefresh()
         do {
             guard try await authenticationRuntimeBridge.reauthorize() else {
@@ -456,7 +456,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
                 return
             }
             runtimeState.account.finishMutation()
-            let currentUserId = runtimeState.authentication.state.authentication?.accessLease?.session?.userId
+            let currentUserId = runtimeState.authentication.state.authentication?.accessLease?.session.userId
             if previousUserId != currentUserId {
                 authenticatedChatRuntimeBridge?.stop(clearState: true)
                 await pushBackendRegistrationRuntimeBridge?.unregister()
