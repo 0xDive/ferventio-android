@@ -17,6 +17,8 @@ import io.ferventio.shared.ui.app.FerventioAccountActions
 import io.ferventio.shared.ui.app.FerventioAuthenticationRoot
 import io.ferventio.shared.ui.app.ProvideFerventioAboutInfo
 import io.ferventio.shared.ui.app.ProvideFerventioAccountActions
+import io.ferventio.shared.ui.app.ProvideFerventioPrivacyPlatformInfo
+import io.ferventio.shared.ui.app.currentIosPrivacyPlatformInfo
 import io.ferventio.shared.ui.locale.FerventioLocaleEnvironment
 import io.ferventio.shared.ui.theme.FerventioTheme
 import io.ferventio.shared.ui.theme.FerventioThemeMode
@@ -63,6 +65,7 @@ fun MainViewController(
     val preferences = iosRuntimeState.settings.preferences
     val authenticationRequired = iosRuntimeState.chat.authenticationRequired
     val aboutInfo = remember { currentIosAboutInfo() }
+    val privacyPlatformInfo = remember { currentIosPrivacyPlatformInfo() }
     val accountActions = remember(onReauthorize, onSignOut, onRevokeDevice, onRevokeAllSessions) {
         FerventioAccountActions(
             onReauthorize = onReauthorize,
@@ -77,45 +80,47 @@ fun MainViewController(
     ProvideFerventioRuntimeState(iosRuntimeState) {
         ProvideFerventioAboutInfo(aboutInfo) {
             ProvideFerventioAccountActions(accountActions) {
-                FerventioLocaleEnvironment(preferences.appLanguage) {
-                    FerventioTheme(
-                        themeMode = when (preferences.themeMode) {
-                            AppThemeMode.LIGHT -> FerventioThemeMode.LIGHT
-                            AppThemeMode.DARK -> FerventioThemeMode.DARK
-                            AppThemeMode.AMOLED -> FerventioThemeMode.AMOLED
-                        },
-                        fontScalePercent = preferences.fontScalePercent,
-                    ) {
-                        FerventioAuthenticationRoot(
-                            state = iosRuntimeState.authentication.state,
-                            workspace = iosRuntimeState.workspace,
-                            onAuthenticate = onAuthenticate,
-                            onSignOut = onSignOut,
-                            pushAuthorizationStatus = iosRuntimeState.pushRegistration.authorizationStatus,
-                            onRequestNotificationPermission = onRequestNotificationPermission,
-                            onOpenNotificationSettings = onOpenNotificationSettings,
-                            onSaveSettings = onSaveSettings,
-                            onUpsertHighlightRule = onUpsertHighlightRule,
-                            onDeleteHighlightRule = onDeleteHighlightRule,
-                            onUpsertIgnoreRule = onUpsertIgnoreRule,
-                            onDeleteIgnoreRule = onDeleteIgnoreRule,
-                            onUpsertSavedFilter = onUpsertSavedFilter,
-                            onDeleteSavedFilter = onDeleteSavedFilter,
-                            onImportSavedFilters = onImportSavedFilters,
-                            onAddSavedFilterSplit = onAddSavedFilterSplit,
-                            onSelectChannel = onSelectChannel,
-                            onAddChannel = onAddChannel,
-                            onSetChannelPinned = onSetChannelPinned,
-                            onRenameChannel = onRenameChannel,
-                            onRemoveChannel = onRemoveChannel,
-                            onMoveChannel = onMoveChannel,
-                            onSetSplitFilterQuery = onSetSplitFilterQuery,
-                            onSetSplitChannel = onSetSplitChannel,
-                            onFocusSplit = onFocusSplit,
-                            onAddSplit = onAddSplit,
-                            onRemoveSplit = onRemoveSplit,
-                            onSetPrimaryFraction = onSetPrimaryFraction,
-                        )
+                ProvideFerventioPrivacyPlatformInfo(privacyPlatformInfo) {
+                    FerventioLocaleEnvironment(preferences.appLanguage) {
+                        FerventioTheme(
+                            themeMode = when (preferences.themeMode) {
+                                AppThemeMode.LIGHT -> FerventioThemeMode.LIGHT
+                                AppThemeMode.DARK -> FerventioThemeMode.DARK
+                                AppThemeMode.AMOLED -> FerventioThemeMode.AMOLED
+                            },
+                            fontScalePercent = preferences.fontScalePercent,
+                        ) {
+                            FerventioAuthenticationRoot(
+                                state = iosRuntimeState.authentication.state,
+                                workspace = iosRuntimeState.workspace,
+                                onAuthenticate = onAuthenticate,
+                                onSignOut = onSignOut,
+                                pushAuthorizationStatus = iosRuntimeState.pushRegistration.authorizationStatus,
+                                onRequestNotificationPermission = onRequestNotificationPermission,
+                                onOpenNotificationSettings = onOpenNotificationSettings,
+                                onSaveSettings = onSaveSettings,
+                                onUpsertHighlightRule = onUpsertHighlightRule,
+                                onDeleteHighlightRule = onDeleteHighlightRule,
+                                onUpsertIgnoreRule = onUpsertIgnoreRule,
+                                onDeleteIgnoreRule = onDeleteIgnoreRule,
+                                onUpsertSavedFilter = onUpsertSavedFilter,
+                                onDeleteSavedFilter = onDeleteSavedFilter,
+                                onImportSavedFilters = onImportSavedFilters,
+                                onAddSavedFilterSplit = onAddSavedFilterSplit,
+                                onSelectChannel = onSelectChannel,
+                                onAddChannel = onAddChannel,
+                                onSetChannelPinned = onSetChannelPinned,
+                                onRenameChannel = onRenameChannel,
+                                onRemoveChannel = onRemoveChannel,
+                                onMoveChannel = onMoveChannel,
+                                onSetSplitFilterQuery = onSetSplitFilterQuery,
+                                onSetSplitChannel = onSetSplitChannel,
+                                onFocusSplit = onFocusSplit,
+                                onAddSplit = onAddSplit,
+                                onRemoveSplit = onRemoveSplit,
+                                onSetPrimaryFraction = onSetPrimaryFraction,
+                            )
+                        }
                     }
                 }
             }
