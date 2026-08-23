@@ -12,6 +12,11 @@ targets:
     sources:
       - path: Sources
     preBuildScripts:
+      - name: Verify release privacy metadata
+        script: |
+          cd "$SRCROOT/.."
+          sh ./iosApp/Scripts/verify-privacy-configuration.sh
+        basedOnDependencyAnalysis: false
       - name: Sync Compose resources
         script: |
           cd "$SRCROOT/.."
