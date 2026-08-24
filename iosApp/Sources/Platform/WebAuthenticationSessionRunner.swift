@@ -5,6 +5,7 @@ import UIKit
 final class WebAuthenticationSessionRunner: NSObject, ASWebAuthenticationPresentationContextProviding {
     enum Error: Swift.Error {
         case alreadyRunning
+        case canceled
         case failedToStart
         case missingCallbackURL
     }
@@ -25,7 +26,13 @@ final class WebAuthenticationSessionRunner: NSObject, ASWebAuthenticationPresent
                 Task { @MainActor in
                     self?.activeSession = nil
                     if let error {
-                        continuation.resume(throwing: error)
+                        let nsError = error as NSError
+                        if nsError.domain == ASWebAuthenticationSessionErrorDomain,
+                           nsError.code == ASWebAuthenticationSessionError.Code.canceledLogin.rawValue {
+                            continuation.resume(throwing: Error.canceled)
+                        } else {
+                            continuation.resume(throwing: error)
+                        }
                     } else if let callbackURL {
                         continuation.resume(returning: callbackURL)
                     } else {

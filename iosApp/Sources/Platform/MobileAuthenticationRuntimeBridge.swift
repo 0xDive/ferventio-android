@@ -118,6 +118,8 @@ final class MobileAuthenticationRuntimeBridge {
             )
             try sessionStore.save(authentication)
             stateHolder.markSignedIn(authentication: authentication)
+        } catch WebAuthenticationSessionRunner.Error.canceled {
+            stateHolder.signOut()
         } catch {
             stateHolder.markFailed(errorMessage: String(describing: error))
         }
@@ -145,7 +147,12 @@ final class MobileAuthenticationRuntimeBridge {
             identity: identity,
             callbackScheme: configuration.callbackScheme
         )
-        let callback = try await browser.authenticate(request: request)
+        let callback: BackendAuthorizationCallbackResult
+        do {
+            callback = try await browser.authenticate(request: request)
+        } catch WebAuthenticationSessionRunner.Error.canceled {
+            return false
+        }
         let authentication = try await coordinator.completeAuthorization(
             identity: identity,
             callback: callback
