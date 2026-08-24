@@ -37,6 +37,32 @@ jobs:
           xcodebuild -version
           xcrun --sdk iphonesimulator --show-sdk-version
 
+      - name: Verify iOS privacy configuration guard
+        run: |
+          CONFIGURATION=Debug \
+            sh ./iosApp/Scripts/verify-privacy-configuration.sh
+
+          if CONFIGURATION=Release \
+            sh ./iosApp/Scripts/verify-privacy-configuration.sh; then
+            echo "Release privacy validation unexpectedly accepted missing metadata." >&2
+            exit 1
+          fi
+
+          CONFIGURATION=Release \
+            FERVENTIO_PRIVACY_OPERATOR_NAME="Ferventio CI" \
+            FERVENTIO_PRIVACY_CONTACT="privacy@example.com" \
+            FERVENTIO_PRIVACY_POLICY_URL="https://example.com/privacy" \
+            sh ./iosApp/Scripts/verify-privacy-configuration.sh
+
+          if CONFIGURATION=Release \
+            FERVENTIO_PRIVACY_OPERATOR_NAME="Ferventio CI" \
+            FERVENTIO_PRIVACY_CONTACT="privacy@example.com" \
+            FERVENTIO_PRIVACY_POLICY_URL="http://example.com/privacy" \
+            sh ./iosApp/Scripts/verify-privacy-configuration.sh; then
+            echo "Release privacy validation unexpectedly accepted a non-HTTPS policy URL." >&2
+            exit 1
+          fi
+
       - name: Compile common domain for iOS simulator
         run: |
           ./gradlew \
