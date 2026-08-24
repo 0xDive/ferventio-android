@@ -1,0 +1,9 @@
+<resources>
+    <string name="image_cache_title">Кэш изображений</string>
+    <string name="image_cache_section_title">Кэш изображений Coil</string>
+    <string name="image_cache_summary">Очищает кэш изображений в памяти и на диске для эмоутов, значков, аватаров и других загружаемых изображений. При необходимости изображения будут загружены снова.</string>
+    <string name="image_cache_clear">Очистить кэш изображений</string>
+    <string name="image_cache_clearing">Очистка кэша изображений…</string>
+    <string name="image_cache_cleared_amount">Очищено: %1$s.</string>
+    <string name="image_cache_clear_failed">Не удалось очистить кэш изображений.</string>
+</resources>
