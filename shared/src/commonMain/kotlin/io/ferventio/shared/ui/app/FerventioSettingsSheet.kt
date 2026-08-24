@@ -129,14 +129,25 @@ internal fun FerventioSettingsSheet(
             Spacer(Modifier.height(16.dp))
 
             when (page) {
-                SharedSettingsPage.ROOT -> SettingsHome(
-                    preferences = state.preferences,
-                    aboutInfo = aboutInfo,
-                    accountManagementAvailable = accountActions.accountManagementAvailable,
-                    onOpen = { page = it },
-                    onOpenMessageRules = ::openMessageRules,
-                    onOpenSavedFilters = ::openSavedFilters,
-                )
+                SharedSettingsPage.ROOT -> {
+                    if (accountActions.accountManagementAvailable) {
+                        FerventioSettingsAccountProfileCard(
+                            onOpenAccount = { page = SharedSettingsPage.ACCOUNT },
+                            onSignOut = {
+                                saveAndDismiss()
+                                accountActions.onSignOut()
+                            },
+                        )
+                        Spacer(Modifier.height(12.dp))
+                    }
+                    SettingsHome(
+                        preferences = state.preferences,
+                        aboutInfo = aboutInfo,
+                        onOpen = { page = it },
+                        onOpenMessageRules = ::openMessageRules,
+                        onOpenSavedFilters = ::openSavedFilters,
+                    )
+                }
                 SharedSettingsPage.APPEARANCE -> AppearanceSettingsPage(
                     preferences = state.preferences,
                     update = ::update,
@@ -238,7 +249,6 @@ private fun SettingsPageHeader(page: SharedSettingsPage, onBack: () -> Unit) {
 private fun SettingsHome(
     preferences: SharedAppPreferences,
     aboutInfo: FerventioAboutInfo,
-    accountManagementAvailable: Boolean,
     onOpen: (SharedSettingsPage) -> Unit,
     onOpenMessageRules: () -> Unit,
     onOpenSavedFilters: () -> Unit,
@@ -293,14 +303,6 @@ private fun SettingsHome(
         }
 
         SettingsHomeGroup(stringResource(Res.string.settings_home_app_group)) {
-            if (accountManagementAvailable) {
-                SettingsMenuRow(
-                    title = stringResource(Res.string.settings_account),
-                    summary = stringResource(Res.string.settings_account_summary),
-                    onClick = { onOpen(SharedSettingsPage.ACCOUNT) },
-                )
-                HorizontalDivider()
-            }
             SettingsMenuRow(
                 title = stringResource(Res.string.settings_language),
                 summary = sharedLanguageLabel(preferences.appLanguage),
