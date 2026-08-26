@@ -171,7 +171,34 @@ internal fun FerventioSettingsSheet(
                     preferences = state.preferences,
                     update = ::update,
                 )
-                SharedSettingsPage.ACCOUNT -> FerventioAccountSettingsPage()
+                SharedSettingsPage.ACCOUNT -> ProvideFerventioAccountActions(
+                    actions = FerventioAccountActions(
+                        onReauthorize = accountActions.onReauthorize?.let { action ->
+                            {
+                                persistIfChanged()
+                                action()
+                            }
+                        },
+                        onSignOut = {
+                            saveAndDismiss()
+                            accountActions.onSignOut()
+                        },
+                        onRevokeDevice = accountActions.onRevokeDevice?.let { action ->
+                            {
+                                persistIfChanged()
+                                action()
+                            }
+                        },
+                        onRevokeAllSessions = accountActions.onRevokeAllSessions?.let { action ->
+                            {
+                                persistIfChanged()
+                                action()
+                            }
+                        },
+                    ),
+                ) {
+                    FerventioAccountSettingsPage()
+                }
                 SharedSettingsPage.LANGUAGE -> FerventioLanguageSettingsPage(
                     preferences = state.preferences,
                     onLanguageSelected = { language ->

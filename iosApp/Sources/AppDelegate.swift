@@ -11,6 +11,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     private var pushBackendRegistrationRuntimeBridge: PushBackendRegistrationRuntimeBridge?
     private var authenticatedChatRuntimeBridge: AuthenticatedChatRuntimeBridge?
     private var authenticationLeaseRefreshTask: Task<Void, Never>?
+    private var settingsSaveTask: Task<Void, Never>?
     private var isPrimarySceneActive = false
     private lazy var workspaceLayoutRuntimeBridge = try? WorkspaceLayoutRuntimeBridge.live(
         stateHolder: runtimeState.workspace
@@ -172,13 +173,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
                 }
             },
             onSaveSettings: { [weak self] preferences in
-                Task { @MainActor [weak self] in
-                    guard let self else { return }
-                    await workspaceRuntimeBridge?.savePreferences(
-                        authentication: runtimeState.authentication.state.authentication,
-                        preferences: preferences
-                    )
-                }
+                self?.enqueueSettingsSave(preferences)
             },
             onUpsertHighlightRule: { [weak self] rule in
                 Task { @MainActor [weak self] in
@@ -436,13 +431,32 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         UIApplication.shared.open(url)
     }
 
+    private func enqueueSettingsSave(_ preferences: SharedAppPreferences) {
+        let previousTask = settingsSaveTask
+        let authentication = runtimeState.authentication.state.authentication
+        settingsSaveTask = Task { @MainActor [weak self] in
+            await previousTask?.value
+            guard let self else { return }
+            await workspaceRuntimeBridge?.savePreferences(
+                authentication: authentication,
+                preferences: preferences
+            )
+        }
+    }
+
+    private func awaitPendingSettingsSave() async {
+        await settingsSaveTask?.value
+    }
+
     private func signOutAndCleanup() async {
+        await awaitPendingSettingsSave()
         guard let authenticationRuntimeBridge else { return }
         guard await authenticationRuntimeBridge.signOut() else { return }
         await cleanupAfterAuthenticatedSessionEnded()
     }
 
     private func reauthorizeAndSynchronize() async {
+        await awaitPendingSettingsSave()
         guard let authenticationRuntimeBridge else {
             runtimeState.account.finishMutation()
             return
@@ -473,6 +487,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     }
 
     private func revokeCurrentDeviceAndCleanup() async {
+        await awaitPendingSettingsSave()
         guard let authenticationRuntimeBridge else {
             runtimeState.account.finishMutation()
             return
@@ -490,6 +505,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     }
 
     private func revokeAllSessionsAndCleanup() async {
+        await awaitPendingSettingsSave()
         guard let authenticationRuntimeBridge else {
             runtimeState.account.finishMutation()
             return
