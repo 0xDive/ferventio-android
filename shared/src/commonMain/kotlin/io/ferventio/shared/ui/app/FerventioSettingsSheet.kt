@@ -54,6 +54,7 @@ private enum class SharedSettingsPage {
     USER_CARD,
     NOTIFICATIONS,
     HISTORY,
+    IMAGE_CACHE,
     ACCOUNT,
     LANGUAGE,
     ABOUT,
@@ -171,6 +172,7 @@ internal fun FerventioSettingsSheet(
                     preferences = state.preferences,
                     update = ::update,
                 )
+                SharedSettingsPage.IMAGE_CACHE -> FerventioImageCacheSettingsPage()
                 SharedSettingsPage.ACCOUNT -> ProvideFerventioAccountActions(
                     actions = FerventioAccountActions(
                         onReauthorize = accountActions.onReauthorize?.let { action ->
@@ -260,6 +262,7 @@ private fun SettingsPageHeader(page: SharedSettingsPage, onBack: () -> Unit) {
                 SharedSettingsPage.USER_CARD -> stringResource(Res.string.settings_user_card)
                 SharedSettingsPage.NOTIFICATIONS -> stringResource(Res.string.notifications_title)
                 SharedSettingsPage.HISTORY -> stringResource(Res.string.settings_history)
+                SharedSettingsPage.IMAGE_CACHE -> stringResource(Res.string.image_cache_title)
                 SharedSettingsPage.ACCOUNT -> stringResource(Res.string.settings_account)
                 SharedSettingsPage.LANGUAGE -> stringResource(Res.string.settings_language)
                 SharedSettingsPage.ABOUT -> stringResource(Res.string.settings_about)
@@ -326,6 +329,12 @@ private fun SettingsHome(
                 title = stringResource(Res.string.settings_history),
                 summary = stringResource(Res.string.settings_history_summary),
                 onClick = { onOpen(SharedSettingsPage.HISTORY) },
+            )
+            HorizontalDivider()
+            SettingsMenuRow(
+                title = stringResource(Res.string.image_cache_title),
+                summary = stringResource(Res.string.image_cache_summary),
+                onClick = { onOpen(SharedSettingsPage.IMAGE_CACHE) },
             )
         }
 
