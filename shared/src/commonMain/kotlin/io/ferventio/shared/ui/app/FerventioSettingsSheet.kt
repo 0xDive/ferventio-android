@@ -86,7 +86,13 @@ internal fun FerventioSettingsSheet(
     }
 
     fun persistIfChanged() {
-        if (state.preferences != persistedPreferences) {
+        if (
+            shouldPersistSettings(
+                current = state.preferences,
+                lastRequested = persistedPreferences,
+                saveStatus = state.saveStatus,
+            )
+        ) {
             persistedPreferences = state.preferences
             onSave(state.preferences)
         }
