@@ -135,6 +135,29 @@ internal object SharedSettingsBackupCodec {
         return SharedSettingsBackupDecodeResult(document = document, summary = summary)
     }
 
+    /** Re-captures validated imported content using the current Android-compatible sync envelope. */
+    internal fun promoteForSync(
+        raw: String,
+        currentAppVersion: String,
+        createdAt: Instant,
+    ): String {
+        val decoded = decode(raw)
+        val appVersion = currentAppVersion.trim()
+        require(appVersion.isNotEmpty() && appVersion.length <= 40) {
+            "Current app version is invalid for settings sync"
+        }
+        val content = decoded.document.content
+        return compactJson.encodeToString(
+            SharedSettingsBackupDocument(
+                formatVersion = BACKUP_FORMAT_VERSION,
+                createdAt = createdAt.toString(),
+                appVersion = appVersion,
+                contentHash = contentHashForVersion(content, BACKUP_FORMAT_VERSION),
+                content = content,
+            ),
+        )
+    }
+
     internal fun encodeForTesting(document: SharedSettingsBackupDocument): String =
         compactJson.encodeToString(document)
 
