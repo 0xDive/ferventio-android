@@ -131,6 +131,54 @@ class WorkspaceSettingsBackupUploadClientTest {
         )
     }
 
+    @Test
+    fun explicitOverwriteUsesForceAgainstFreshServerRevision() = runTest {
+        var putCount = 0
+        val localPayload = workspaceSettingsBackupTestPayload(themeMode = "LIGHT")
+        val serverPayload = workspaceSettingsBackupTestPayload(themeMode = "DARK")
+        val engine = MockEngine { request ->
+            when (request.method) {
+                HttpMethod.Get -> respond(
+                    ByteReadChannel("""{"revision":8,"payload":$serverPayload}"""),
+                    HttpStatusCode.OK,
+                )
+                HttpMethod.Put -> {
+                    putCount += 1
+                    val body = json.parseToJsonElement(
+                        request.body.toByteArray().decodeToString(),
+                    ).jsonObject
+                    assertEquals(8L, body.getValue("baseRevision").jsonPrimitive.long)
+                    assertTrue(body.getValue("force").jsonPrimitive.boolean)
+                    val uploaded = body.getValue("payload")
+                    assertEquals(
+                        "LIGHT",
+                        WorkspaceSettingsBackupImportPreparation.prepare(uploaded.toString())
+                            .preferences.themeMode.name,
+                    )
+                    respond(
+                        ByteReadChannel("""{"revision":9,"payload":$uploaded}"""),
+                        HttpStatusCode.OK,
+                    )
+                }
+                else -> error("Unexpected request ${request.method}")
+            }
+        }
+        val client = WorkspaceSettingsBackupUploadClient(
+            HttpClient(engine) { expectSuccess = false },
+        )
+
+        val result = client.overwrite(
+            identity = identity(),
+            authentication = authentication(),
+            importedPayload = localPayload,
+            currentAppVersion = "0.0.6",
+            createdAt = uploadTime,
+        )
+
+        assertEquals(1, putCount)
+        assertEquals(9L, result.revision)
+    }
+
     private fun identity() = MobileDeviceIdentity(
         installationId = "installation-id",
         deviceSecret = "s".repeat(32),

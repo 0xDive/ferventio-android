@@ -40,7 +40,8 @@ internal sealed interface WorkspaceSettingsBackupUploadResult {
  * Android re-captures imported settings with the current app/version envelope before ordinary sync,
  * then surfaces a local/server choice on conflict. Shared clients mirror that: imported content is
  * promoted to the current backup format, uploaded once with force=false, and HTTP 409 is returned
- * as data rather than retried or forced.
+ * as data rather than retried or forced. A forced overwrite is exposed separately for an explicit
+ * user choice to keep the imported local version.
  */
 internal class WorkspaceSettingsBackupUploadClient(
     private val client: HttpClient = createPlatformMobileAuthenticationHttpClient(),
@@ -54,6 +55,44 @@ internal class WorkspaceSettingsBackupUploadClient(
         importedPayload: String,
         currentAppVersion: String,
         createdAt: Instant,
+    ): WorkspaceSettingsBackupUploadResult = write(
+        identity = identity,
+        authentication = authentication,
+        importedPayload = importedPayload,
+        currentAppVersion = currentAppVersion,
+        createdAt = createdAt,
+        force = false,
+    )
+
+    suspend fun overwrite(
+        identity: MobileDeviceIdentity,
+        authentication: StoredAuthentication,
+        importedPayload: String,
+        currentAppVersion: String,
+        createdAt: Instant,
+    ): WorkspaceSettingsBackupUploadResult.Success = when (
+        val result = write(
+            identity = identity,
+            authentication = authentication,
+            importedPayload = importedPayload,
+            currentAppVersion = currentAppVersion,
+            createdAt = createdAt,
+            force = true,
+        )
+    ) {
+        is WorkspaceSettingsBackupUploadResult.Success -> result
+        is WorkspaceSettingsBackupUploadResult.Conflict -> error(
+            "Backend returned a settings conflict for a forced upload",
+        )
+    }
+
+    private suspend fun write(
+        identity: MobileDeviceIdentity,
+        authentication: StoredAuthentication,
+        importedPayload: String,
+        currentAppVersion: String,
+        createdAt: Instant,
+        force: Boolean,
     ): WorkspaceSettingsBackupUploadResult {
         val syncPayload = SharedSettingsBackupCodec.promoteForSync(
             raw = importedPayload,
@@ -73,7 +112,7 @@ internal class WorkspaceSettingsBackupUploadClient(
             setBody(
                 buildJsonObject {
                     put("baseRevision", JsonPrimitive(baseRevision))
-                    put("force", JsonPrimitive(false))
+                    put("force", JsonPrimitive(force))
                     put("payload", json.parseToJsonElement(syncPayload))
                 }.toString(),
             )
