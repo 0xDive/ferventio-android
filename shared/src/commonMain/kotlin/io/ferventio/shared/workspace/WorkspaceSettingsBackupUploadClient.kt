@@ -81,7 +81,7 @@ internal class WorkspaceSettingsBackupUploadClient(
         val body = response.bodyAsText()
         if (response.status.value == 409) {
             val snapshot = parseObject(body, "Backend returned malformed settings conflict JSON")
-                ["snapshot"]
+                .get("snapshot")
                 ?.runCatching { jsonObject }
                 ?.getOrNull()
                 ?: error("Backend settings conflict does not contain snapshot")
