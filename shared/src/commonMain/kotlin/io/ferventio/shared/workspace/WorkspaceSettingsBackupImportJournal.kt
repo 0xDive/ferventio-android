@@ -13,16 +13,23 @@ internal interface WorkspaceSettingsBackupImportJournalStorage {
     fun clear()
 }
 
+internal data class WorkspaceSettingsBackupImportConflict(
+    val serverRevision: Long,
+    val serverImport: WorkspaceSettingsPreparedImport,
+)
+
 internal data class WorkspaceSettingsBackupImportJournalSnapshot(
     val preImportPayload: String?,
     val pendingImport: WorkspaceSettingsPreparedImport?,
+    val conflict: WorkspaceSettingsBackupImportConflict? = null,
 )
 
 /**
  * Durable transaction metadata for settings import.
  *
- * The storage contract intentionally writes one record containing both the rollback source and the
- * pending local import. Platform implementations can therefore replace the journal atomically.
+ * The storage contract intentionally writes one record containing the rollback source, pending
+ * local import, and any unresolved server conflict. Platform implementations can therefore replace
+ * the complete import transaction atomically and recover it after process restart.
  */
 internal class WorkspaceSettingsBackupImportJournal(
     private val storage: WorkspaceSettingsBackupImportJournalStorage,
@@ -71,9 +78,53 @@ internal class WorkspaceSettingsBackupImportJournal(
         val pending = record.pendingImportPayload
             ?.takeIf { it.isNotBlank() }
             ?.let(WorkspaceSettingsBackupImportPreparation::prepare)
+        val conflictPayload = record.conflictServerPayload?.takeIf { it.isNotBlank() }
+        val conflictRevision = record.conflictServerRevision
+        require((conflictPayload == null) == (conflictRevision == null)) {
+            "Settings import journal contains an incomplete conflict"
+        }
+        val conflict = conflictPayload?.let { payload ->
+            requireNotNull(conflictRevision)
+            require(conflictRevision > 0L) { "Settings conflict revision must be positive" }
+            WorkspaceSettingsBackupImportConflict(
+                serverRevision = conflictRevision,
+                serverImport = WorkspaceSettingsBackupImportPreparation.prepare(payload),
+            )
+        }
+        require(conflict == null || pending != null) {
+            "Settings import journal conflict requires a pending import"
+        }
         return WorkspaceSettingsBackupImportJournalSnapshot(
             preImportPayload = preImport,
             pendingImport = pending,
+            conflict = conflict,
+        )
+    }
+
+    fun markConflict(
+        serverRevision: Long,
+        serverPayload: String,
+    ): WorkspaceSettingsBackupImportJournalSnapshot {
+        require(serverRevision > 0L) { "Settings conflict revision must be positive" }
+        val serverImport = WorkspaceSettingsBackupImportPreparation.prepare(serverPayload)
+        val current = load()
+        val pending = current.pendingImport
+            ?: error("Cannot persist a settings conflict without a pending import")
+        writeRecord(
+            JournalRecord(
+                preImportPayload = current.preImportPayload,
+                pendingImportPayload = pending.sourcePayload,
+                conflictServerRevision = serverRevision,
+                conflictServerPayload = serverPayload,
+            ),
+        )
+        return WorkspaceSettingsBackupImportJournalSnapshot(
+            preImportPayload = current.preImportPayload,
+            pendingImport = pending,
+            conflict = WorkspaceSettingsBackupImportConflict(
+                serverRevision = serverRevision,
+                serverImport = serverImport,
+            ),
         )
     }
 
@@ -89,6 +140,7 @@ internal class WorkspaceSettingsBackupImportJournal(
         return WorkspaceSettingsBackupImportJournalSnapshot(
             preImportPayload = preImport,
             pendingImport = null,
+            conflict = null,
         )
     }
 
@@ -109,6 +161,8 @@ internal class WorkspaceSettingsBackupImportJournal(
         val schemaVersion: Int = JOURNAL_SCHEMA_VERSION,
         val preImportPayload: String? = null,
         val pendingImportPayload: String? = null,
+        val conflictServerRevision: Long? = null,
+        val conflictServerPayload: String? = null,
     )
 
     private companion object {

@@ -24,8 +24,10 @@ class WorkspaceSettingsBackupImportJournalTest {
 
         assertEquals(preImport, started.preImportPayload)
         assertEquals(AppThemeMode.LIGHT, started.pendingImport?.preferences?.themeMode)
+        assertNull(started.conflict)
         assertEquals(preImport, loaded.preImportPayload)
         assertEquals(AppThemeMode.LIGHT, loaded.pendingImport?.preferences?.themeMode)
+        assertNull(loaded.conflict)
         assertEquals(1, storage.writeCount)
         assertEquals(persistedRecord, storage.value)
     }
@@ -53,7 +55,42 @@ class WorkspaceSettingsBackupImportJournalTest {
     }
 
     @Test
-    fun settledImportDropsPendingPayloadButKeepsRollbackSource() {
+    fun conflictRoundTripsServerChoiceWhileKeepingPendingImport() {
+        val storage = MemoryStorage()
+        val journal = WorkspaceSettingsBackupImportJournal(storage)
+        val preImport = workspaceSettingsBackupTestPayload(themeMode = "DARK")
+        val imported = workspaceSettingsBackupTestPayload(themeMode = "LIGHT")
+        val server = workspaceSettingsBackupTestPayload(themeMode = "DARK")
+        journal.begin(preImportPayload = preImport, importedPayload = imported)
+
+        val conflicted = journal.markConflict(serverRevision = 8L, serverPayload = server)
+        val loaded = journal.load()
+
+        assertEquals(AppThemeMode.LIGHT, conflicted.pendingImport?.preferences?.themeMode)
+        assertEquals(8L, conflicted.conflict?.serverRevision)
+        assertEquals(AppThemeMode.DARK, conflicted.conflict?.serverImport?.preferences?.themeMode)
+        assertEquals(AppThemeMode.LIGHT, loaded.pendingImport?.preferences?.themeMode)
+        assertEquals(8L, loaded.conflict?.serverRevision)
+        assertEquals(AppThemeMode.DARK, loaded.conflict?.serverImport?.preferences?.themeMode)
+    }
+
+    @Test
+    fun conflictRequiresPendingImport() {
+        val storage = MemoryStorage()
+        val journal = WorkspaceSettingsBackupImportJournal(storage)
+
+        assertFailsWith<IllegalStateException> {
+            journal.markConflict(
+                serverRevision = 3L,
+                serverPayload = workspaceSettingsBackupTestPayload(),
+            )
+        }
+
+        assertNull(storage.value)
+    }
+
+    @Test
+    fun settledImportDropsPendingAndConflictButKeepsRollbackSource() {
         val storage = MemoryStorage()
         val journal = WorkspaceSettingsBackupImportJournal(storage)
         val preImport = workspaceSettingsBackupTestPayload(themeMode = "DARK")
@@ -61,14 +98,20 @@ class WorkspaceSettingsBackupImportJournalTest {
             preImportPayload = preImport,
             importedPayload = workspaceSettingsBackupTestPayload(themeMode = "LIGHT"),
         )
+        journal.markConflict(
+            serverRevision = 8L,
+            serverPayload = workspaceSettingsBackupTestPayload(themeMode = "DARK"),
+        )
 
         val settled = journal.markSettled()
         val reloaded = journal.load()
 
         assertEquals(preImport, settled.preImportPayload)
         assertNull(settled.pendingImport)
+        assertNull(settled.conflict)
         assertEquals(preImport, reloaded.preImportPayload)
         assertNull(reloaded.pendingImport)
+        assertNull(reloaded.conflict)
     }
 
     @Test
