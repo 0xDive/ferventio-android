@@ -7,6 +7,7 @@ import io.ferventio.app.domain.CustomCommandCodec
 import io.ferventio.app.domain.MessageDensity
 import io.ferventio.app.domain.MessageFilterCodec
 import io.ferventio.app.domain.MessageRuleCodec
+import io.ferventio.app.domain.WorkspaceLayout
 import io.ferventio.app.domain.WorkspaceLayoutCodec
 import kotlin.time.Instant
 import kotlinx.serialization.ExperimentalSerializationApi
@@ -142,19 +143,103 @@ internal object SharedSettingsBackupCodec {
         createdAt: Instant,
     ): String {
         val decoded = decode(raw)
-        val appVersion = currentAppVersion.trim()
-        require(appVersion.isNotEmpty() && appVersion.length <= 40) {
-            "Current app version is invalid for settings sync"
-        }
+        val appVersion = requireCurrentAppVersion(currentAppVersion)
         val content = decoded.document.content
-        return compactJson.encodeToString(
-            SharedSettingsBackupDocument(
-                formatVersion = BACKUP_FORMAT_VERSION,
-                createdAt = createdAt.toString(),
-                appVersion = appVersion,
-                contentHash = contentHashForVersion(content, BACKUP_FORMAT_VERSION),
-                content = content,
+        return encodeCurrentDocument(content, appVersion, createdAt)
+    }
+
+    /**
+     * Captures the current shared runtime projections in Android's backup format.
+     *
+     * An optional synced base preserves sections that shared UI does not currently edit, such as
+     * custom commands, favourite emotes, and legacy favourite/recent channel references. With no
+     * base (a new account), those opaque sections start empty rather than borrowing data from the
+     * file that is about to be imported.
+     */
+    internal fun captureCurrent(
+        basePayload: String?,
+        preferences: SharedAppPreferences,
+        channelLogins: List<String>,
+        selectedChannelLogin: String?,
+        pinnedChannelIds: List<String>,
+        channelTabTitles: Map<String, String>,
+        workspaceLayout: WorkspaceLayout,
+        messageRules: SharedMessageRulesSnapshot,
+        savedFilters: SharedSavedFiltersSnapshot,
+        currentAppVersion: String,
+        createdAt: Instant,
+    ): String {
+        val base = basePayload
+            ?.takeIf { it.isNotBlank() }
+            ?.let(::decode)
+            ?.document
+            ?.content
+        val normalizedLogins = channelLogins.map { it.trim().removePrefix("#").lowercase() }
+            .filter(String::isNotEmpty)
+        val selectedLogin = selectedChannelLogin
+            ?.trim()
+            ?.removePrefix("#")
+            ?.lowercase()
+            ?.takeIf { it in normalizedLogins }
+        val normalizedPreferences = preferences.normalized()
+        val content = SharedSettingsBackupContent(
+            settings = SharedSettingsBackupSettings(
+                appLanguage = normalizedPreferences.appLanguage.name,
+                themeMode = normalizedPreferences.themeMode.name,
+                fontScalePercent = normalizedPreferences.fontScalePercent,
+                messageDensity = normalizedPreferences.messageDensity.name,
+                showAvatars = normalizedPreferences.showAvatars,
+                showBadges = normalizedPreferences.showBadges,
+                showTimestamps = normalizedPreferences.showTimestamps,
+                nameStyle = normalizedPreferences.nameStyle.name,
+                wrapMessageLines = normalizedPreferences.wrapMessageLines,
+                showDeletedMessageContent = normalizedPreferences.showDeletedMessageContent,
+                showSystemMessages = normalizedPreferences.showSystemMessages,
+                mentionColorArgb = normalizedPreferences.mentionColorArgb,
+                autoScrollEnabled = normalizedPreferences.autoScrollEnabled,
+                repeatCollapseEnabled = normalizedPreferences.repeatCollapseEnabled,
+                animateEmotes = normalizedPreferences.animateEmotes,
+                emoteScalePercent = normalizedPreferences.emoteScalePercent,
+                betterTtvEnabled = normalizedPreferences.betterTtvEnabled,
+                frankerFaceZEnabled = normalizedPreferences.frankerFaceZEnabled,
+                sevenTvEnabled = normalizedPreferences.sevenTvEnabled,
+                sendOnEnter = normalizedPreferences.sendOnEnter,
+                showComposerEmoteImages = normalizedPreferences.showComposerEmoteImages,
+                replyNotificationsEnabled = normalizedPreferences.replyNotificationsEnabled,
+                autoModNotificationsEnabled = normalizedPreferences.autoModNotificationsEnabled,
+                recentMessagesEnabled = normalizedPreferences.recentMessagesEnabled,
+                localHistoryEnabled = normalizedPreferences.localHistoryEnabled,
+                localHistoryLimit = normalizedPreferences.localHistoryLimit,
+                localHistoryRetentionDays = normalizedPreferences.localHistoryRetentionDays,
+                localHistoryMaxSizeMb = normalizedPreferences.localHistoryMaxSizeMb,
+                userCardTimeoutPresetsSeconds = normalizedPreferences.userCardTimeoutPresetsSeconds,
+                userCardShowBanAction = normalizedPreferences.userCardShowBanAction,
+                userCardModerationActionOrder = normalizedPreferences.userCardModerationActionOrder,
             ),
+            channels = SharedSettingsBackupChannels(
+                logins = normalizedLogins,
+                selectedLogin = selectedLogin,
+                favouriteChannelIds = base?.channels?.favouriteChannelIds.orEmpty(),
+                pinnedChannelIds = pinnedChannelIds,
+                recentChannelIds = base?.channels?.recentChannelIds.orEmpty(),
+                tabTitles = channelTabTitles,
+            ),
+            workspaces = compactJson.parseToJsonElement(WorkspaceLayoutCodec.encode(workspaceLayout)),
+            filters = compactJson.parseToJsonElement(MessageFilterCodec.encode(savedFilters.filters)),
+            highlights = compactJson.parseToJsonElement(
+                MessageRuleCodec.encodeHighlights(messageRules.highlightRules),
+            ),
+            ignoreRules = compactJson.parseToJsonElement(
+                MessageRuleCodec.encodeIgnores(messageRules.ignoreRules),
+            ),
+            commands = base?.commands ?: JsonObject(emptyMap()),
+            favouriteEmotes = base?.favouriteEmotes.orEmpty(),
+        )
+        validateContent(content)
+        return encodeCurrentDocument(
+            content = content,
+            appVersion = requireCurrentAppVersion(currentAppVersion),
+            createdAt = createdAt,
         )
     }
 
@@ -165,6 +250,26 @@ internal object SharedSettingsBackupCodec {
         content: SharedSettingsBackupContent,
         formatVersion: Int = BACKUP_FORMAT_VERSION,
     ): String = contentHashForVersion(content, formatVersion)
+
+    private fun encodeCurrentDocument(
+        content: SharedSettingsBackupContent,
+        appVersion: String,
+        createdAt: Instant,
+    ): String = compactJson.encodeToString(
+        SharedSettingsBackupDocument(
+            formatVersion = BACKUP_FORMAT_VERSION,
+            createdAt = createdAt.toString(),
+            appVersion = appVersion,
+            contentHash = contentHashForVersion(content, BACKUP_FORMAT_VERSION),
+            content = content,
+        ),
+    )
+
+    private fun requireCurrentAppVersion(value: String): String = value.trim().also { appVersion ->
+        require(appVersion.isNotEmpty() && appVersion.length <= 40) {
+            "Current app version is invalid for settings sync"
+        }
+    }
 
     private fun validateDocument(document: SharedSettingsBackupDocument): SharedSettingsBackupImportSummary {
         require(document.format == BACKUP_FORMAT) { "Unsupported Ferventio settings backup format" }
