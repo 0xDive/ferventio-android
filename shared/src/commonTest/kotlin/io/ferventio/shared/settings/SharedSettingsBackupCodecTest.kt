@@ -85,14 +85,14 @@ class SharedSettingsBackupCodecTest {
     }
 
     @Test
-    fun rejectsStringEncodedInteger() {
+    fun acceptsStringEncodedIntegerLikeAndroidSerializer() {
         val content = androidCompatibleContent()
         val encoded = SharedSettingsBackupCodec.encodeForTesting(document(content = content))
             .replace("\"fontScalePercent\":125", "\"fontScalePercent\":\"125\"")
 
-        assertFailsWith<IllegalArgumentException> {
-            SharedSettingsBackupCodec.decode(encoded)
-        }
+        val decoded = SharedSettingsBackupCodec.decode(encoded)
+
+        assertEquals(125, decoded.document.content.settings.fontScalePercent)
     }
 
     @Test
