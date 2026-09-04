@@ -6,6 +6,7 @@ import UserNotifications
 @MainActor
 final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     private let runtimeState = MainViewControllerKt.IosRuntimeState()
+    private let settingsBackupRuntime = MainViewControllerKt.IosSettingsBackupRuntimeState()
     private var authenticationRuntimeBridge: MobileAuthenticationRuntimeBridge?
     private var workspaceRuntimeBridge: WorkspaceRuntimeBridge?
     private var pushBackendRegistrationRuntimeBridge: PushBackendRegistrationRuntimeBridge?
@@ -13,6 +14,10 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     private var authenticationLeaseRefreshTask: Task<Void, Never>?
     private var settingsSaveTask: Task<Void, Never>?
     private var isPrimarySceneActive = false
+    private lazy var settingsBackupRuntimeBridge = try? SettingsBackupRuntimeBridge.live(
+        runtime: settingsBackupRuntime
+    )
+    private let settingsBackupDocumentBridge = SettingsBackupDocumentBridge()
     private lazy var workspaceLayoutRuntimeBridge = try? WorkspaceLayoutRuntimeBridge.live(
         stateHolder: runtimeState.workspace
     )
@@ -174,6 +179,24 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
             },
             onSaveSettings: { [weak self] preferences in
                 self?.enqueueSettingsSave(preferences)
+            },
+            onExportSettingsBackup: { [weak self] in
+                Task { @MainActor [weak self] in
+                    await self?.exportSettingsBackup()
+                }
+            },
+            onImportSettingsBackup: { [weak self] in
+                self?.presentSettingsBackupImport()
+            },
+            onKeepLocalSettingsBackup: { [weak self] in
+                Task { @MainActor [weak self] in
+                    await self?.keepLocalSettingsBackup()
+                }
+            },
+            onUseServerSettingsBackup: { [weak self] in
+                Task { @MainActor [weak self] in
+                    await self?.useServerSettingsBackup()
+                }
             },
             onUpsertHighlightRule: { [weak self] rule in
                 Task { @MainActor [weak self] in
@@ -448,6 +471,116 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         await settingsSaveTask?.value
     }
 
+    private func exportSettingsBackup() async {
+        await awaitPendingSettingsSave()
+        guard let bridge = settingsBackupRuntimeBridge else {
+            settingsBackupRuntime.reportFileFailure(message: "Settings backup runtime is unavailable")
+            return
+        }
+        do {
+            let content = try await bridge.exportBackup(
+                authentication: runtimeState.authentication.state.authentication
+            )
+            settingsBackupDocumentBridge.presentExport(
+                content: content,
+                onExported: { [weak self] in
+                    self?.settingsBackupRuntimeBridge?.reportExported()
+                },
+                onCancelled: { [weak self] in
+                    self?.settingsBackupRuntimeBridge?.reportExportCancelled()
+                },
+                onFailure: { [weak self] message in
+                    self?.settingsBackupRuntimeBridge?.reportFileFailure(message)
+                }
+            )
+        } catch {
+            bridge.reportFileFailure(String(describing: error))
+        }
+    }
+
+    private func presentSettingsBackupImport() {
+        settingsBackupDocumentBridge.presentImport(
+            onImport: { [weak self] payload in
+                Task { @MainActor [weak self] in
+                    await self?.importSettingsBackup(payload)
+                }
+            },
+            onFailure: { [weak self] message in
+                if let bridge = self?.settingsBackupRuntimeBridge {
+                    bridge.reportFileFailure(message)
+                } else {
+                    self?.settingsBackupRuntime.reportFileFailure(message: message)
+                }
+            }
+        )
+    }
+
+    private func importSettingsBackup(_ payload: String) async {
+        await awaitPendingSettingsSave()
+        guard let bridge = settingsBackupRuntimeBridge else {
+            settingsBackupRuntime.reportFileFailure(message: "Settings backup runtime is unavailable")
+            return
+        }
+        do {
+            if try await bridge.importBackup(
+                authentication: runtimeState.authentication.state.authentication,
+                payload: payload
+            ) {
+                runtimeState.chat.retainChannels(channelIds: runtimeState.workspace.channelIds)
+                await synchronizeWorkspaceTransportAfterChannelSetChanged()
+            }
+        } catch {
+            bridge.reportFileFailure(String(describing: error))
+        }
+    }
+
+    private func keepLocalSettingsBackup() async {
+        guard let bridge = settingsBackupRuntimeBridge else {
+            settingsBackupRuntime.reportFileFailure(message: "Settings backup runtime is unavailable")
+            return
+        }
+        do {
+            if try await bridge.keepLocal(
+                authentication: runtimeState.authentication.state.authentication
+            ) {
+                runtimeState.chat.retainChannels(channelIds: runtimeState.workspace.channelIds)
+                await synchronizeWorkspaceTransportAfterChannelSetChanged()
+            }
+        } catch {
+            bridge.reportFileFailure(String(describing: error))
+        }
+    }
+
+    private func useServerSettingsBackup() async {
+        guard let bridge = settingsBackupRuntimeBridge else {
+            settingsBackupRuntime.reportFileFailure(message: "Settings backup runtime is unavailable")
+            return
+        }
+        do {
+            if try await bridge.useServer(
+                authentication: runtimeState.authentication.state.authentication
+            ) {
+                runtimeState.chat.retainChannels(channelIds: runtimeState.workspace.channelIds)
+                await synchronizeWorkspaceTransportAfterChannelSetChanged()
+            }
+        } catch {
+            bridge.reportFileFailure(String(describing: error))
+        }
+    }
+
+    private func resumePendingSettingsBackupIfNeeded(
+        authentication: StoredAuthentication
+    ) async {
+        guard let bridge = settingsBackupRuntimeBridge else { return }
+        do {
+            if try await bridge.resumePendingImport(authentication: authentication) {
+                runtimeState.chat.retainChannels(channelIds: runtimeState.workspace.channelIds)
+            }
+        } catch {
+            bridge.reportFileFailure(String(describing: error))
+        }
+    }
+
     private func signOutAndCleanup() async {
         await awaitPendingSettingsSave()
         guard let authenticationRuntimeBridge else { return }
@@ -607,6 +740,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
             return
         }
         if await workspaceRuntimeBridge.restore(authentication: authentication) {
+            await resumePendingSettingsBackupIfNeeded(authentication: authentication)
             await synchronizePushBackendRegistration()
             synchronizeAuthenticatedChatRuntime()
         } else {
@@ -624,6 +758,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         runtimeState.settings.clear()
         runtimeState.messageRules.clear()
         runtimeState.savedFilters.clear()
+        try? settingsBackupRuntime.discardPendingImport()
     }
 
     private func synchronizePushBackendRegistration() async {
