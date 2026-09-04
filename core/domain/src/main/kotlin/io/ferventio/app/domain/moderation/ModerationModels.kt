@@ -1,6 +1,7 @@
 package io.ferventio.app.domain
 
-import java.time.Instant
+import kotlin.time.Clock
+import kotlin.time.Instant
 
 enum class AutoModMessageStatus {
     HELD,
@@ -27,14 +28,14 @@ data class AutoModHeldMessage(
     val category: String? = null,
     val level: Int? = null,
     val boundaries: List<AutoModBoundary> = emptyList(),
-    val heldAt: String = Instant.now().toString(),
+    val heldAt: String = Clock.System.now().toString(),
     val status: AutoModMessageStatus = AutoModMessageStatus.HELD,
     val decidedByUserId: String? = null,
     val decidedByUserLogin: String? = null,
     val decidedByUserName: String? = null,
 ) {
     val heldAtMillis: Long
-        get() = runCatching { Instant.parse(heldAt).toEpochMilli() }.getOrDefault(0L)
+        get() = runCatching { Instant.parse(heldAt).toEpochMilliseconds() }.getOrDefault(0L)
 }
 
 data class ModerationChatSettings(
@@ -94,10 +95,10 @@ data class RemoteModerationAction(
     val messageId: String? = null,
     val reason: String? = null,
     val durationSeconds: Int? = null,
-    val createdAt: String = Instant.now().toString(),
+    val createdAt: String = Clock.System.now().toString(),
 ) {
     val createdAtMillis: Long
-        get() = runCatching { Instant.parse(createdAt).toEpochMilli() }.getOrDefault(0L)
+        get() = runCatching { Instant.parse(createdAt).toEpochMilliseconds() }.getOrDefault(0L)
 }
 
 enum class ModerationPeopleTab {

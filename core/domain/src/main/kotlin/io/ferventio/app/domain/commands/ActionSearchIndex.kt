@@ -1,7 +1,5 @@
 package io.ferventio.app.domain
 
-import java.util.Locale
-
 enum class SearchableActionKind {
     NAVIGATION,
     SETTING,
@@ -50,7 +48,7 @@ object ActionSearchIndex {
             .mapNotNull { action -> score(action, normalizedQuery, queryTokens) }
             .sortedWith(
                 compareByDescending<SearchableActionMatch>(SearchableActionMatch::score)
-                    .thenBy { match -> match.action.title.lowercase(Locale.ROOT) },
+                    .thenBy { match -> match.action.title.lowercase() },
             )
             .take(limit.coerceAtLeast(0))
             .toList()
@@ -99,7 +97,7 @@ object ActionSearchIndex {
 
     private fun normalize(value: String): String = value
         .trim()
-        .lowercase(Locale.ROOT)
+        .lowercase()
         .replace(WHITESPACE, " ")
 
     private val WHITESPACE = Regex("\\s+")

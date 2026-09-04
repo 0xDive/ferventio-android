@@ -1,0 +1,30 @@
+<resources>
+    <string name="saved_filters_title">Сохранённые фильтры</string>
+    <string name="saved_filters_intro">Сохранённые фильтры используют тот же компилируемый язык фильтрации сообщений, что и Android. Сравнения без regex не учитывают регистр.</string>
+    <string name="saved_filters_empty">Сохранённых фильтров пока нет.</string>
+    <string name="saved_filters_add">Создать фильтр</string>
+    <string name="saved_filters_add_to_split">Добавить в split</string>
+    <string name="saved_filters_edit">Изменить</string>
+    <string name="saved_filters_delete">Удалить</string>
+    <string name="saved_filters_new_title">Новый фильтр</string>
+    <string name="saved_filters_edit_title">Редактирование фильтра</string>
+    <string name="saved_filters_name">Название</string>
+    <string name="saved_filters_expression">Выражение</string>
+    <string name="saved_filters_expression_valid">Выражение корректно.</string>
+    <string name="saved_filters_expression_invalid">Компилятор нашёл замечания в выражении.</string>
+    <string name="saved_filters_preview">Предпросмотр: совпало %1$d из %2$d последних сообщений</string>
+    <string name="saved_filters_preview_empty">Для предпросмотра пока нет последних live-сообщений.</string>
+    <string name="saved_filters_diagnostic_error">Ошибка</string>
+    <string name="saved_filters_diagnostic_warning">Предупреждение</string>
+    <string name="saved_filters_export">Экспорт</string>
+    <string name="saved_filters_export_title">Экспорт сохранённых фильтров</string>
+    <string name="saved_filters_export_hint">Выделите и скопируйте этот совместимый с Android JSON, чтобы перенести фильтры между устройствами.</string>
+    <string name="saved_filters_import">Импорт</string>
+    <string name="saved_filters_import_title">Импорт сохранённых фильтров</string>
+    <string name="saved_filters_import_json">JSON сохранённых фильтров</string>
+    <string name="saved_filters_import_error">Ошибка импорта: %1$s</string>
+    <string name="saved_filters_save">Сохранить</string>
+    <string name="saved_filters_cancel">Отмена</string>
+    <string name="saved_filters_close">Закрыть</string>
+    <string name="saved_filters_summary">Сохранённые выражения фильтрации сообщений</string>
+</resources>

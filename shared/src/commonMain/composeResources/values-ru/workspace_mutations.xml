@@ -1,0 +1,4 @@
+<resources>
+    <string name="workspace_mutation_failed">Не удалось обновить рабочее пространство: %1$s</string>
+    <string name="workspace_mutation_dismiss">Закрыть</string>
+</resources>

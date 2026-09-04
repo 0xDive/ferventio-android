@@ -1,6 +1,8 @@
 package io.ferventio.app.data
 
+import io.ferventio.app.domain.AuthenticationPersistenceValidation
 import io.ferventio.app.domain.BackendSessionCredential
+import io.ferventio.app.domain.StoredAuthentication
 import io.ferventio.app.domain.TwitchAccessLease
 import io.ferventio.app.domain.TwitchSession
 import java.io.ByteArrayInputStream
@@ -17,24 +19,12 @@ internal object AuthSessionPayloadCodec {
     private const val MAGIC = "FERVAUTH"
     private const val VERSION = 2
     private const val LEGACY_VERSION = "backend-session-v1"
-    private const val MAX_SCOPES = 128
-
-    data class StoredAuthentication(
-        val backendCredential: BackendSessionCredential,
-        val accessLease: TwitchAccessLease?,
-    )
 
     fun encode(
         backendCredential: BackendSessionCredential,
         accessLease: TwitchAccessLease?,
     ): ByteArray {
-        validateBackendCredential(backendCredential)
-        accessLease?.let {
-            validateAccessLease(it)
-            require(it.backendSessionExpiresAtEpochMillis == backendCredential.expiresAtEpochMillis) {
-                "Срок access-token cache не совпадает с серверной сессией"
-            }
-        }
+        AuthenticationPersistenceValidation.requireValid(backendCredential, accessLease)
         val buffer = ByteArrayOutputStream()
         DataOutputStream(buffer).use { output ->
             output.writeUTF(MAGIC)
@@ -70,8 +60,7 @@ internal object AuthSessionPayloadCodec {
                 expiresAtEpochMillis = input.readLong(),
                 serverUrl = input.readUTF(),
                 token = input.readUTF(),
-            )
-            validateBackendCredential(credential)
+            ).also(AuthenticationPersistenceValidation::requireValidBackendCredential)
             val lease = if (input.readBoolean()) {
                 val accessToken = input.readUTF()
                 val leaseExpiresAt = input.readLong()
@@ -82,7 +71,9 @@ internal object AuthSessionPayloadCodec {
                 val userId = input.readUTF()
                 val login = input.readUTF()
                 val scopeCount = input.readInt()
-                require(scopeCount in 0..MAX_SCOPES) { "Некорректное количество OAuth scopes" }
+                require(scopeCount in 0..AuthenticationPersistenceValidation.MAX_SCOPES) {
+                    "Некорректное количество OAuth scopes"
+                }
                 val scopes = buildSet(scopeCount) {
                     repeat(scopeCount) { add(input.readUTF()) }
                 }
@@ -99,14 +90,12 @@ internal object AuthSessionPayloadCodec {
                         scopes = scopes,
                         expiresInSeconds = input.readLong(),
                     ),
-                ).also(::validateAccessLease)
+                ).also(AuthenticationPersistenceValidation::requireValidAccessLease)
             } else {
                 null
             }
             require(input.available() == 0) { "OAuth-хранилище содержит лишние данные" }
-            require(lease == null || lease.backendSessionExpiresAtEpochMillis == credential.expiresAtEpochMillis) {
-                "Срок access-token cache не совпадает с серверной сессией"
-            }
+            AuthenticationPersistenceValidation.requireValid(credential, lease)
             return StoredAuthentication(credential, lease)
         }
     }
@@ -120,8 +109,7 @@ internal object AuthSessionPayloadCodec {
             expiresAtEpochMillis = parts[1].toLong(),
             serverUrl = parts[2],
             token = parts[3],
-        )
-        validateBackendCredential(credential)
+        ).also(AuthenticationPersistenceValidation::requireValidBackendCredential)
         return StoredAuthentication(credential, accessLease = null)
     }
 
@@ -129,31 +117,5 @@ internal object AuthSessionPayloadCodec {
         val prefix = "$LEGACY_VERSION\n".toByteArray(Charsets.UTF_8)
         if (size < prefix.size) return false
         return prefix.indices.all { index -> this[index] == prefix[index] }
-    }
-
-    private fun validateBackendCredential(credential: BackendSessionCredential) {
-        require(credential.serverUrl.isNotBlank()) { "Пустой адрес сервера" }
-        require(credential.token.isNotBlank()) { "Пустая серверная сессия" }
-        require(credential.expiresAtEpochMillis > 0L) { "Не задан срок серверной сессии" }
-    }
-
-    private fun validateAccessLease(lease: TwitchAccessLease) {
-        require(lease.accessToken.isNotBlank()) { "Пустой Twitch access token" }
-        require(lease.leaseExpiresAtEpochMillis > 0L) { "Не задан срок token lease" }
-        require(lease.twitchExpiresAtEpochMillis > 0L) { "Не задан срок Twitch access token" }
-        require(lease.leaseExpiresAtEpochMillis <= lease.twitchExpiresAtEpochMillis) {
-            "Short lease не может истекать позже Twitch access token"
-        }
-        require(lease.twitchValidatedAtEpochMillis > 0L) { "Не задан момент проверки Twitch access token" }
-        require(lease.twitchValidatedAtEpochMillis <= lease.twitchExpiresAtEpochMillis) {
-            "Проверка Twitch access token не может быть позже его expiry"
-        }
-        require(lease.backendSessionExpiresAtEpochMillis > 0L) { "Не задан срок серверной сессии" }
-        require(lease.session.clientId.isNotBlank()) { "Пустой Twitch Client ID" }
-        require(lease.session.userId.isNotBlank()) { "Пустой Twitch user ID" }
-        require(lease.session.login.isNotBlank()) { "Пустой Twitch login" }
-        require(lease.session.scopes.size <= MAX_SCOPES) { "Слишком много OAuth scopes" }
-        require(lease.session.scopes.none(String::isBlank)) { "Пустой OAuth scope" }
-        require(lease.session.expiresInSeconds >= 0L) { "Некорректный срок Twitch access token" }
     }
 }

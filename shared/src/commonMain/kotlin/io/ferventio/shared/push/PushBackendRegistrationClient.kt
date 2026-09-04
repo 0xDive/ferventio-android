@@ -1,0 +1,233 @@
+package io.ferventio.shared.push
+
+import io.ferventio.app.domain.AuthenticationPersistenceValidation
+import io.ferventio.app.domain.MobileDeviceIdentity
+import io.ferventio.app.domain.StoredAuthentication
+import io.ferventio.app.domain.TwitchSession
+import io.ferventio.shared.workspace.WorkspaceRuntimeSnapshot
+import io.ktor.client.HttpClient
+import io.ktor.client.request.delete
+import io.ktor.client.request.header
+import io.ktor.client.request.put
+import io.ktor.client.request.setBody
+import io.ktor.client.statement.bodyAsText
+import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.Url
+import io.ktor.http.contentType
+import kotlin.Throws
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+
+private const val DEVICE_SECRET_HEADER = "X-Device-Secret"
+
+class PushBackendRegistrationException(
+    val statusCode: Int,
+    val backendMessage: String,
+) : IllegalStateException("Ferventio backend HTTP $statusCode: $backendMessage")
+
+/** KMP transport for the backend push-registration endpoint. */
+class PushBackendRegistrationClient(
+    private val client: HttpClient = createPlatformPushHttpClient(),
+) {
+    private val json = Json { ignoreUnknownKeys = true }
+
+    @Throws(Exception::class)
+    suspend fun register(
+        serverUrl: String,
+        request: PushRegistrationRequest,
+    ) {
+        PushRegistrationValidation.requireValid(request)
+        val baseUrl = validateServerUrl(serverUrl)
+        val response = client.put(
+            "$baseUrl/v1/push/registrations/${request.installationId}",
+        ) {
+            contentType(ContentType.Application.Json)
+            header(HttpHeaders.Accept, ContentType.Application.Json.toString())
+            setBody(json.encodeToString(request))
+        }
+        val body = response.bodyAsText()
+        if (response.status.value !in 200..299) {
+            throw PushBackendRegistrationException(
+                statusCode = response.status.value,
+                backendMessage = decodeBackendError(body),
+            )
+        }
+    }
+
+    /**
+     * Removes this installation from the backend. A missing registration is already the desired
+     * state, so HTTP 404 is treated as a successful idempotent cleanup.
+     */
+    @Throws(Exception::class)
+    suspend fun unregister(
+        serverUrl: String,
+        identity: MobileDeviceIdentity,
+    ) {
+        val installationId = identity.installationId.trim()
+        val deviceSecret = identity.deviceSecret.trim()
+        require(installationId.isNotEmpty()) { "Push installation ID must not be blank" }
+        require(deviceSecret.isNotEmpty()) { "Push device secret must not be blank" }
+
+        val baseUrl = validateServerUrl(serverUrl)
+        val response = client.delete(
+            "$baseUrl/v1/push/registrations/$installationId",
+        ) {
+            header(DEVICE_SECRET_HEADER, deviceSecret)
+            header(HttpHeaders.Accept, ContentType.Application.Json.toString())
+        }
+        val body = response.bodyAsText()
+        if (response.status == HttpStatusCode.NotFound) {
+            return
+        }
+        if (response.status.value !in 200..299) {
+            throw PushBackendRegistrationException(
+                statusCode = response.status.value,
+                backendMessage = decodeBackendError(body),
+            )
+        }
+    }
+
+    private fun validateServerUrl(value: String): String {
+        val normalized = value.trim().trimEnd('/')
+        require(normalized.isNotEmpty()) { "Ferventio server URL must not be blank" }
+        val url = runCatching { Url(normalized) }
+            .getOrElse { throw IllegalArgumentException("Invalid Ferventio server URL", it) }
+        require(url.protocol.name.equals("https", ignoreCase = true)) {
+            "Ferventio server must use HTTPS"
+        }
+        require(
+            url.host.isNotBlank() &&
+                url.user == null &&
+                url.password == null &&
+                url.parameters.isEmpty() &&
+                url.fragment.isEmpty(),
+        ) { "Ferventio server URL must be a base HTTPS URL without credentials, query or fragment" }
+        return normalized
+    }
+
+    private fun decodeBackendError(body: String): String = runCatching {
+        json.parseToJsonElement(body)
+            .jsonObject["error"]
+            ?.jsonPrimitive
+            ?.contentOrNull
+    }.getOrNull().orEmpty().ifBlank {
+        body.take(300).ifBlank { "unknown backend error" }
+    }
+}
+
+/** High-level APNs registration operation intended for the native iOS adapter. */
+class ApnsPushRegistrationCoordinator(
+    private val backend: PushBackendRegistrationClient = PushBackendRegistrationClient(),
+    private val requestFactory: PushRegistrationRequestFactory = PushRegistrationRequestFactory(),
+) {
+    /** Explicit constructor for Kotlin/Native export; default primary arguments are not a Swift init(). */
+    constructor() : this(
+        backend = PushBackendRegistrationClient(),
+        requestFactory = PushRegistrationRequestFactory(),
+    )
+
+    @Throws(Exception::class)
+    suspend fun register(
+        serverUrl: String,
+        identity: MobileDeviceIdentity,
+        apnsDeviceToken: String,
+        appVersion: String,
+    ): PushRegistrationRequest = register(
+        serverUrl = serverUrl,
+        identity = identity,
+        apnsDeviceToken = apnsDeviceToken,
+        appVersion = appVersion,
+        context = PushRegistrationContext(),
+    )
+
+    @Throws(Exception::class)
+    suspend fun registerAuthenticated(
+        serverUrl: String,
+        identity: MobileDeviceIdentity,
+        apnsDeviceToken: String,
+        appVersion: String,
+        authentication: StoredAuthentication,
+    ): PushRegistrationRequest {
+        val session = requireAuthenticatedSession(authentication)
+        return register(
+            serverUrl = serverUrl,
+            identity = identity,
+            apnsDeviceToken = apnsDeviceToken,
+            appVersion = appVersion,
+            context = PushRegistrationContext(
+                userId = session.userId,
+                userLogin = session.login,
+            ),
+        )
+    }
+
+    @Throws(Exception::class)
+    suspend fun registerAuthenticatedWorkspace(
+        serverUrl: String,
+        identity: MobileDeviceIdentity,
+        apnsDeviceToken: String,
+        appVersion: String,
+        authentication: StoredAuthentication,
+        workspace: WorkspaceRuntimeSnapshot,
+    ): PushRegistrationRequest {
+        val session = requireAuthenticatedSession(authentication)
+        return register(
+            serverUrl = serverUrl,
+            identity = identity,
+            apnsDeviceToken = apnsDeviceToken,
+            appVersion = appVersion,
+            context = PushRegistrationContext(
+                userId = session.userId,
+                userLogin = session.login,
+                channelIds = workspace.channelIds,
+                moderatorChannelIds = workspace.channelIds.filter(workspace.moderatorChannelIds::contains),
+            ),
+        )
+    }
+
+    @Throws(Exception::class)
+    suspend fun register(
+        serverUrl: String,
+        identity: MobileDeviceIdentity,
+        apnsDeviceToken: String,
+        appVersion: String,
+        context: PushRegistrationContext,
+    ): PushRegistrationRequest {
+        val request = requestFactory.apns(
+            identity = identity,
+            apnsDeviceToken = apnsDeviceToken,
+            appVersion = appVersion,
+            context = context,
+        )
+        backend.register(serverUrl, request)
+        return request
+    }
+
+    @Throws(Exception::class)
+    suspend fun unregister(
+        serverUrl: String,
+        identity: MobileDeviceIdentity,
+    ) {
+        backend.unregister(serverUrl, identity)
+    }
+
+    private fun requireAuthenticatedSession(authentication: StoredAuthentication): TwitchSession {
+        AuthenticationPersistenceValidation.requireValid(
+            authentication.backendCredential,
+            authentication.accessLease,
+        )
+        val session = authentication.accessLease?.session
+            ?: error("Authenticated push registration requires a Twitch access lease")
+        require(session.userId.isNotBlank() && session.login.isNotBlank()) {
+            "Authenticated push registration requires Twitch user identity"
+        }
+        return session
+    }
+}
+
+internal expect fun createPlatformPushHttpClient(): HttpClient

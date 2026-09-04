@@ -1,0 +1,87 @@
+name: Ferventio
+
+options:
+  bundleIdPrefix: io.ferventio
+  deploymentTarget:
+    iOS: "16.0"
+
+targets:
+  Ferventio:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+    preBuildScripts:
+      - name: Verify release privacy metadata
+        script: |
+          cd "$SRCROOT/.."
+          sh ./iosApp/Scripts/verify-privacy-configuration.sh
+        basedOnDependencyAnalysis: false
+      - name: Sync Compose resources
+        script: |
+          cd "$SRCROOT/.."
+          ./gradlew :shared:syncComposeResourcesForIos --no-configuration-cache --stacktrace
+        basedOnDependencyAnalysis: false
+    info:
+      path: Generated/Info.plist
+      properties:
+        CFBundleDisplayName: Ferventio
+        CFBundleURLTypes:
+          - CFBundleTypeRole: Editor
+            CFBundleURLName: Ferventio OAuth
+            CFBundleURLSchemes:
+              - $(PRODUCT_BUNDLE_IDENTIFIER)
+        CADisableMinimumFrameDurationOnPhone: true
+        FerventioServerURL: $(FERVENTIO_SERVER_URL)
+        FerventioAppWebsiteURL: $(FERVENTIO_APP_WEBSITE_URL)
+        FerventioAppGitHubURL: $(FERVENTIO_APP_GITHUB_URL)
+        FerventioAppTelegramChannelURL: $(FERVENTIO_APP_TELEGRAM_CHANNEL_URL)
+        FerventioAppTelegramChatURL: $(FERVENTIO_APP_TELEGRAM_CHAT_URL)
+        FerventioAppTranslationsURL: $(FERVENTIO_APP_TRANSLATIONS_URL)
+        FerventioPrivacyOperatorName: $(FERVENTIO_PRIVACY_OPERATOR_NAME)
+        FerventioPrivacyContact: $(FERVENTIO_PRIVACY_CONTACT)
+        FerventioPrivacyPolicyURL: $(FERVENTIO_PRIVACY_POLICY_URL)
+        FerventioShowPrivacyPolicyInApp: $(FERVENTIO_SHOW_PRIVACY_POLICY_IN_APP)
+        ITSAppUsesNonExemptEncryption: false
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+          UISceneConfigurations:
+            UIWindowSceneSessionRoleApplication:
+              - UISceneConfigurationName: Default Configuration
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).SceneDelegate
+        UIApplicationSupportsIndirectInputEvents: true
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    entitlements:
+      path: Generated/Ferventio.entitlements
+      properties:
+        aps-environment: $(APS_ENVIRONMENT)
+    dependencies:
+      - framework: ../shared/build/bin/iosSimulatorArm64/debugFramework/FerventioShared.framework
+        embed: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.ferventio.app
+        FERVENTIO_SERVER_URL: https://ferventio.godive.dev
+        FERVENTIO_APP_WEBSITE_URL: https://ferventio.godive.dev
+        FERVENTIO_APP_GITHUB_URL: https://github.com/0xDive/ferventio-android
+        FERVENTIO_APP_TELEGRAM_CHANNEL_URL: ""
+        FERVENTIO_APP_TELEGRAM_CHAT_URL: ""
+        FERVENTIO_APP_TRANSLATIONS_URL: ""
+        FERVENTIO_PRIVACY_OPERATOR_NAME: ""
+        FERVENTIO_PRIVACY_CONTACT: ""
+        FERVENTIO_PRIVACY_POLICY_URL: ""
+        FERVENTIO_SHOW_PRIVACY_POLICY_IN_APP: NO
+        MARKETING_VERSION: 0.0.5
+        CURRENT_PROJECT_VERSION: 1
+        SWIFT_VERSION: "6.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+      configs:
+        Debug:
+          APS_ENVIRONMENT: development
+        Release:
+          APS_ENVIRONMENT: production

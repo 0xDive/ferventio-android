@@ -1,0 +1,9 @@
+<resources>
+    <string name="user_card_account_created">Аккаунт создан: %1$s</string>
+    <string name="user_card_following_since">Следит за каналом с: %1$s</string>
+    <string name="user_card_subscription_hidden">Статус подписки скрыт</string>
+    <string name="user_card_subscribed">Сейчас подписан</string>
+    <string name="user_card_subscribed_months">Подписка длится %1$d мес.</string>
+    <string name="user_card_subscriber_tier">Уровень подписки: %1$s</string>
+    <string name="user_card_not_subscribed">Сейчас не подписан</string>
+</resources>

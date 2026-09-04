@@ -1,0 +1,33 @@
+<resources>
+    <string name="settings_home_chat_group">Чат</string>
+    <string name="settings_home_features_group">Функции</string>
+    <string name="settings_home_data_group">Данные</string>
+    <string name="settings_home_app_group">Приложение</string>
+    <string name="settings_messages_appearance">Сообщения и внешний вид</string>
+    <string name="settings_messages_appearance_summary">Тема, текст, имена и отображение сообщений</string>
+    <string name="settings_input_behavior">Ввод и поведение</string>
+    <string name="settings_input_behavior_summary">Автопрокрутка, быстрая модерация и поле ввода</string>
+    <string name="settings_user_card_summary">Действия модерации и варианты таймаута</string>
+    <string name="settings_message_rules_summary">Highlights, Ignore и действия уведомлений</string>
+    <string name="settings_notifications_summary">Разрешения и уведомления о сообщениях</string>
+    <string name="settings_history_summary">Недавние сообщения и локальное хранение</string>
+    <string name="settings_export_sync">Экспорт и синхронизация</string>
+    <string name="settings_export_sync_summary">Резервная копия, восстановление и ревизия синхронизации</string>
+    <string name="settings_backup_description">Резервная копия содержит настройки интерфейса, каналы, workspaces, filters, highlights и ignore rules. Локальная история сообщений и Twitch-токены никогда не экспортируются.</string>
+    <string name="settings_backup_revision">Синхронизированная ревизия %1$d</string>
+    <string name="settings_backup_not_synced">Синхронизированной ревизии настроек пока нет.</string>
+    <string name="settings_backup_export">Экспортировать копию</string>
+    <string name="settings_backup_import">Импортировать копию</string>
+    <string name="settings_backup_unavailable">Передача файла резервной копии пока недоступна на этой платформе.</string>
+    <string name="settings_backup_conflict">Во время импорта настройки изменились на другом устройстве. Выберите, какую версию сохранить.</string>
+    <string name="settings_backup_keep_local">Оставить импортированную</string>
+    <string name="settings_backup_use_server">Использовать серверную</string>
+    <string name="settings_backup_error">Ошибка резервной копии: %1$s</string>
+    <string name="settings_backup_unresolved_channels">Резервная копия синхронизирована, но эти Twitch-каналы не удалось разрешить локально: %1$s. Они остаются в синхронизированной копии и смогут восстановиться, когда Twitch снова их разрешит.</string>
+    <string name="settings_language_search">Поиск языка</string>
+    <string name="settings_language_no_results">Языки не найдены.</string>
+    <string name="settings_language_system_summary">Использовать язык устройства</string>
+    <string name="settings_language_russian_summary">Русский</string>
+    <string name="settings_language_english_summary">English</string>
+    <string name="settings_back">Назад</string>
+</resources>

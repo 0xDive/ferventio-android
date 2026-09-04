@@ -1,7 +1,5 @@
 package io.ferventio.app.domain
 
-import java.util.Locale
-
 enum class AppLanguage(val storageValue: String) {
     SYSTEM("system"),
     RUSSIAN("ru"),
@@ -14,13 +12,13 @@ enum class AppLanguage(val storageValue: String) {
     }
 }
 
-fun AppLanguage.matchesLocale(locale: Locale): Boolean = when (this) {
+fun AppLanguage.matchesLanguageCode(languageCode: String): Boolean = when (this) {
     AppLanguage.SYSTEM -> true
-    AppLanguage.RUSSIAN -> locale.language.equals("ru", ignoreCase = true)
-    AppLanguage.ENGLISH -> locale.language.equals("en", ignoreCase = true)
+    AppLanguage.RUSSIAN -> languageCode.equals("ru", ignoreCase = true)
+    AppLanguage.ENGLISH -> languageCode.equals("en", ignoreCase = true)
 }
 
-fun AppLanguage.resolve(locale: Locale): AppLanguage = when (this) {
-    AppLanguage.SYSTEM -> if (locale.language.equals("en", ignoreCase = true)) AppLanguage.ENGLISH else AppLanguage.RUSSIAN
+fun AppLanguage.resolveLanguageCode(languageCode: String): AppLanguage = when (this) {
+    AppLanguage.SYSTEM -> if (languageCode.equals("en", ignoreCase = true)) AppLanguage.ENGLISH else AppLanguage.RUSSIAN
     else -> this
 }

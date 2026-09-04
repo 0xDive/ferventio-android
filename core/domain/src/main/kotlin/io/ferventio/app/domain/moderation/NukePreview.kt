@@ -110,14 +110,13 @@ object NukePreviewPlanner {
 
             matchedMessages += 1
             val userKey = message.userId.ifBlank { "login:${message.userLogin.lowercase()}" }
-            matchedUsersByKey.putIfAbsent(
-                userKey,
-                NukeTargetUser(
+            if (!matchedUsersByKey.containsKey(userKey)) {
+                matchedUsersByKey[userKey] = NukeTargetUser(
                     userId = message.userId,
                     userLogin = message.userLogin,
                     userDisplayName = message.userDisplayName,
-                ),
-            )
+                )
+            }
             matchedMessageIds += message.id
             if (samples.size < maxSamples) {
                 samples += NukePreviewSample(
