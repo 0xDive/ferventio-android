@@ -32,12 +32,17 @@ internal class WorkspaceSettingsBackupImportCoordinator(
         identity: MobileDeviceIdentity,
         authentication: StoredAuthentication,
         importedPayload: String,
+        rollbackPayload: (String?) -> String? = { remotePayload -> remotePayload },
     ): WorkspaceSettingsBackupImportJournalSnapshot {
         // Validate before any remote read so a malformed file cannot create network side effects.
         WorkspaceSettingsBackupImportPreparation.prepare(importedPayload)
+        val existing = journal.load()
+        require(existing.pendingImport == null && existing.conflict == null) {
+            "A settings import is already pending"
+        }
         val current = snapshots.fetch(identity, authentication)
         return journal.begin(
-            preImportPayload = current?.payload,
+            preImportPayload = rollbackPayload(current?.payload),
             importedPayload = importedPayload,
         )
     }
@@ -50,8 +55,12 @@ internal class WorkspaceSettingsBackupImportCoordinator(
         currentAppVersion: String,
         createdAt: Instant,
     ): WorkspaceSettingsBackupImportSyncResult {
-        val pending = journal.load().pendingImport
+        val snapshot = journal.load()
+        val pending = snapshot.pendingImport
             ?: error("No pending settings import is available")
+        require(snapshot.conflict == null) {
+            "Settings import conflict requires an explicit resolution"
+        }
         return when (
             val result = uploads.upload(
                 identity = identity,
@@ -89,8 +98,12 @@ internal class WorkspaceSettingsBackupImportCoordinator(
         currentAppVersion: String,
         createdAt: Instant,
     ): WorkspaceSettingsBackupImportSyncResult.Synced {
-        val pending = journal.load().pendingImport
+        val snapshot = journal.load()
+        val pending = snapshot.pendingImport
             ?: error("No pending settings import is available")
+        require(snapshot.conflict != null) {
+            "Forced settings overwrite requires an unresolved conflict"
+        }
         val result = uploads.overwrite(
             identity = identity,
             authentication = authentication,
@@ -103,5 +116,16 @@ internal class WorkspaceSettingsBackupImportCoordinator(
             revision = result.revision,
             payload = result.payload,
         )
+    }
+
+    /** Settles a durable conflict only after the caller has successfully applied the server side. */
+    fun acceptServerConflict(expectedServerRevision: Long) {
+        require(expectedServerRevision > 0L) { "Settings conflict revision must be positive" }
+        val conflict = journal.load().conflict
+            ?: error("No settings import conflict is available")
+        require(conflict.serverRevision == expectedServerRevision) {
+            "Settings import conflict changed before it was settled"
+        }
+        journal.markSettled()
     }
 }
