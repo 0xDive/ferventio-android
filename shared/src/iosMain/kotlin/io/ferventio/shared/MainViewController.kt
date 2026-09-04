@@ -16,10 +16,12 @@ import io.ferventio.shared.settings.SharedLocalUiPreferencesStateHolder
 import io.ferventio.shared.ui.app.FerventioAccountActions
 import io.ferventio.shared.ui.app.FerventioAuthenticationRoot
 import io.ferventio.shared.ui.app.FerventioSettingsBackupActions
+import io.ferventio.shared.ui.app.FerventioSettingsBackupOperationFeedback
 import io.ferventio.shared.ui.app.ProvideFerventioAboutInfo
 import io.ferventio.shared.ui.app.ProvideFerventioAccountActions
 import io.ferventio.shared.ui.app.ProvideFerventioPrivacyPlatformInfo
 import io.ferventio.shared.ui.app.ProvideFerventioSettingsBackupActions
+import io.ferventio.shared.ui.app.SharedSettingsBackupStatus
 import io.ferventio.shared.ui.app.currentIosPrivacyPlatformInfo
 import io.ferventio.shared.ui.locale.FerventioLocaleEnvironment
 import io.ferventio.shared.ui.theme.FerventioTheme
@@ -30,8 +32,11 @@ private val iosRuntimeState = FerventioRuntimeState(
     history = IosChatHistoryStore(),
     localUiPreferences = SharedLocalUiPreferencesStateHolder(IosLocalUiPreferencesStore()),
 )
+private val iosSettingsBackupRuntime = IosSettingsBackupRuntime(iosRuntimeState)
 
 fun IosRuntimeState(): FerventioRuntimeState = iosRuntimeState
+
+fun IosSettingsBackupRuntimeState(): IosSettingsBackupRuntime = iosSettingsBackupRuntime
 
 fun MainViewController(
     onAuthenticate: () -> Unit = {},
@@ -70,6 +75,11 @@ fun MainViewController(
 ): UIViewController = ComposeUIViewController {
     val preferences = iosRuntimeState.settings.preferences
     val authenticationRequired = iosRuntimeState.chat.authenticationRequired
+    val backupStatus = iosSettingsBackupRuntime.state.status
+    val backupLocked = backupStatus == SharedSettingsBackupStatus.EXPORTING ||
+        backupStatus == SharedSettingsBackupStatus.IMPORTING ||
+        backupStatus == SharedSettingsBackupStatus.RESOLVING ||
+        backupStatus == SharedSettingsBackupStatus.CONFLICT
     val aboutInfo = remember { currentIosAboutInfo() }
     val privacyPlatformInfo = remember { currentIosPrivacyPlatformInfo() }
     val accountActions = remember(onReauthorize, onSignOut, onRevokeDevice, onRevokeAllSessions) {
@@ -85,12 +95,22 @@ fun MainViewController(
         onImportSettingsBackup,
         onKeepLocalSettingsBackup,
         onUseServerSettingsBackup,
+        backupStatus,
     ) {
         FerventioSettingsBackupActions(
-            onExport = onExportSettingsBackup,
-            onImport = onImportSettingsBackup,
-            onKeepLocal = onKeepLocalSettingsBackup,
-            onUseServer = onUseServerSettingsBackup,
+            state = iosSettingsBackupRuntime.state,
+            onExport = if (backupLocked) null else onExportSettingsBackup,
+            onImport = if (backupLocked) null else onImportSettingsBackup,
+            onKeepLocal = if (backupStatus == SharedSettingsBackupStatus.CONFLICT) {
+                onKeepLocalSettingsBackup
+            } else {
+                null
+            },
+            onUseServer = if (backupStatus == SharedSettingsBackupStatus.CONFLICT) {
+                onUseServerSettingsBackup
+            } else {
+                null
+            },
         )
     }
     LaunchedEffect(authenticationRequired) {
@@ -140,6 +160,7 @@ fun MainViewController(
                                     onRemoveSplit = onRemoveSplit,
                                     onSetPrimaryFraction = onSetPrimaryFraction,
                                 )
+                                FerventioSettingsBackupOperationFeedback(backupActions)
                             }
                         }
                     }

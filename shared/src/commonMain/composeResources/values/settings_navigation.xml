@@ -19,6 +19,11 @@
     <string name="settings_backup_export">Export backup</string>
     <string name="settings_backup_import">Import backup</string>
     <string name="settings_backup_unavailable">Backup file transfer is not available on this platform yet.</string>
+    <string name="settings_backup_conflict">Settings changed on another device while this backup was being imported. Choose which version to keep.</string>
+    <string name="settings_backup_keep_local">Keep imported</string>
+    <string name="settings_backup_use_server">Use server</string>
+    <string name="settings_backup_error">Backup operation failed: %1$s</string>
+    <string name="settings_backup_unresolved_channels">The backup was synced, but these Twitch channels could not be resolved locally: %1$s. They remain in the synced backup and can be restored when Twitch resolves them again.</string>
     <string name="settings_language_search">Search languages</string>
     <string name="settings_language_no_results">No languages found.</string>
     <string name="settings_language_system_summary">Follow the device language</string>

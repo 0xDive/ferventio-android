@@ -19,6 +19,11 @@
     <string name="settings_backup_export">Экспортировать копию</string>
     <string name="settings_backup_import">Импортировать копию</string>
     <string name="settings_backup_unavailable">Передача файла резервной копии пока недоступна на этой платформе.</string>
+    <string name="settings_backup_conflict">Во время импорта настройки изменились на другом устройстве. Выберите, какую версию сохранить.</string>
+    <string name="settings_backup_keep_local">Оставить импортированную</string>
+    <string name="settings_backup_use_server">Использовать серверную</string>
+    <string name="settings_backup_error">Ошибка резервной копии: %1$s</string>
+    <string name="settings_backup_unresolved_channels">Резервная копия синхронизирована, но эти Twitch-каналы не удалось разрешить локально: %1$s. Они остаются в синхронизированной копии и смогут восстановиться, когда Twitch снова их разрешит.</string>
     <string name="settings_language_search">Поиск языка</string>
     <string name="settings_language_no_results">Языки не найдены.</string>
     <string name="settings_language_system_summary">Использовать язык устройства</string>
