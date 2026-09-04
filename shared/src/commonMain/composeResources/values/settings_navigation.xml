@@ -11,6 +11,14 @@
     <string name="settings_message_rules_summary">Highlights, Ignore and notification actions</string>
     <string name="settings_notifications_summary">Permissions and message alerts</string>
     <string name="settings_history_summary">Recent messages and local retention</string>
+    <string name="settings_export_sync">Export &amp; sync</string>
+    <string name="settings_export_sync_summary">Backup, restore and synced settings revision</string>
+    <string name="settings_backup_description">A backup contains interface settings, channels, workspaces, filters, highlights and ignore rules. Local message history and Twitch tokens are never exported.</string>
+    <string name="settings_backup_revision">Synced revision %1$d</string>
+    <string name="settings_backup_not_synced">No synced settings revision yet.</string>
+    <string name="settings_backup_export">Export backup</string>
+    <string name="settings_backup_import">Import backup</string>
+    <string name="settings_backup_unavailable">Backup file transfer is not available on this platform yet.</string>
     <string name="settings_language_search">Search languages</string>
     <string name="settings_language_no_results">No languages found.</string>
     <string name="settings_language_system_summary">Follow the device language</string>

@@ -15,9 +15,11 @@ import io.ferventio.shared.settings.SharedAppPreferences
 import io.ferventio.shared.settings.SharedLocalUiPreferencesStateHolder
 import io.ferventio.shared.ui.app.FerventioAccountActions
 import io.ferventio.shared.ui.app.FerventioAuthenticationRoot
+import io.ferventio.shared.ui.app.FerventioSettingsBackupActions
 import io.ferventio.shared.ui.app.ProvideFerventioAboutInfo
 import io.ferventio.shared.ui.app.ProvideFerventioAccountActions
 import io.ferventio.shared.ui.app.ProvideFerventioPrivacyPlatformInfo
+import io.ferventio.shared.ui.app.ProvideFerventioSettingsBackupActions
 import io.ferventio.shared.ui.app.currentIosPrivacyPlatformInfo
 import io.ferventio.shared.ui.locale.FerventioLocaleEnvironment
 import io.ferventio.shared.ui.theme.FerventioTheme
@@ -38,6 +40,10 @@ fun MainViewController(
     onRequestNotificationPermission: () -> Unit = {},
     onOpenNotificationSettings: () -> Unit = {},
     onSaveSettings: (SharedAppPreferences) -> Unit = {},
+    onExportSettingsBackup: (() -> Unit)? = null,
+    onImportSettingsBackup: (() -> Unit)? = null,
+    onKeepLocalSettingsBackup: (() -> Unit)? = null,
+    onUseServerSettingsBackup: (() -> Unit)? = null,
     onUpsertHighlightRule: (HighlightRule) -> Unit = {},
     onDeleteHighlightRule: (String) -> Unit = {},
     onUpsertIgnoreRule: (IgnoreRule) -> Unit = {},
@@ -74,52 +80,67 @@ fun MainViewController(
             onRevokeAllSessions = onRevokeAllSessions,
         )
     }
+    val backupActions = remember(
+        onExportSettingsBackup,
+        onImportSettingsBackup,
+        onKeepLocalSettingsBackup,
+        onUseServerSettingsBackup,
+    ) {
+        FerventioSettingsBackupActions(
+            onExport = onExportSettingsBackup,
+            onImport = onImportSettingsBackup,
+            onKeepLocal = onKeepLocalSettingsBackup,
+            onUseServer = onUseServerSettingsBackup,
+        )
+    }
     LaunchedEffect(authenticationRequired) {
         if (authenticationRequired) onAuthenticationRequired()
     }
     ProvideFerventioRuntimeState(iosRuntimeState) {
         ProvideFerventioAboutInfo(aboutInfo) {
             ProvideFerventioAccountActions(accountActions) {
-                ProvideFerventioPrivacyPlatformInfo(privacyPlatformInfo) {
-                    FerventioLocaleEnvironment(preferences.appLanguage) {
-                        FerventioTheme(
-                            themeMode = when (preferences.themeMode) {
-                                AppThemeMode.LIGHT -> FerventioThemeMode.LIGHT
-                                AppThemeMode.DARK -> FerventioThemeMode.DARK
-                                AppThemeMode.AMOLED -> FerventioThemeMode.AMOLED
-                            },
-                            fontScalePercent = preferences.fontScalePercent,
-                        ) {
-                            FerventioAuthenticationRoot(
-                                state = iosRuntimeState.authentication.state,
-                                workspace = iosRuntimeState.workspace,
-                                onAuthenticate = onAuthenticate,
-                                onSignOut = onSignOut,
-                                pushAuthorizationStatus = iosRuntimeState.pushRegistration.authorizationStatus,
-                                onRequestNotificationPermission = onRequestNotificationPermission,
-                                onOpenNotificationSettings = onOpenNotificationSettings,
-                                onSaveSettings = onSaveSettings,
-                                onUpsertHighlightRule = onUpsertHighlightRule,
-                                onDeleteHighlightRule = onDeleteHighlightRule,
-                                onUpsertIgnoreRule = onUpsertIgnoreRule,
-                                onDeleteIgnoreRule = onDeleteIgnoreRule,
-                                onUpsertSavedFilter = onUpsertSavedFilter,
-                                onDeleteSavedFilter = onDeleteSavedFilter,
-                                onImportSavedFilters = onImportSavedFilters,
-                                onAddSavedFilterSplit = onAddSavedFilterSplit,
-                                onSelectChannel = onSelectChannel,
-                                onAddChannel = onAddChannel,
-                                onSetChannelPinned = onSetChannelPinned,
-                                onRenameChannel = onRenameChannel,
-                                onRemoveChannel = onRemoveChannel,
-                                onMoveChannel = onMoveChannel,
-                                onSetSplitFilterQuery = onSetSplitFilterQuery,
-                                onSetSplitChannel = onSetSplitChannel,
-                                onFocusSplit = onFocusSplit,
-                                onAddSplit = onAddSplit,
-                                onRemoveSplit = onRemoveSplit,
-                                onSetPrimaryFraction = onSetPrimaryFraction,
-                            )
+                ProvideFerventioSettingsBackupActions(backupActions) {
+                    ProvideFerventioPrivacyPlatformInfo(privacyPlatformInfo) {
+                        FerventioLocaleEnvironment(preferences.appLanguage) {
+                            FerventioTheme(
+                                themeMode = when (preferences.themeMode) {
+                                    AppThemeMode.LIGHT -> FerventioThemeMode.LIGHT
+                                    AppThemeMode.DARK -> FerventioThemeMode.DARK
+                                    AppThemeMode.AMOLED -> FerventioThemeMode.AMOLED
+                                },
+                                fontScalePercent = preferences.fontScalePercent,
+                            ) {
+                                FerventioAuthenticationRoot(
+                                    state = iosRuntimeState.authentication.state,
+                                    workspace = iosRuntimeState.workspace,
+                                    onAuthenticate = onAuthenticate,
+                                    onSignOut = onSignOut,
+                                    pushAuthorizationStatus = iosRuntimeState.pushRegistration.authorizationStatus,
+                                    onRequestNotificationPermission = onRequestNotificationPermission,
+                                    onOpenNotificationSettings = onOpenNotificationSettings,
+                                    onSaveSettings = onSaveSettings,
+                                    onUpsertHighlightRule = onUpsertHighlightRule,
+                                    onDeleteHighlightRule = onDeleteHighlightRule,
+                                    onUpsertIgnoreRule = onUpsertIgnoreRule,
+                                    onDeleteIgnoreRule = onDeleteIgnoreRule,
+                                    onUpsertSavedFilter = onUpsertSavedFilter,
+                                    onDeleteSavedFilter = onDeleteSavedFilter,
+                                    onImportSavedFilters = onImportSavedFilters,
+                                    onAddSavedFilterSplit = onAddSavedFilterSplit,
+                                    onSelectChannel = onSelectChannel,
+                                    onAddChannel = onAddChannel,
+                                    onSetChannelPinned = onSetChannelPinned,
+                                    onRenameChannel = onRenameChannel,
+                                    onRemoveChannel = onRemoveChannel,
+                                    onMoveChannel = onMoveChannel,
+                                    onSetSplitFilterQuery = onSetSplitFilterQuery,
+                                    onSetSplitChannel = onSetSplitChannel,
+                                    onFocusSplit = onFocusSplit,
+                                    onAddSplit = onAddSplit,
+                                    onRemoveSplit = onRemoveSplit,
+                                    onSetPrimaryFraction = onSetPrimaryFraction,
+                                )
+                            }
                         }
                     }
                 }

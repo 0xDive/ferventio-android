@@ -55,6 +55,7 @@ private enum class SharedSettingsPage {
     NOTIFICATIONS,
     HISTORY,
     IMAGE_CACHE,
+    BACKUP_SYNC,
     ACCOUNT,
     LANGUAGE,
     ABOUT,
@@ -78,6 +79,7 @@ internal fun FerventioSettingsSheet(
     val notificationAction = notificationPermissionAction(notificationAuthorizationStatus)
     val aboutInfo = LocalFerventioAboutInfo.current
     val accountActions = LocalFerventioAccountActions.current
+    val backupActions = LocalFerventioSettingsBackupActions.current
     val privacyPlatformInfo = LocalFerventioPrivacyPlatformInfo.current
     var page by remember { mutableStateOf(SharedSettingsPage.ROOT) }
 
@@ -149,6 +151,7 @@ internal fun FerventioSettingsSheet(
                     }
                     SettingsHome(
                         preferences = state.preferences,
+                        syncRevision = state.syncRevision,
                         aboutInfo = aboutInfo,
                         onOpen = { page = it },
                         onOpenMessageRules = ::openMessageRules,
@@ -179,6 +182,11 @@ internal fun FerventioSettingsSheet(
                     update = ::update,
                 )
                 SharedSettingsPage.IMAGE_CACHE -> FerventioImageCacheSettingsPage()
+                SharedSettingsPage.BACKUP_SYNC -> SettingsBackupPage(
+                    syncRevision = state.syncRevision,
+                    actions = backupActions,
+                    onBeforeExport = ::persistIfChanged,
+                )
                 SharedSettingsPage.ACCOUNT -> ProvideFerventioAccountActions(
                     actions = FerventioAccountActions(
                         onReauthorize = accountActions.onReauthorize?.let { action ->
@@ -269,6 +277,7 @@ private fun SettingsPageHeader(page: SharedSettingsPage, onBack: () -> Unit) {
                 SharedSettingsPage.NOTIFICATIONS -> stringResource(Res.string.notifications_title)
                 SharedSettingsPage.HISTORY -> stringResource(Res.string.settings_history)
                 SharedSettingsPage.IMAGE_CACHE -> stringResource(Res.string.image_cache_title)
+                SharedSettingsPage.BACKUP_SYNC -> stringResource(Res.string.settings_export_sync)
                 SharedSettingsPage.ACCOUNT -> stringResource(Res.string.settings_account)
                 SharedSettingsPage.LANGUAGE -> stringResource(Res.string.settings_language)
                 SharedSettingsPage.ABOUT -> stringResource(Res.string.settings_about)
@@ -284,6 +293,7 @@ private fun SettingsPageHeader(page: SharedSettingsPage, onBack: () -> Unit) {
 @Composable
 private fun SettingsHome(
     preferences: SharedAppPreferences,
+    syncRevision: Long,
     aboutInfo: FerventioAboutInfo,
     onOpen: (SharedSettingsPage) -> Unit,
     onOpenMessageRules: () -> Unit,
@@ -341,6 +351,16 @@ private fun SettingsHome(
                 title = stringResource(Res.string.image_cache_title),
                 summary = stringResource(Res.string.image_cache_summary),
                 onClick = { onOpen(SharedSettingsPage.IMAGE_CACHE) },
+            )
+            HorizontalDivider()
+            SettingsMenuRow(
+                title = stringResource(Res.string.settings_export_sync),
+                summary = if (syncRevision > 0L) {
+                    stringResource(Res.string.settings_backup_revision, syncRevision)
+                } else {
+                    stringResource(Res.string.settings_export_sync_summary)
+                },
+                onClick = { onOpen(SharedSettingsPage.BACKUP_SYNC) },
             )
         }
 
@@ -401,6 +421,61 @@ private fun SettingsMenuRow(title: String, summary: String, onClick: () -> Unit)
             text = "›",
             style = MaterialTheme.typography.titleLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun SettingsBackupPage(
+    syncRevision: Long,
+    actions: FerventioSettingsBackupActions,
+    onBeforeExport: () -> Unit,
+) {
+    SettingsSectionTitle(stringResource(Res.string.settings_export_sync))
+    Text(
+        text = stringResource(Res.string.settings_backup_description),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    Spacer(Modifier.height(12.dp))
+    Text(
+        text = if (syncRevision > 0L) {
+            stringResource(Res.string.settings_backup_revision, syncRevision)
+        } else {
+            stringResource(Res.string.settings_backup_not_synced)
+        },
+        style = MaterialTheme.typography.bodyMedium,
+        fontWeight = FontWeight.Medium,
+    )
+    Spacer(Modifier.height(8.dp))
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        TextButton(
+            onClick = {
+                onBeforeExport()
+                actions.onExport?.invoke()
+            },
+            enabled = actions.onExport != null,
+            modifier = Modifier.weight(1f),
+        ) {
+            Text(stringResource(Res.string.settings_backup_export))
+        }
+        TextButton(
+            onClick = { actions.onImport?.invoke() },
+            enabled = actions.onImport != null,
+            modifier = Modifier.weight(1f),
+        ) {
+            Text(stringResource(Res.string.settings_backup_import))
+        }
+    }
+    if (!actions.fileTransferAvailable) {
+        Text(
+            text = stringResource(Res.string.settings_backup_unavailable),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 6.dp),
         )
     }
 }
