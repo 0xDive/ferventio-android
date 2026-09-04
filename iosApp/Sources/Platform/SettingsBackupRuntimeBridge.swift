@@ -45,7 +45,7 @@ final class SettingsBackupRuntimeBridge {
             payload: payload,
             currentAppVersion: appVersion,
             createdAt: timestampFormatter.string(from: Date())
-        )
+        ).boolValue
     }
 
     func resumePendingImport(authentication: StoredAuthentication?) async throws -> Bool {
@@ -55,7 +55,7 @@ final class SettingsBackupRuntimeBridge {
             authentication: authentication,
             currentAppVersion: appVersion,
             createdAt: timestampFormatter.string(from: Date())
-        )
+        ).boolValue
     }
 
     func keepLocal(authentication: StoredAuthentication?) async throws -> Bool {
@@ -65,12 +65,12 @@ final class SettingsBackupRuntimeBridge {
             authentication: authentication,
             currentAppVersion: appVersion,
             createdAt: timestampFormatter.string(from: Date())
-        )
+        ).boolValue
     }
 
     func useServer(authentication: StoredAuthentication?) async throws -> Bool {
         let authentication = try requireAuthentication(authentication)
-        return try await runtime.useServer(authentication: authentication)
+        return try await runtime.useServer(authentication: authentication).boolValue
     }
 
     func reportExported() {
