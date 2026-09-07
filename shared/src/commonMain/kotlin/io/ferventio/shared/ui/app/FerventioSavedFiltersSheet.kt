@@ -1,9 +1,13 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+@file:OptIn(
+    androidx.compose.material3.ExperimentalMaterial3Api::class,
+    androidx.compose.foundation.layout.ExperimentalLayoutApi::class,
+)
 
 package io.ferventio.shared.ui.app
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -14,6 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -28,14 +33,22 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.ferventio.app.domain.ChatMessage
 import io.ferventio.app.domain.CompiledMessageFilter
 import io.ferventio.app.domain.FilterDiagnostic
 import io.ferventio.app.domain.FilterDiagnosticSeverity
+import io.ferventio.app.domain.FilterTokenKind
 import io.ferventio.app.domain.MAX_FILTER_EXPRESSION_LENGTH
 import io.ferventio.app.domain.MessageFilterLanguage
 import io.ferventio.app.domain.SavedMessageFilter
@@ -50,6 +63,7 @@ import io.ferventio.shared.generated.resources.saved_filters_diagnostic_warning
 import io.ferventio.shared.generated.resources.saved_filters_edit
 import io.ferventio.shared.generated.resources.saved_filters_edit_title
 import io.ferventio.shared.generated.resources.saved_filters_empty
+import io.ferventio.shared.generated.resources.saved_filters_examples
 import io.ferventio.shared.generated.resources.saved_filters_export
 import io.ferventio.shared.generated.resources.saved_filters_export_hint
 import io.ferventio.shared.generated.resources.saved_filters_export_title
@@ -65,6 +79,7 @@ import io.ferventio.shared.generated.resources.saved_filters_name
 import io.ferventio.shared.generated.resources.saved_filters_new_title
 import io.ferventio.shared.generated.resources.saved_filters_preview
 import io.ferventio.shared.generated.resources.saved_filters_preview_empty
+import io.ferventio.shared.generated.resources.saved_filters_reward_metadata_hint
 import io.ferventio.shared.generated.resources.saved_filters_save
 import io.ferventio.shared.generated.resources.saved_filters_title
 import io.ferventio.shared.generated.resources.settings_save_failed
@@ -312,14 +327,9 @@ private fun SavedFilterEditorDialog(
                     label = { Text(stringResource(Res.string.saved_filters_name)) },
                     singleLine = true,
                 )
-                OutlinedTextField(
+                SavedFilterExpressionField(
                     value = expression,
                     onValueChange = { expression = it.take(MAX_FILTER_EXPRESSION_LENGTH) },
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp),
-                    label = { Text(stringResource(Res.string.saved_filters_expression)) },
-                    textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
-                    minLines = 4,
-                    maxLines = 9,
                     isError = expression.isNotBlank() && !compiled.isValid,
                 )
                 if (expression.isNotBlank()) {
@@ -363,6 +373,18 @@ private fun SavedFilterEditorDialog(
                         PreviewMessageRow(message)
                     }
                 }
+
+                Text(
+                    text = stringResource(Res.string.saved_filters_examples),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                SavedFilterExamples(onSelect = { expression = it })
+                Text(
+                    text = stringResource(Res.string.saved_filters_reward_metadata_hint),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
             }
         },
         confirmButton = {
@@ -386,6 +408,99 @@ private fun SavedFilterEditorDialog(
             }
         },
     )
+}
+
+@Composable
+private fun SavedFilterExpressionField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    isError: Boolean,
+) {
+    val colors = MaterialTheme.colorScheme
+    val transformation = remember(colors) {
+        SavedFilterSyntaxTransformation(
+            fieldColor = colors.primary,
+            stringColor = colors.tertiary,
+            numberColor = colors.secondary,
+            regexColor = colors.error,
+            operatorColor = colors.onSurface,
+            booleanColor = colors.secondary,
+            invalidColor = colors.error,
+        )
+    }
+    OutlinedTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = Modifier.fillMaxWidth().heightIn(min = 120.dp),
+        label = { Text(stringResource(Res.string.saved_filters_expression)) },
+        textStyle = MaterialTheme.typography.bodyMedium.copy(fontFamily = FontFamily.Monospace),
+        visualTransformation = transformation,
+        minLines = 4,
+        maxLines = 9,
+        isError = isError,
+    )
+}
+
+@Composable
+private fun SavedFilterExamples(onSelect: (String) -> Unit) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        MessageFilterLanguage.examples().forEach { (_, expression) ->
+            FilterChip(
+                selected = false,
+                onClick = { onSelect(expression) },
+                label = {
+                    Text(
+                        text = expression,
+                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace),
+                    )
+                },
+            )
+        }
+    }
+}
+
+private class SavedFilterSyntaxTransformation(
+    private val fieldColor: Color,
+    private val stringColor: Color,
+    private val numberColor: Color,
+    private val regexColor: Color,
+    private val operatorColor: Color,
+    private val booleanColor: Color,
+    private val invalidColor: Color,
+) : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText {
+        val tokenization = MessageFilterLanguage.tokenize(text.text)
+        val annotated = buildAnnotatedString {
+            append(text.text)
+            tokenization.tokens.forEach { token ->
+                if (token.span.start >= token.span.endExclusive || token.span.endExclusive > text.length) {
+                    return@forEach
+                }
+                val color = when (token.kind) {
+                    FilterTokenKind.IDENTIFIER -> fieldColor
+                    FilterTokenKind.STRING -> stringColor
+                    FilterTokenKind.NUMBER -> numberColor
+                    FilterTokenKind.BOOLEAN -> booleanColor
+                    FilterTokenKind.REGEX -> regexColor
+                    FilterTokenKind.OPERATOR,
+                    FilterTokenKind.KEYWORD_OPERATOR,
+                    FilterTokenKind.LEFT_PAREN,
+                    FilterTokenKind.RIGHT_PAREN,
+                    FilterTokenKind.LEFT_BRACKET,
+                    FilterTokenKind.RIGHT_BRACKET,
+                    FilterTokenKind.COMMA,
+                    -> operatorColor
+                    FilterTokenKind.INVALID -> invalidColor
+                    FilterTokenKind.EOF -> return@forEach
+                }
+                addStyle(SpanStyle(color = color), token.span.start, token.span.endExclusive)
+            }
+        }
+        return TransformedText(annotated, OffsetMapping.Identity)
+    }
 }
 
 @Composable

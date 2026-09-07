@@ -14,6 +14,8 @@
     <string name="saved_filters_expression_invalid">Expression has compiler diagnostics.</string>
     <string name="saved_filters_preview">Preview: %1$d of %2$d recent messages match</string>
     <string name="saved_filters_preview_empty">No recent live messages are available for preview.</string>
+    <string name="saved_filters_examples">Examples</string>
+    <string name="saved_filters_reward_metadata_hint">reward.title and reward.cost are available only when Twitch includes reward metadata; otherwise comparisons against them do not match.</string>
     <string name="saved_filters_diagnostic_error">Error</string>
     <string name="saved_filters_diagnostic_warning">Warning</string>
     <string name="saved_filters_export">Export</string>

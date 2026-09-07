@@ -14,6 +14,8 @@
     <string name="saved_filters_expression_invalid">Компилятор нашёл замечания в выражении.</string>
     <string name="saved_filters_preview">Предпросмотр: совпало %1$d из %2$d последних сообщений</string>
     <string name="saved_filters_preview_empty">Для предпросмотра пока нет последних live-сообщений.</string>
+    <string name="saved_filters_examples">Примеры</string>
+    <string name="saved_filters_reward_metadata_hint">Поля reward.title и reward.cost доступны только если Twitch передал metadata награды; иначе сравнение с ними не совпадает.</string>
     <string name="saved_filters_diagnostic_error">Ошибка</string>
     <string name="saved_filters_diagnostic_warning">Предупреждение</string>
     <string name="saved_filters_export">Экспорт</string>
