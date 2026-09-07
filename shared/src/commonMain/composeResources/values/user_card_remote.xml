@@ -1,0 +1,9 @@
+<resources>
+    <string name="user_card_account_created">Account created: %1$s</string>
+    <string name="user_card_following_since">Following since: %1$s</string>
+    <string name="user_card_subscription_hidden">Subscription status is hidden</string>
+    <string name="user_card_subscribed">Currently subscribed</string>
+    <string name="user_card_subscribed_months">Subscribed for %1$d months</string>
+    <string name="user_card_subscriber_tier">Subscription tier: %1$s</string>
+    <string name="user_card_not_subscribed">Not currently subscribed</string>
+</resources>

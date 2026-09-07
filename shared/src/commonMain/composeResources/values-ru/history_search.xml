@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="history_search_open">Поиск по истории чата</string>
+    <string name="history_search_title">История чата</string>
+    <string name="history_search_query_label">Поисковый запрос</string>
+    <string name="history_search_query_hint">Текст или операторы: from:, in:, has:link, is:deleted…</string>
+    <string name="history_search_current_channel">Текущий чат</string>
+    <string name="history_search_all_channels">Все чаты</string>
+    <string name="history_search_action">Найти</string>
+    <string name="history_search_empty">Подходящих сообщений нет</string>
+    <string name="history_search_initial">Поиск по сохранённым сообщениям чата</string>
+    <string name="history_search_results">Результатов: %1$d</string>
+    <string name="history_search_channel">#%1$s</string>
+    <string name="history_search_open_message">Открыть сообщение</string>
+    <string name="history_search_unavailable">Локальная история недоступна</string>
+</resources>

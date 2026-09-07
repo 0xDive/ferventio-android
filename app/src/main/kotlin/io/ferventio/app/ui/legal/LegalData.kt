@@ -119,7 +119,7 @@ internal object FerventioLegalContent {
             OpenSourceNotice(
                 id = "androidx",
                 name = "AndroidX / Jetpack / Compose / Room",
-                version = "Core 1.17.0 · Activity 1.13.0 · Lifecycle 2.11.0 · Compose 1.11.4 · Room 2.8.4",
+                version = "Core 1.17.0 · Activity 1.13.0 · Lifecycle 2.10.0 · Compose 1.11.4 · Room 2.8.4",
                 licenseId = APACHE_2_0,
                 description = "Android application, UI, lifecycle, persistence and profile infrastructure.",
                 projectUrl = "https://github.com/androidx/androidx",
@@ -139,7 +139,7 @@ internal object FerventioLegalContent {
             OpenSourceNotice(
                 id = "coroutines",
                 name = "kotlinx.coroutines",
-                version = "1.10.2",
+                version = "1.11.0",
                 licenseId = APACHE_2_0,
                 description = "Structured concurrency and asynchronous streams.",
                 projectUrl = "https://github.com/Kotlin/kotlinx.coroutines",
@@ -149,7 +149,7 @@ internal object FerventioLegalContent {
             OpenSourceNotice(
                 id = "serialization",
                 name = "kotlinx.serialization",
-                version = "1.9.0",
+                version = "1.11.0",
                 licenseId = APACHE_2_0,
                 description = "JSON encoding and decoding.",
                 projectUrl = "https://github.com/Kotlin/kotlinx.serialization",
@@ -159,7 +159,7 @@ internal object FerventioLegalContent {
             OpenSourceNotice(
                 id = "ktor",
                 name = "Ktor Client",
-                version = "3.4.3",
+                version = "3.5.2",
                 licenseId = APACHE_2_0,
                 description = "HTTP and WebSocket client infrastructure.",
                 projectUrl = "https://github.com/ktorio/ktor",
@@ -200,7 +200,7 @@ internal object FerventioLegalContent {
                 OpenSourceNotice(
                     id = "firebase",
                     name = "Firebase Android SDK",
-                    version = "Messaging 25.1.1 · Crashlytics 20.0.5",
+                    version = "Messaging 25.1.1 · Crashlytics 20.1.0",
                     licenseId = APACHE_2_0,
                     description = "Play-only push delivery and crash reporting.",
                     projectUrl = "https://github.com/firebase/firebase-android-sdk",

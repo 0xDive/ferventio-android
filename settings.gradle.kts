@@ -21,4 +21,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "Ferventio"
-include(":app", ":benchmark", ":core:domain", ":core:database")
+include(":app", ":benchmark", ":core:domain", ":core:database", ":shared")

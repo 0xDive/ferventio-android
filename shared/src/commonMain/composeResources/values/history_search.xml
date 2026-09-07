@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="history_search_open">Search chat history</string>
+    <string name="history_search_title">Chat history</string>
+    <string name="history_search_query_label">Search query</string>
+    <string name="history_search_query_hint">Text or operators: from:, in:, has:link, is:deleted…</string>
+    <string name="history_search_current_channel">Current chat</string>
+    <string name="history_search_all_channels">All chats</string>
+    <string name="history_search_action">Search</string>
+    <string name="history_search_empty">No matching messages</string>
+    <string name="history_search_initial">Search saved chat messages</string>
+    <string name="history_search_results">Results: %1$d</string>
+    <string name="history_search_channel">#%1$s</string>
+    <string name="history_search_open_message">Open message</string>
+    <string name="history_search_unavailable">Local history is unavailable</string>
+</resources>

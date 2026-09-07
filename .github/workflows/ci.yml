@@ -39,7 +39,7 @@ jobs:
       - name: Bootstrap and verify Gradle Wrapper
         run: |
           ./gradlew --version
-          echo "497c8c2a7e5031f6aa847f88104aa80a93532ec32ee17bdb8d1d2f67a194a9c7  gradle/wrapper/gradle-wrapper.jar" | sha256sum --check --strict
+          echo "7a9ce74cff467ca1bf60a4fcd9f05185acceda4d0f382434d393e17864262c5d  gradle/wrapper/gradle-wrapper.jar" | sha256sum --check --strict
 
       - name: Repository secret scan
         run: |
@@ -47,7 +47,9 @@ jobs:
           python3 scripts/security/test-check-repository-secrets.py
 
       - name: Architecture boundaries
-        run: python3 scripts/architecture/check-module-boundaries.py --root .
+        run: |
+          python3 scripts/architecture/check-module-boundaries.py --root .
+          python3 scripts/architecture/check-kmp-boundaries.py --root .
 
       - name: Resource localization contract
         run: python3 scripts/localization/check_ui_localization.py
@@ -60,12 +62,40 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Unit tests, lint, flavor isolation and debug builds
+      - name: Compile common domain
         run: |
           ./gradlew \
-            :core:domain:testDebugUnitTest \
+            :core:domain:compileCommonMainKotlinMetadata \
+            --no-configuration-cache \
+            --stacktrace
+
+      - name: Compile shared common UI
+        run: |
+          ./gradlew \
+            :shared:compileCommonMainKotlinMetadata \
+            --no-configuration-cache \
+            --stacktrace
+
+      - name: Run KMP Android host tests
+        run: |
+          ./gradlew \
+            :core:domain:testAndroidHostTest \
+            :shared:testAndroidHostTest \
+            --no-configuration-cache \
+            --stacktrace
+
+      - name: Verify auth persistence compatibility
+        run: |
+          ./gradlew \
+            :app:testFossDebugUnitTest \
+            --tests io.ferventio.app.data.AuthSessionPayloadCodecTest \
+            --no-configuration-cache \
+            --stacktrace
+
+      - name: Android tests, lint, flavor isolation and debug builds
+        run: |
+          ./gradlew \
             :core:database:testDebugUnitTest \
-            :core:domain:lintDebug \
             :core:database:lintDebug \
             :app:testFossDebugUnitTest \
             :app:testPlayDebugUnitTest \

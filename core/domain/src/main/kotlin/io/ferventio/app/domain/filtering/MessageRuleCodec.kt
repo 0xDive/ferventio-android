@@ -1,5 +1,6 @@
 package io.ferventio.app.domain
 
+import kotlin.uuid.Uuid
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -42,7 +43,7 @@ object MessageRuleCodec {
                     ?.let { runCatching { HighlightRuleType.valueOf(it) }.getOrNull() }
                     ?: return@mapNotNull null
                 HighlightRule(
-                    id = objectValue.string("id").orEmpty().ifBlank { java.util.UUID.randomUUID().toString() },
+                    id = objectValue.string("id").orEmpty().ifBlank { Uuid.random().toString() },
                     type = type,
                     pattern = objectValue.string("pattern").orEmpty(),
                     enabled = objectValue.boolean("enabled") ?: true,
@@ -84,7 +85,7 @@ object MessageRuleCodec {
                     ?.let { runCatching { IgnoreDisplayMode.valueOf(it) }.getOrNull() }
                     ?: IgnoreDisplayMode.HIDE
                 IgnoreRule(
-                    id = objectValue.string("id").orEmpty().ifBlank { java.util.UUID.randomUUID().toString() },
+                    id = objectValue.string("id").orEmpty().ifBlank { Uuid.random().toString() },
                     type = type,
                     pattern = objectValue.string("pattern").orEmpty(),
                     enabled = objectValue.boolean("enabled") ?: true,

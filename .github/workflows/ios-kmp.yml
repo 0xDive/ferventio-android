@@ -1,0 +1,111 @@
+name: iOS KMP CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-kmp-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  framework:
+    runs-on: macos-26
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - uses: gradle/actions/setup-gradle@v6.2.0
+        with:
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
+
+      - name: Select supported Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.4.1.app/Contents/Developer
+
+      - name: Verify Apple toolchain
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphonesimulator --show-sdk-version
+
+      - name: Verify iOS privacy configuration guard
+        run: |
+          CONFIGURATION=Debug \
+            sh ./iosApp/Scripts/verify-privacy-configuration.sh
+
+          if CONFIGURATION=Release \
+            sh ./iosApp/Scripts/verify-privacy-configuration.sh; then
+            echo "Release privacy validation unexpectedly accepted missing metadata." >&2
+            exit 1
+          fi
+
+          CONFIGURATION=Release \
+            FERVENTIO_PRIVACY_OPERATOR_NAME="Ferventio CI" \
+            FERVENTIO_PRIVACY_CONTACT="privacy@example.com" \
+            FERVENTIO_PRIVACY_POLICY_URL="https://example.com/privacy" \
+            sh ./iosApp/Scripts/verify-privacy-configuration.sh
+
+          if CONFIGURATION=Release \
+            FERVENTIO_PRIVACY_OPERATOR_NAME="Ferventio CI" \
+            FERVENTIO_PRIVACY_CONTACT="privacy@example.com" \
+            FERVENTIO_PRIVACY_POLICY_URL="http://example.com/privacy" \
+            sh ./iosApp/Scripts/verify-privacy-configuration.sh; then
+            echo "Release privacy validation unexpectedly accepted a non-HTTPS policy URL." >&2
+            exit 1
+          fi
+
+      - name: Compile common domain for iOS simulator
+        run: |
+          ./gradlew \
+            :core:domain:compileKotlinIosSimulatorArm64 \
+            --no-configuration-cache \
+            --stacktrace
+
+      - name: Link shared iOS simulator framework
+        run: |
+          ./gradlew \
+            :shared:linkDebugFrameworkIosSimulatorArm64 \
+            --no-configuration-cache \
+            --stacktrace
+
+      - name: Verify shared framework output
+        run: |
+          test -d shared/build/bin/iosSimulatorArm64/debugFramework/FerventioShared.framework
+          grep -R "MainViewController" shared/build/bin/iosSimulatorArm64/debugFramework/FerventioShared.framework/Headers
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate iOS application project
+        working-directory: iosApp
+        run: xcodegen generate
+
+      - name: Build iOS application for simulator
+        run: |
+          xcodebuild \
+            -project iosApp/Ferventio.xcodeproj \
+            -scheme Ferventio \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/ios-derived \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=YES \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Verify Compose resources in iOS app bundle
+        run: |
+          APP_BUNDLE="build/ios-derived/Build/Products/Debug-iphonesimulator/Ferventio.app"
+          test -d "$APP_BUNDLE/compose-resources"
+          test -f "$APP_BUNDLE/compose-resources/composeResources/io.ferventio.shared.generated.resources/values/strings.commonMain.cvr"
+          test -f "$APP_BUNDLE/compose-resources/composeResources/io.ferventio.shared.generated.resources/values-ru/strings.commonMain.cvr"

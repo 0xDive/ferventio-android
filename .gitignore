@@ -15,6 +15,10 @@ benchmark/build/
 !build-logic/src/main/kotlin/io/ferventio/build/
 !build-logic/src/main/kotlin/io/ferventio/build/*.kt
 
+# Generated iOS project files
+/iosApp/Ferventio.xcodeproj/
+/iosApp/Generated/
+
 # Local release configuration and credentials
 gradle-local.properties
 gragle.properties

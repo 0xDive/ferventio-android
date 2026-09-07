@@ -1,0 +1,18 @@
+<resources>
+    <string name="workspace_split_filter_title">Split filter</string>
+    <string name="workspace_split_filter_choose_saved">Choose saved filter</string>
+    <string name="workspace_split_filter_linked">Linked to saved filter: %1$s</string>
+    <string name="workspace_split_filter_expression">Expression; leave empty for no filter</string>
+    <string name="workspace_split_filter_highlights">Highlights split</string>
+    <string name="workspace_split_filter_preview">Preview: %1$d of %2$d</string>
+    <string name="workspace_split_filter_apply">Apply</string>
+    <string name="workspace_split_filter_reset">Reset</string>
+    <string name="workspace_split_filter_cancel">Cancel</string>
+    <string name="workspace_split_filter_invalid">Expression is invalid.</string>
+    <string name="workspace_split_filter_no_matches">No matching messages in the current preview.</string>
+    <string name="workspace_split_choose_channel">Choose channel</string>
+    <string name="workspace_split_filter_action">Filter</string>
+    <string name="workspace_split_remove">Remove split</string>
+    <string name="workspace_split_add">Add split</string>
+    <string name="workspace_split_unassigned">No channel</string>
+</resources>

@@ -1,0 +1,23 @@
+<resources>
+    <string name="settings_account">Аккаунт Twitch</string>
+    <string name="settings_account_summary">Авторизация, доступ устройства и сессии</string>
+    <string name="account_twitch_title">Twitch</string>
+    <string name="account_channels_summary">Каналов: %1$d · модераторских: %2$d</string>
+    <string name="account_authorization_summary">Авторизация сохранена на этом устройстве. Если сервис входа временно недоступен, Ferventio продолжит работать напрямую с Twitch, пока активна текущая Twitch-сессия. Выход не удаляет локальные каналы, историю, черновики и настройки.</string>
+    <string name="account_reauthorize">Повторно авторизовать Twitch</string>
+    <string name="account_reauthorizing">Повторная авторизация Twitch…</string>
+    <string name="account_sign_out">Выйти из Twitch</string>
+    <string name="account_session_title">Управление сессиями</string>
+    <string name="account_revoke_device">Отозвать это устройство</string>
+    <string name="account_revoking_device">Отзываем устройство…</string>
+    <string name="account_revoke_device_summary">Удаляет серверные сессии, незавершённые OAuth-переходы и push-данные этой установки. Другие устройства не затрагиваются.</string>
+    <string name="account_revoke_all">Отозвать все сессии</string>
+    <string name="account_revoking_all">Отзываем все сессии…</string>
+    <string name="account_revoke_all_summary">Завершает вход на всех устройствах Ferventio этого Twitch-аккаунта и удаляет серверный push-доступ. Локальные данные на устройствах сохраняются.</string>
+    <string name="account_confirm_revoke_device">Отозвать это устройство?</string>
+    <string name="account_confirm_revoke_device_summary">Эта установка потеряет серверную авторизацию и push-доступ. Локальные каналы, история, черновики и настройки останутся на устройстве.</string>
+    <string name="account_confirm_revoke_all">Отозвать все сессии аккаунта?</string>
+    <string name="account_confirm_revoke_all_summary">Все устройства Ferventio этого Twitch-аккаунта потеряют серверную авторизацию и push-доступ. На каждом устройстве потребуется войти снова. Локальные данные не удаляются.</string>
+    <string name="account_cancel">Отмена</string>
+    <string name="account_action_failed">Ошибка действия с аккаунтом</string>
+</resources>

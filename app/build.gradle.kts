@@ -218,6 +218,7 @@ kotlin {
 dependencies {
     implementation(project(":core:domain"))
     implementation(project(":core:database"))
+    implementation(project(":shared"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)

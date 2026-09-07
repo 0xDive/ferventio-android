@@ -2,6 +2,9 @@ package io.ferventio.app.push
 
 import kotlinx.serialization.Serializable
 
+typealias PushRegistrationContext = io.ferventio.shared.push.PushRegistrationContext
+typealias PushRegistrationRequest = io.ferventio.shared.push.PushRegistrationRequest
+
 enum class PushTransport(val wireName: String, val displayName: String) {
     FCM("fcm", "Firebase Cloud Messaging"),
     EMBEDDED_SOCKET("embedded_socket", "Автономный Ferventio Push"),
@@ -32,35 +35,6 @@ data class PushUiState(
     val errorMessage: String? = null,
 )
 
-data class PushRegistrationContext(
-    val userId: String? = null,
-    val userLogin: String? = null,
-    val channelIds: List<String> = emptyList(),
-    val moderatorChannelIds: List<String> = emptyList(),
-    val notificationRules: List<String> = DEFAULT_NOTIFICATION_RULES,
-    val highlightPhrases: List<String> = emptyList(),
-    val selectedUserLogins: List<String> = emptyList(),
-) {
-    companion object {
-        val DEFAULT_NOTIFICATION_RULES = listOf(
-            "mention",
-            "reply",
-            "automod_hold",
-            "ban",
-            "timeout",
-            "highlight",
-            "selected_user",
-            "stream_online",
-            "title_change",
-            "game_change",
-            "raid",
-            "reward",
-            "subscription",
-            "moderation_action",
-        )
-    }
-}
-
 sealed interface PlatformPushRegistration {
     val transport: PushTransport
 
@@ -74,23 +48,6 @@ sealed interface PlatformPushRegistration {
         override val transport: PushTransport = PushTransport.EMBEDDED_SOCKET
     }
 }
-
-@Serializable
-data class PushRegistrationRequest(
-    val installationId: String,
-    val deviceSecret: String,
-    val provider: String,
-    val firebaseInstallationId: String? = null,
-    val appVersion: String,
-    val platform: String,
-    val userId: String? = null,
-    val userLogin: String? = null,
-    val channelIds: List<String> = emptyList(),
-    val moderatorChannelIds: List<String> = emptyList(),
-    val notificationRules: List<String> = emptyList(),
-    val highlightPhrases: List<String> = emptyList(),
-    val selectedUserLogins: List<String> = emptyList(),
-)
 
 @Serializable
 data class PushNotificationPayload(

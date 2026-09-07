@@ -1,0 +1,24 @@
+<resources>
+    <string name="workspace_add_channel">Add channel</string>
+    <string name="workspace_add_channel_title">Add Twitch channel</string>
+    <string name="workspace_channel_login">Channel login</string>
+    <string name="workspace_add">Add</string>
+    <string name="workspace_cancel">Cancel</string>
+    <string name="workspace_manage_channel">Manage channel</string>
+    <string name="workspace_pin_channel">Pin channel</string>
+    <string name="workspace_unpin_channel">Unpin channel</string>
+    <string name="workspace_rename_channel">Rename locally</string>
+    <string name="workspace_remove_channel">Remove channel</string>
+    <string name="workspace_remove_channel_title">Remove #%1$s?</string>
+    <string name="workspace_remove_channel_body">The channel will disappear from open chats. Synced settings will be updated on your other devices.</string>
+    <string name="workspace_confirm_remove">Remove</string>
+    <string name="workspace_local_title">Local channel name</string>
+    <string name="workspace_local_title_hint">Leave empty to show #%1$s again.</string>
+    <string name="workspace_save">Save</string>
+    <string name="workspace_move_up">Move up</string>
+    <string name="workspace_move_down">Move down</string>
+    <string name="workspace_pinned">Pinned</string>
+    <string name="workspace_mutation_in_progress">Saving workspace…</string>
+    <string name="workspace_mutation_failed">Workspace update failed: %1$s</string>
+    <string name="workspace_channel_limit">You can open up to 20 channels.</string>
+</resources>

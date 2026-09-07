@@ -1,0 +1,23 @@
+<resources>
+    <string name="settings_account">Twitch account</string>
+    <string name="settings_account_summary">Authorization, device access, and sessions</string>
+    <string name="account_twitch_title">Twitch</string>
+    <string name="account_channels_summary">Channels: %1$d · moderator channels: %2$d</string>
+    <string name="account_authorization_summary">Authorization is stored on this device. If the sign-in service is temporarily unavailable, Ferventio can continue working directly with Twitch while the current Twitch session remains valid. Signing out does not remove local channels, history, drafts, or preferences.</string>
+    <string name="account_reauthorize">Reauthorize Twitch</string>
+    <string name="account_reauthorizing">Reauthorizing Twitch…</string>
+    <string name="account_sign_out">Sign out of Twitch</string>
+    <string name="account_session_title">Session management</string>
+    <string name="account_revoke_device">Revoke this device</string>
+    <string name="account_revoking_device">Revoking device…</string>
+    <string name="account_revoke_device_summary">Removes server sessions, pending OAuth state, and push data for this installation. Other devices are not affected.</string>
+    <string name="account_revoke_all">Revoke all sessions</string>
+    <string name="account_revoking_all">Revoking all sessions…</string>
+    <string name="account_revoke_all_summary">Signs out every Ferventio device for this Twitch account and removes server-side push access. Local data remains on each device.</string>
+    <string name="account_confirm_revoke_device">Revoke this device?</string>
+    <string name="account_confirm_revoke_device_summary">This installation will lose its server authorization and push access. Local channels, history, drafts, and preferences remain on the device.</string>
+    <string name="account_confirm_revoke_all">Revoke all account sessions?</string>
+    <string name="account_confirm_revoke_all_summary">Every Ferventio device for this Twitch account will lose server authorization and push access. Each device will need to sign in again. Local data is not deleted.</string>
+    <string name="account_cancel">Cancel</string>
+    <string name="account_action_failed">Account action failed</string>
+</resources>

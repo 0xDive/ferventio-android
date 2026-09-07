@@ -1,0 +1,33 @@
+<resources>
+    <string name="settings_home_chat_group">Chat</string>
+    <string name="settings_home_features_group">Features</string>
+    <string name="settings_home_data_group">Data</string>
+    <string name="settings_home_app_group">App</string>
+    <string name="settings_messages_appearance">Messages &amp; appearance</string>
+    <string name="settings_messages_appearance_summary">Theme, text, names and message presentation</string>
+    <string name="settings_input_behavior">Input &amp; behavior</string>
+    <string name="settings_input_behavior_summary">Auto-scroll, quick moderation and message composer</string>
+    <string name="settings_user_card_summary">Moderation actions and timeout presets</string>
+    <string name="settings_message_rules_summary">Highlights, Ignore and notification actions</string>
+    <string name="settings_notifications_summary">Permissions and message alerts</string>
+    <string name="settings_history_summary">Recent messages and local retention</string>
+    <string name="settings_export_sync">Export &amp; sync</string>
+    <string name="settings_export_sync_summary">Backup, restore and synced settings revision</string>
+    <string name="settings_backup_description">A backup contains interface settings, channels, workspaces, filters, highlights and ignore rules. Local message history and Twitch tokens are never exported.</string>
+    <string name="settings_backup_revision">Synced revision %1$d</string>
+    <string name="settings_backup_not_synced">No synced settings revision yet.</string>
+    <string name="settings_backup_export">Export backup</string>
+    <string name="settings_backup_import">Import backup</string>
+    <string name="settings_backup_unavailable">Backup file transfer is not available on this platform yet.</string>
+    <string name="settings_backup_conflict">Settings changed on another device while this backup was being imported. Choose which version to keep.</string>
+    <string name="settings_backup_keep_local">Keep imported</string>
+    <string name="settings_backup_use_server">Use server</string>
+    <string name="settings_backup_error">Backup operation failed: %1$s</string>
+    <string name="settings_backup_unresolved_channels">The backup was synced, but these Twitch channels could not be resolved locally: %1$s. They remain in the synced backup and can be restored when Twitch resolves them again.</string>
+    <string name="settings_language_search">Search languages</string>
+    <string name="settings_language_no_results">No languages found.</string>
+    <string name="settings_language_system_summary">Follow the device language</string>
+    <string name="settings_language_russian_summary">Русский</string>
+    <string name="settings_language_english_summary">English</string>
+    <string name="settings_back">Back</string>
+</resources>

@@ -1,0 +1,9 @@
+<resources>
+    <string name="image_cache_title">Image cache</string>
+    <string name="image_cache_section_title">Coil image cache</string>
+    <string name="image_cache_summary">Clears the in-memory and on-disk image caches used for emotes, badges, avatars, and other remote images. Images will be downloaded again when needed.</string>
+    <string name="image_cache_clear">Clear image cache</string>
+    <string name="image_cache_clearing">Clearing image cache…</string>
+    <string name="image_cache_cleared_amount">Cleared %1$s.</string>
+    <string name="image_cache_clear_failed">Couldn’t clear the image cache.</string>
+</resources>

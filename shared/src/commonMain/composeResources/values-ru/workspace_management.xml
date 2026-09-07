@@ -1,0 +1,24 @@
+<resources>
+    <string name="workspace_add_channel">Добавить канал</string>
+    <string name="workspace_add_channel_title">Добавить Twitch-канал</string>
+    <string name="workspace_channel_login">Логин канала</string>
+    <string name="workspace_add">Добавить</string>
+    <string name="workspace_cancel">Отмена</string>
+    <string name="workspace_manage_channel">Управление каналом</string>
+    <string name="workspace_pin_channel">Закрепить канал</string>
+    <string name="workspace_unpin_channel">Открепить канал</string>
+    <string name="workspace_rename_channel">Изменить локальное название</string>
+    <string name="workspace_remove_channel">Удалить канал</string>
+    <string name="workspace_remove_channel_title">Удалить #%1$s?</string>
+    <string name="workspace_remove_channel_body">Канал исчезнет из открытых чатов. Синхронизированные настройки обновятся и на других устройствах.</string>
+    <string name="workspace_confirm_remove">Удалить</string>
+    <string name="workspace_local_title">Локальное название канала</string>
+    <string name="workspace_local_title_hint">Оставьте пустым, чтобы снова показывать #%1$s.</string>
+    <string name="workspace_save">Сохранить</string>
+    <string name="workspace_move_up">Переместить выше</string>
+    <string name="workspace_move_down">Переместить ниже</string>
+    <string name="workspace_pinned">Закреплён</string>
+    <string name="workspace_mutation_in_progress">Сохраняем workspace…</string>
+    <string name="workspace_mutation_failed">Не удалось обновить workspace: %1$s</string>
+    <string name="workspace_channel_limit">Можно открыть до 20 каналов.</string>
+</resources>
