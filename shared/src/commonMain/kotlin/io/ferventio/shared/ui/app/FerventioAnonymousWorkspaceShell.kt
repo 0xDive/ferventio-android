@@ -36,11 +36,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.ferventio.app.domain.ChatChannel
+import io.ferventio.app.domain.HighlightRule
+import io.ferventio.app.domain.IgnoreRule
 import io.ferventio.app.domain.SavedMessageFilter
 import io.ferventio.shared.generated.resources.Res
 import io.ferventio.shared.generated.resources.attention_open
 import io.ferventio.shared.generated.resources.auth_sign_in_with_twitch
 import io.ferventio.shared.generated.resources.history_search_open
+import io.ferventio.shared.generated.resources.message_rules_title
 import io.ferventio.shared.generated.resources.saved_filters_title
 import io.ferventio.shared.generated.resources.settings_open
 import io.ferventio.shared.generated.resources.workspace_anonymous_no_channels_summary
@@ -71,6 +74,10 @@ internal fun FerventioAnonymousWorkspaceShell(
     onRemoveChannel: (String) -> Unit,
     onMoveChannel: (String, Int) -> Unit,
     onSaveHistoryPreferences: (SharedAppPreferences) -> Unit = {},
+    onUpsertHighlightRule: (HighlightRule) -> Unit = {},
+    onDeleteHighlightRule: (String) -> Unit = {},
+    onUpsertIgnoreRule: (IgnoreRule) -> Unit = {},
+    onDeleteIgnoreRule: (String) -> Unit = {},
     onUpsertSavedFilter: (SavedMessageFilter) -> Unit = {},
     onDeleteSavedFilter: (String) -> Unit = {},
     onImportSavedFilters: (String) -> Unit = {},
@@ -89,6 +96,7 @@ internal fun FerventioAnonymousWorkspaceShell(
     var attentionVisible by remember { mutableStateOf(false) }
     var historySearchVisible by remember { mutableStateOf(false) }
     var historySettingsVisible by remember { mutableStateOf(false) }
+    var messageRulesVisible by remember { mutableStateOf(false) }
     var savedFiltersVisible by remember { mutableStateOf(false) }
     val selectedChannelId = resolveWorkspaceActiveChannelId(
         layout = state.workspaceLayout,
@@ -133,6 +141,17 @@ internal fun FerventioAnonymousWorkspaceShell(
                         modifier = Modifier.weight(1f),
                     )
                     HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+                    TextButton(
+                        onClick = {
+                            scope.launch {
+                                drawerState.close()
+                                messageRulesVisible = true
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                    ) {
+                        Text(stringResource(Res.string.message_rules_title))
+                    }
                     TextButton(
                         onClick = {
                             scope.launch {
@@ -305,6 +324,17 @@ internal fun FerventioAnonymousWorkspaceShell(
                 }
             },
             onDismiss = { historySearchVisible = false },
+        )
+    }
+
+    if (messageRulesVisible) {
+        FerventioMessageRulesSheet(
+            state = runtime.messageRules,
+            onUpsertHighlightRule = onUpsertHighlightRule,
+            onDeleteHighlightRule = onDeleteHighlightRule,
+            onUpsertIgnoreRule = onUpsertIgnoreRule,
+            onDeleteIgnoreRule = onDeleteIgnoreRule,
+            onDismiss = { messageRulesVisible = false },
         )
     }
 

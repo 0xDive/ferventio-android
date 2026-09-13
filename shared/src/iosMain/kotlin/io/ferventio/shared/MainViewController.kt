@@ -14,8 +14,10 @@ import io.ferventio.shared.runtime.AppLifecyclePhase
 import io.ferventio.shared.runtime.FerventioRuntimeState
 import io.ferventio.shared.runtime.ProvideFerventioRuntimeState
 import io.ferventio.shared.settings.AnonymousHistoryPreferencesCoordinator
+import io.ferventio.shared.settings.AnonymousMessageRulesCoordinator
 import io.ferventio.shared.settings.AnonymousSavedFiltersCoordinator
 import io.ferventio.shared.settings.IosAnonymousHistoryPreferencesStore
+import io.ferventio.shared.settings.IosAnonymousMessageRulesStore
 import io.ferventio.shared.settings.IosAnonymousSavedFiltersStore
 import io.ferventio.shared.settings.IosLocalUiPreferencesStore
 import io.ferventio.shared.settings.SharedAppPreferences
@@ -51,6 +53,9 @@ private val iosAnonymousHistoryPreferencesCoordinator = AnonymousHistoryPreferen
 )
 private val iosAnonymousSavedFiltersCoordinator = AnonymousSavedFiltersCoordinator(
     IosAnonymousSavedFiltersStore(),
+)
+private val iosAnonymousMessageRulesCoordinator = AnonymousMessageRulesCoordinator(
+    IosAnonymousMessageRulesStore(),
 )
 private val iosAnonymousChatRuntime = AnonymousChatRuntimeCoordinator(
     state = iosRuntimeState.chat,
@@ -160,6 +165,9 @@ fun MainViewController(
             runCatching {
                 iosAnonymousSavedFiltersCoordinator.restore(iosRuntimeState.savedFilters)
             }
+            runCatching {
+                iosAnonymousMessageRulesCoordinator.restore(iosRuntimeState.messageRules)
+            }
         }
     }
     LaunchedEffect(anonymousMode, lifecyclePhase, anonymousTransportLogins) {
@@ -176,6 +184,9 @@ fun MainViewController(
                 iosAnonymousSavedFiltersCoordinator.restore(iosRuntimeState.savedFilters)
             }
             runCatching {
+                iosAnonymousMessageRulesCoordinator.restore(iosRuntimeState.messageRules)
+            }
+            runCatching {
                 iosAnonymousWorkspaceCoordinator.restore(iosRuntimeState.workspace)
             }
             return@LaunchedEffect
@@ -189,6 +200,42 @@ fun MainViewController(
         }
     }
 
+    val upsertHighlightRuleAction: (HighlightRule) -> Unit = { rule ->
+        if (anonymousMode) {
+            runCatching {
+                iosAnonymousMessageRulesCoordinator.upsertHighlight(rule, iosRuntimeState.messageRules)
+            }
+        } else {
+            onUpsertHighlightRule(rule)
+        }
+    }
+    val deleteHighlightRuleAction: (String) -> Unit = { ruleId ->
+        if (anonymousMode) {
+            runCatching {
+                iosAnonymousMessageRulesCoordinator.deleteHighlight(ruleId, iosRuntimeState.messageRules)
+            }
+        } else {
+            onDeleteHighlightRule(ruleId)
+        }
+    }
+    val upsertIgnoreRuleAction: (IgnoreRule) -> Unit = { rule ->
+        if (anonymousMode) {
+            runCatching {
+                iosAnonymousMessageRulesCoordinator.upsertIgnore(rule, iosRuntimeState.messageRules)
+            }
+        } else {
+            onUpsertIgnoreRule(rule)
+        }
+    }
+    val deleteIgnoreRuleAction: (String) -> Unit = { ruleId ->
+        if (anonymousMode) {
+            runCatching {
+                iosAnonymousMessageRulesCoordinator.deleteIgnore(ruleId, iosRuntimeState.messageRules)
+            }
+        } else {
+            onDeleteIgnoreRule(ruleId)
+        }
+    }
     val upsertSavedFilterAction: (SavedMessageFilter) -> Unit = { filter ->
         if (anonymousMode) {
             runCatching {
@@ -374,10 +421,10 @@ fun MainViewController(
                                     onOpenNotificationSettings = onOpenNotificationSettings,
                                     onSaveSettings = onSaveSettings,
                                     onSaveAnonymousHistoryPreferences = saveAnonymousHistoryPreferencesAction,
-                                    onUpsertHighlightRule = onUpsertHighlightRule,
-                                    onDeleteHighlightRule = onDeleteHighlightRule,
-                                    onUpsertIgnoreRule = onUpsertIgnoreRule,
-                                    onDeleteIgnoreRule = onDeleteIgnoreRule,
+                                    onUpsertHighlightRule = upsertHighlightRuleAction,
+                                    onDeleteHighlightRule = deleteHighlightRuleAction,
+                                    onUpsertIgnoreRule = upsertIgnoreRuleAction,
+                                    onDeleteIgnoreRule = deleteIgnoreRuleAction,
                                     onUpsertSavedFilter = upsertSavedFilterAction,
                                     onDeleteSavedFilter = deleteSavedFilterAction,
                                     onImportSavedFilters = importSavedFiltersAction,
