@@ -167,6 +167,37 @@ class ChatAttentionStateHolder {
         }
     }
 
+    /** Moves all per-channel attention/UI navigation state to a replacement runtime channel id. */
+    fun remapChannelId(channelId: String, replacementId: String): Boolean {
+        val currentId = requireChannelId(channelId)
+        val nextId = requireChannelId(replacementId)
+        if (currentId == nextId) return false
+
+        val hadState = currentId in channelAttention ||
+            attentionEntries.any { entry -> entry.channelId == currentId } ||
+            currentId in visibleChannelIds ||
+            currentId in channelsAtLiveTail ||
+            currentId in messageNavigationTargets
+        if (!hadState) return false
+
+        channelAttention[currentId]?.let { value ->
+            channelAttention = (channelAttention - currentId) + (nextId to value)
+        }
+        if (attentionEntries.any { entry -> entry.channelId == currentId }) {
+            attentionEntries = attentionEntries.map { entry ->
+                if (entry.channelId == currentId) entry.copy(channelId = nextId) else entry
+            }
+        }
+        visibleChannelIds = visibleChannelIds
+            .mapTo(linkedSetOf()) { id -> if (id == currentId) nextId else id }
+        channelsAtLiveTail = channelsAtLiveTail
+            .mapTo(linkedSetOf()) { id -> if (id == currentId) nextId else id }
+        messageNavigationTargets[currentId]?.let { messageId ->
+            messageNavigationTargets = (messageNavigationTargets - currentId) + (nextId to messageId)
+        }
+        return true
+    }
+
     fun retainChannels(channelIds: Iterable<String>) {
         val allowed = channelIds.map(String::trim).filter(String::isNotEmpty).toSet()
         channelAttention = channelAttention.filterKeys(allowed::contains)
