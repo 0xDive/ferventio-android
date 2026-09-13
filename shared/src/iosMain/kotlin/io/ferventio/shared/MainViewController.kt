@@ -179,10 +179,7 @@ fun MainViewController(
     val selectChannelAction: (String) -> Unit = { channelId ->
         if (anonymousMode) {
             runCatching {
-                iosAnonymousWorkspaceCoordinator.selectChannel(
-                    channelId = channelId,
-                    state = iosRuntimeState.workspace,
-                )
+                iosAnonymousWorkspaceCoordinator.selectChannel(channelId, iosRuntimeState.workspace)
             }
         } else {
             onSelectChannel(channelId)
@@ -191,10 +188,7 @@ fun MainViewController(
     val addChannelAction: (String) -> Unit = { login ->
         if (anonymousMode) {
             runCatching {
-                iosAnonymousWorkspaceCoordinator.addChannel(
-                    loginInput = login,
-                    state = iosRuntimeState.workspace,
-                )
+                iosAnonymousWorkspaceCoordinator.addChannel(login, iosRuntimeState.workspace)
             }
         } else {
             onAddChannel(login)
@@ -204,9 +198,9 @@ fun MainViewController(
         if (anonymousMode) {
             runCatching {
                 iosAnonymousWorkspaceCoordinator.setChannelPinned(
-                    channelId = channelId,
-                    pinned = pinned,
-                    state = iosRuntimeState.workspace,
+                    channelId,
+                    pinned,
+                    iosRuntimeState.workspace,
                 )
             }
         } else {
@@ -217,9 +211,9 @@ fun MainViewController(
         if (anonymousMode) {
             runCatching {
                 iosAnonymousWorkspaceCoordinator.renameChannel(
-                    channelId = channelId,
-                    title = title,
-                    state = iosRuntimeState.workspace,
+                    channelId,
+                    title,
+                    iosRuntimeState.workspace,
                 )
             }
         } else {
@@ -229,10 +223,7 @@ fun MainViewController(
     val removeChannelAction: (String) -> Unit = { channelId ->
         if (anonymousMode) {
             runCatching {
-                iosAnonymousWorkspaceCoordinator.removeChannel(
-                    channelId = channelId,
-                    state = iosRuntimeState.workspace,
-                )
+                iosAnonymousWorkspaceCoordinator.removeChannel(channelId, iosRuntimeState.workspace)
                 iosRuntimeState.chat.retainChannels(iosRuntimeState.workspace.channelIds)
                 iosRuntimeState.attention.retainChannels(iosRuntimeState.workspace.channelIds)
             }
@@ -244,13 +235,73 @@ fun MainViewController(
         if (anonymousMode) {
             runCatching {
                 iosAnonymousWorkspaceCoordinator.moveChannel(
-                    channelId = channelId,
-                    targetIndex = targetIndex,
-                    state = iosRuntimeState.workspace,
+                    channelId,
+                    targetIndex,
+                    iosRuntimeState.workspace,
                 )
             }
         } else {
             onMoveChannel(channelId, targetIndex)
+        }
+    }
+    val setSplitFilterQueryAction: (String, String) -> Unit = { splitId, filterQuery ->
+        if (anonymousMode) {
+            runCatching {
+                iosAnonymousWorkspaceCoordinator.setSplitFilterQuery(
+                    splitId,
+                    filterQuery,
+                    iosRuntimeState.workspace,
+                )
+            }
+        } else {
+            onSetSplitFilterQuery(splitId, filterQuery)
+        }
+    }
+    val setSplitChannelAction: (String, String) -> Unit = { splitId, channelId ->
+        if (anonymousMode) {
+            runCatching {
+                iosAnonymousWorkspaceCoordinator.setSplitChannel(
+                    splitId,
+                    channelId,
+                    iosRuntimeState.workspace,
+                )
+            }
+        } else {
+            onSetSplitChannel(splitId, channelId)
+        }
+    }
+    val focusSplitAction: (String) -> Unit = { splitId ->
+        if (anonymousMode) {
+            runCatching {
+                iosAnonymousWorkspaceCoordinator.focusSplit(splitId, iosRuntimeState.workspace)
+            }
+        } else {
+            onFocusSplit(splitId)
+        }
+    }
+    val addSplitAction: () -> Unit = {
+        if (anonymousMode) {
+            runCatching { iosAnonymousWorkspaceCoordinator.addSplit(iosRuntimeState.workspace) }
+        } else {
+            onAddSplit()
+        }
+    }
+    val removeSplitAction: (String) -> Unit = { splitId ->
+        if (anonymousMode) {
+            runCatching {
+                iosAnonymousWorkspaceCoordinator.removeSplit(splitId, iosRuntimeState.workspace)
+            }
+        } else {
+            onRemoveSplit(splitId)
+        }
+    }
+    val setPrimaryFractionAction: (Float) -> Unit = { fraction ->
+        if (anonymousMode) {
+            runCatching {
+                iosAnonymousWorkspaceCoordinator.setPrimaryFraction(fraction, iosRuntimeState.workspace)
+            }
+        } else {
+            onSetPrimaryFraction(fraction)
         }
     }
     val saveAnonymousHistoryPreferencesAction: (SharedAppPreferences) -> Unit = { value ->
@@ -297,12 +348,12 @@ fun MainViewController(
                                     onRenameChannel = renameChannelAction,
                                     onRemoveChannel = removeChannelAction,
                                     onMoveChannel = moveChannelAction,
-                                    onSetSplitFilterQuery = onSetSplitFilterQuery,
-                                    onSetSplitChannel = onSetSplitChannel,
-                                    onFocusSplit = onFocusSplit,
-                                    onAddSplit = onAddSplit,
-                                    onRemoveSplit = onRemoveSplit,
-                                    onSetPrimaryFraction = onSetPrimaryFraction,
+                                    onSetSplitFilterQuery = setSplitFilterQueryAction,
+                                    onSetSplitChannel = setSplitChannelAction,
+                                    onFocusSplit = focusSplitAction,
+                                    onAddSplit = addSplitAction,
+                                    onRemoveSplit = removeSplitAction,
+                                    onSetPrimaryFraction = setPrimaryFractionAction,
                                 )
                                 FerventioSettingsBackupOperationFeedback(backupActions)
                             }

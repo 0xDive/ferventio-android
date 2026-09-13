@@ -51,11 +51,12 @@ import io.ferventio.shared.runtime.LocalFerventioRuntimeState
 import io.ferventio.shared.settings.SharedAppPreferences
 import io.ferventio.shared.workspace.WorkspaceLoadStatus
 import io.ferventio.shared.workspace.WorkspaceRuntimeStateHolder
+import io.ferventio.shared.workspace.activeWorkspaceSplitIdForChannelSelection
 import io.ferventio.shared.workspace.resolveWorkspaceActiveChannelId
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 
-/** Minimal read-only workspace surface used while no Twitch account is authorized. */
+/** Read-only workspace surface used while no Twitch account is authorized. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun FerventioAnonymousWorkspaceShell(
@@ -68,6 +69,12 @@ internal fun FerventioAnonymousWorkspaceShell(
     onRemoveChannel: (String) -> Unit,
     onMoveChannel: (String, Int) -> Unit,
     onSaveHistoryPreferences: (SharedAppPreferences) -> Unit = {},
+    onSetSplitFilterQuery: (String, String) -> Unit = { _, _ -> },
+    onSetSplitChannel: (String, String) -> Unit = { _, _ -> },
+    onFocusSplit: (String) -> Unit = {},
+    onAddSplit: () -> Unit = {},
+    onRemoveSplit: (String) -> Unit = {},
+    onSetPrimaryFraction: (Float) -> Unit = {},
     modifier: Modifier = Modifier,
     content: @Composable (ChatChannel, String, Modifier) -> Unit,
 ) {
@@ -103,8 +110,13 @@ internal fun FerventioAnonymousWorkspaceShell(
                         state = state,
                         selectedChannel = selectedChannel,
                         onSelectChannel = { channelId ->
+                            val splitId = activeWorkspaceSplitIdForChannelSelection(state.workspaceLayout)
                             state.selectChannel(channelId)
-                            onSelectChannel(channelId)
+                            if (splitId != null) {
+                                onSetSplitChannel(splitId, channelId)
+                            } else {
+                                onSelectChannel(channelId)
+                            }
                             scope.launch { drawerState.close() }
                         },
                         onAddChannel = onAddChannel,
@@ -222,7 +234,19 @@ internal fun FerventioAnonymousWorkspaceShell(
                         state.loadStatus == WorkspaceLoadStatus.FAILED && state.channels.isEmpty() ->
                             AnonymousWorkspaceFailureState(onAuthenticate)
                         selectedChannel == null -> AnonymousWorkspaceEmptyState(onAuthenticate)
-                        else -> content(selectedChannel, "", Modifier.fillMaxSize())
+                        else -> FerventioWorkspaceResponsiveContent(
+                            state = state,
+                            savedFilters = runtime.savedFilters.filters,
+                            decorations = runtime.messageRules.decorationsByMessageId,
+                            onSetSplitFilterQuery = onSetSplitFilterQuery,
+                            onSetSplitChannel = onSetSplitChannel,
+                            onFocusSplit = onFocusSplit,
+                            onAddSplit = onAddSplit,
+                            onRemoveSplit = onRemoveSplit,
+                            onSetPrimaryFraction = onSetPrimaryFraction,
+                            modifier = Modifier.fillMaxSize(),
+                            content = content,
+                        )
                     }
                 }
             }

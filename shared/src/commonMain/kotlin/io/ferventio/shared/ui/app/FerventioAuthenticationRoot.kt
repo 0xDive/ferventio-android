@@ -72,6 +72,12 @@ fun FerventioAuthenticationRoot(
             onRemoveChannel = onRemoveChannel,
             onMoveChannel = onMoveChannel,
             onSaveHistoryPreferences = onSaveAnonymousHistoryPreferences,
+            onSetSplitFilterQuery = onSetSplitFilterQuery,
+            onSetSplitChannel = onSetSplitChannel,
+            onFocusSplit = onFocusSplit,
+            onAddSplit = onAddSplit,
+            onRemoveSplit = onRemoveSplit,
+            onSetPrimaryFraction = onSetPrimaryFraction,
             modifier = modifier,
         ) { channel, filterQuery, contentModifier ->
             key(channel.id) {
