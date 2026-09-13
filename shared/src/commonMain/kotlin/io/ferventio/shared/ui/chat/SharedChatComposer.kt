@@ -30,6 +30,7 @@ import io.ferventio.shared.chat.TwitchChatMessageScopeException
 import io.ferventio.shared.generated.resources.Res
 import io.ferventio.shared.generated.resources.chat_composer_placeholder
 import io.ferventio.shared.generated.resources.chat_message_too_long
+import io.ferventio.shared.generated.resources.chat_read_only_sign_in_to_send
 import io.ferventio.shared.generated.resources.chat_reply_cancel
 import io.ferventio.shared.generated.resources.chat_replying_to
 import io.ferventio.shared.generated.resources.chat_send
@@ -52,16 +53,32 @@ fun SharedChatComposer(
     modifier: Modifier = Modifier,
 ) {
     val runtime = LocalFerventioRuntimeState.current
-    val scope = rememberCoroutineScope()
     val authentication = runtime.authentication.state.authentication
-    val hasWriteScope = authentication?.accessLease?.session?.scopes?.contains(WRITE_CHAT_SCOPE) == true
+
+    if (authentication == null) {
+        Surface(
+            modifier = modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            tonalElevation = 1.dp,
+        ) {
+            Text(
+                text = stringResource(Res.string.chat_read_only_sign_in_to_send),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        return
+    }
+
+    val scope = rememberCoroutineScope()
+    val hasWriteScope = authentication.accessLease?.session?.scopes?.contains(WRITE_CHAT_SCOPE) == true
     var draft by remember(channel.id) { mutableStateOf("") }
     var sending by remember(channel.id) { mutableStateOf(false) }
     var errorMessage by remember(channel.id) { mutableStateOf<String?>(null) }
     val trimmed = draft.trim()
     val tooLong = trimmed.length > MAX_CHAT_MESSAGE_LENGTH
-    val canSend = authentication != null &&
-        hasWriteScope &&
+    val canSend = hasWriteScope &&
         trimmed.isNotEmpty() &&
         !tooLong &&
         !sending
@@ -69,7 +86,6 @@ fun SharedChatComposer(
     val sendFailedFormat = stringResource(Res.string.chat_send_failed, "%s")
 
     fun submit() {
-        val auth = authentication ?: return
         if (!canSend) return
         val outgoingText = trimmed
         val replyParentMessageId = replyTarget
@@ -82,7 +98,7 @@ fun SharedChatComposer(
         scope.launch {
             try {
                 runtime.chatMessages.send(
-                    authentication = auth,
+                    authentication = authentication,
                     channel = channel,
                     message = outgoingText,
                     replyParentMessageId = replyParentMessageId,
@@ -158,11 +174,11 @@ fun SharedChatComposer(
                         Text(stringResource(Res.string.chat_composer_placeholder, channel.displayName))
                     },
                     supportingText = when {
-                        !hasWriteScope && authentication != null -> ({ Text(scopeRequiredText) })
+                        !hasWriteScope -> ({ Text(scopeRequiredText) })
                         tooLong -> ({ Text(stringResource(Res.string.chat_message_too_long, trimmed.length)) })
                         else -> null
                     },
-                    isError = tooLong || (!hasWriteScope && authentication != null),
+                    isError = tooLong || !hasWriteScope,
                     maxLines = 4,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
                     keyboardActions = KeyboardActions(onSend = { submit() }),

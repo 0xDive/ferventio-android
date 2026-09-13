@@ -48,6 +48,7 @@ fun FerventioModeratedChatScreen(
     val runtime = LocalFerventioRuntimeState.current
     val scope = rememberCoroutineScope()
     val canModerateChannel = canPreviewNuke(channel.id, moderatorChannelIds)
+    val canWriteChat = runtime.authentication.state.authentication != null
     val authenticationRequiredText = stringResource(Res.string.quick_moderation_auth_required)
     var showNukePreview by remember(channel.id) { mutableStateOf(false) }
     var selectedUserMessage by remember(channel.id) { mutableStateOf<ChatMessage?>(null) }
@@ -80,7 +81,11 @@ fun FerventioModeratedChatScreen(
             modifier = Modifier.weight(1f),
             canModerate = canModerateChannel,
             onAuthorClick = { message -> selectedUserMessage = message },
-            onReplyRequest = { message -> replyTarget = message },
+            onReplyRequest = if (canWriteChat) {
+                { message -> replyTarget = message }
+            } else {
+                null
+            },
             onRetryMessage = { message ->
                 runtime.authentication.state.authentication?.let { authentication ->
                     scope.launch {

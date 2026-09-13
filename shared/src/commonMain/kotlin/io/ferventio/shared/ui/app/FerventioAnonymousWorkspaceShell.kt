@@ -39,12 +39,12 @@ import io.ferventio.app.domain.ChatChannel
 import io.ferventio.shared.generated.resources.Res
 import io.ferventio.shared.generated.resources.attention_open
 import io.ferventio.shared.generated.resources.auth_sign_in_with_twitch
+import io.ferventio.shared.generated.resources.workspace_anonymous_no_channels_summary
 import io.ferventio.shared.generated.resources.workspace_chats
 import io.ferventio.shared.generated.resources.workspace_load_failed
 import io.ferventio.shared.generated.resources.workspace_loading
 import io.ferventio.shared.generated.resources.workspace_menu
 import io.ferventio.shared.generated.resources.workspace_no_channels
-import io.ferventio.shared.generated.resources.workspace_no_channels_summary
 import io.ferventio.shared.runtime.LocalFerventioRuntimeState
 import io.ferventio.shared.workspace.WorkspaceLoadStatus
 import io.ferventio.shared.workspace.WorkspaceRuntimeStateHolder
@@ -266,7 +266,7 @@ private fun AnonymousWorkspaceEmptyState(onAuthenticate: () -> Unit) {
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                text = stringResource(Res.string.workspace_no_channels_summary),
+                text = stringResource(Res.string.workspace_anonymous_no_channels_summary),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
