@@ -80,14 +80,23 @@ class TwitchAnonymousChatSocketClient internal constructor(
         if (channelLogins.isEmpty()) return
 
         var attempt = 0
+        var hasConnected = false
         while (currentCoroutineContext().isActive && !closed) {
             try {
+                val reconnecting = TwitchAnonymousChatConnectionPolicy.isReconnectAttempt(
+                    attempt = attempt,
+                    hasConnected = hasConnected,
+                )
                 publish(
-                    status = if (attempt == 0) ConnectionStatus.CONNECTING else ConnectionStatus.RECONNECTING,
-                    stage = if (attempt == 0) {
-                        TwitchAnonymousChatConnectionStage.CONNECTING
+                    status = if (reconnecting) {
+                        ConnectionStatus.RECONNECTING
                     } else {
+                        ConnectionStatus.CONNECTING
+                    },
+                    stage = if (reconnecting) {
                         TwitchAnonymousChatConnectionStage.RECONNECTING
+                    } else {
+                        TwitchAnonymousChatConnectionStage.CONNECTING
                     },
                     attempt = attempt,
                 )
@@ -103,6 +112,7 @@ class TwitchAnonymousChatSocketClient internal constructor(
                         stage = TwitchAnonymousChatConnectionStage.CONNECTED,
                         attempt = 0,
                     )
+                    hasConnected = true
                     attempt = 0
 
                     for (frame in incoming) {
@@ -236,6 +246,9 @@ internal object TwitchAnonymousChatProtocol {
 }
 
 internal object TwitchAnonymousChatConnectionPolicy {
+    fun isReconnectAttempt(attempt: Int, hasConnected: Boolean): Boolean =
+        hasConnected || attempt > 0
+
     fun reconnectDelayMillis(attempt: Int, jitterFraction: Double): Long {
         val exponent = 1L shl min(attempt.coerceAtLeast(1) - 1, 5)
         val base = (1_000L * exponent).coerceAtMost(30_000L)

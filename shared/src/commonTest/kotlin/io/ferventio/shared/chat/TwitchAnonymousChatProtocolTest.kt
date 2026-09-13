@@ -33,6 +33,28 @@ class TwitchAnonymousChatProtocolTest {
     }
 
     @Test
+    fun reconnectPresentationDistinguishesInitialConnectFromReconnects() {
+        assertFalse(
+            TwitchAnonymousChatConnectionPolicy.isReconnectAttempt(
+                attempt = 0,
+                hasConnected = false,
+            ),
+        )
+        assertTrue(
+            TwitchAnonymousChatConnectionPolicy.isReconnectAttempt(
+                attempt = 1,
+                hasConnected = false,
+            ),
+        )
+        assertTrue(
+            TwitchAnonymousChatConnectionPolicy.isReconnectAttempt(
+                attempt = 0,
+                hasConnected = true,
+            ),
+        )
+    }
+
+    @Test
     fun reconnectBackoffMatchesAndroidPolicy() {
         assertEquals(800L, TwitchAnonymousChatConnectionPolicy.reconnectDelayMillis(1, 0.0))
         assertEquals(1_200L, TwitchAnonymousChatConnectionPolicy.reconnectDelayMillis(1, 1.0))
