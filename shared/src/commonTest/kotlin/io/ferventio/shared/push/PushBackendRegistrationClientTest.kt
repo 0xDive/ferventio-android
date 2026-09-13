@@ -89,6 +89,60 @@ class PushBackendRegistrationClientTest {
     }
 
     @Test
+    fun selfTestPostsToInstallationEndpointWithDeviceSecret() = runTest {
+        var requestedMethod: HttpMethod? = null
+        var requestedUrl: String? = null
+        var requestedSecret: String? = null
+        val engine = MockEngine { request ->
+            requestedMethod = request.method
+            requestedUrl = request.url.toString()
+            requestedSecret = request.headers["X-Device-Secret"]
+            respond(
+                content = ByteReadChannel("{\"status\":\"sent\"}"),
+                status = HttpStatusCode.Accepted,
+            )
+        }
+        val backend = PushBackendRegistrationClient(
+            client = HttpClient(engine) { expectSuccess = false },
+        )
+
+        backend.selfTest(
+            serverUrl = "https://example.test/",
+            identity = identity,
+        )
+
+        assertEquals(HttpMethod.Post, requestedMethod)
+        assertEquals(
+            "https://example.test/v1/push/registrations/installation-id/self-test",
+            requestedUrl,
+        )
+        assertEquals(identity.deviceSecret, requestedSecret)
+    }
+
+    @Test
+    fun selfTestSurfacesBackendFailure() = runTest {
+        val engine = MockEngine {
+            respond(
+                content = ByteReadChannel("{\"error\":\"registration not found\"}"),
+                status = HttpStatusCode.NotFound,
+            )
+        }
+        val backend = PushBackendRegistrationClient(
+            client = HttpClient(engine) { expectSuccess = false },
+        )
+
+        val error = assertFailsWith<PushBackendRegistrationException> {
+            backend.selfTest(
+                serverUrl = "https://example.test",
+                identity = identity,
+            )
+        }
+
+        assertEquals(404, error.statusCode)
+        assertEquals("registration not found", error.backendMessage)
+    }
+
+    @Test
     fun unregisterTreatsMissingRegistrationAsAlreadyClean() = runTest {
         val engine = MockEngine {
             respond(

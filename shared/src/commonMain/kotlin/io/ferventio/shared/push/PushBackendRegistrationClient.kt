@@ -8,6 +8,7 @@ import io.ferventio.shared.workspace.WorkspaceRuntimeSnapshot
 import io.ktor.client.HttpClient
 import io.ktor.client.request.delete
 import io.ktor.client.request.header
+import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsText
@@ -84,6 +85,33 @@ class PushBackendRegistrationClient(
         if (response.status == HttpStatusCode.NotFound) {
             return
         }
+        if (response.status.value !in 200..299) {
+            throw PushBackendRegistrationException(
+                statusCode = response.status.value,
+                backendMessage = decodeBackendError(body),
+            )
+        }
+    }
+
+    /** Requests one backend-delivered notification for the current installation. */
+    @Throws(Exception::class)
+    suspend fun selfTest(
+        serverUrl: String,
+        identity: MobileDeviceIdentity,
+    ) {
+        val installationId = identity.installationId.trim()
+        val deviceSecret = identity.deviceSecret.trim()
+        require(installationId.isNotEmpty()) { "Push installation ID must not be blank" }
+        require(deviceSecret.isNotEmpty()) { "Push device secret must not be blank" }
+
+        val baseUrl = validateServerUrl(serverUrl)
+        val response = client.post(
+            "$baseUrl/v1/push/registrations/$installationId/self-test",
+        ) {
+            header(DEVICE_SECRET_HEADER, deviceSecret)
+            header(HttpHeaders.Accept, ContentType.Application.Json.toString())
+        }
+        val body = response.bodyAsText()
         if (response.status.value !in 200..299) {
             throw PushBackendRegistrationException(
                 statusCode = response.status.value,
@@ -214,6 +242,14 @@ class ApnsPushRegistrationCoordinator(
         identity: MobileDeviceIdentity,
     ) {
         backend.unregister(serverUrl, identity)
+    }
+
+    @Throws(Exception::class)
+    suspend fun selfTest(
+        serverUrl: String,
+        identity: MobileDeviceIdentity,
+    ) {
+        backend.selfTest(serverUrl, identity)
     }
 
     private fun requireAuthenticatedSession(authentication: StoredAuthentication): TwitchSession {
