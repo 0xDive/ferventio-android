@@ -1,32 +1,19 @@
 package io.ferventio.shared.ui.app
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
-import androidx.compose.material3.Button
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import io.ferventio.app.domain.HighlightRule
 import io.ferventio.app.domain.IgnoreRule
 import io.ferventio.app.domain.SavedMessageFilter
 import io.ferventio.shared.auth.MobileAuthenticationState
 import io.ferventio.shared.auth.MobileAuthenticationStatus
-import io.ferventio.shared.generated.resources.Res
-import io.ferventio.shared.generated.resources.auth_sign_in_with_twitch
 import io.ferventio.shared.push.PushAuthorizationStatus
 import io.ferventio.shared.runtime.LocalFerventioRuntimeState
 import io.ferventio.shared.settings.SharedAppPreferences
 import io.ferventio.shared.ui.moderation.FerventioModeratedChatScreen
 import io.ferventio.shared.workspace.WorkspaceRuntimeStateHolder
-import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun FerventioAuthenticationRoot(
@@ -74,10 +61,24 @@ fun FerventioAuthenticationRoot(
 
         MobileAuthenticationStatus.SIGNED_OUT,
         MobileAuthenticationStatus.FAILED,
-        -> FerventioSignedOutScreen(
+        -> FerventioAnonymousWorkspaceShell(
+            state = workspace,
             onAuthenticate = onAuthenticate,
+            onSelectChannel = onSelectChannel,
+            onAddChannel = onAddChannel,
+            onRemoveChannel = onRemoveChannel,
+            onMoveChannel = onMoveChannel,
             modifier = modifier,
-        )
+        ) { channel, filterQuery, contentModifier ->
+            key(channel.id) {
+                FerventioModeratedChatScreen(
+                    channel = channel,
+                    moderatorChannelIds = emptySet(),
+                    filterQuery = filterQuery,
+                    modifier = contentModifier,
+                )
+            }
+        }
 
         MobileAuthenticationStatus.SIGNED_IN -> {
             val authenticatedUserId = state.authentication?.accessLease?.session?.userId.orEmpty()
@@ -121,28 +122,6 @@ fun FerventioAuthenticationRoot(
                         )
                     }
                 }
-            }
-        }
-    }
-}
-
-@Composable
-private fun FerventioSignedOutScreen(
-    onAuthenticate: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
-        ) {
-            FerventioBrandMark()
-            Spacer(Modifier.height(24.dp))
-            Button(onClick = onAuthenticate) {
-                Text(stringResource(Res.string.auth_sign_in_with_twitch))
             }
         }
     }

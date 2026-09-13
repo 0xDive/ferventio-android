@@ -7,7 +7,10 @@ import io.ferventio.app.domain.AppThemeMode
 import io.ferventio.app.domain.HighlightRule
 import io.ferventio.app.domain.IgnoreRule
 import io.ferventio.app.domain.SavedMessageFilter
+import io.ferventio.shared.auth.MobileAuthenticationStatus
+import io.ferventio.shared.chat.AnonymousChatRuntimeCoordinator
 import io.ferventio.shared.history.IosChatHistoryStore
+import io.ferventio.shared.runtime.AppLifecyclePhase
 import io.ferventio.shared.runtime.FerventioRuntimeState
 import io.ferventio.shared.runtime.ProvideFerventioRuntimeState
 import io.ferventio.shared.settings.IosLocalUiPreferencesStore
@@ -26,6 +29,9 @@ import io.ferventio.shared.ui.app.currentIosPrivacyPlatformInfo
 import io.ferventio.shared.ui.locale.FerventioLocaleEnvironment
 import io.ferventio.shared.ui.theme.FerventioTheme
 import io.ferventio.shared.ui.theme.FerventioThemeMode
+import io.ferventio.shared.workspace.AnonymousWorkspaceCoordinator
+import io.ferventio.shared.workspace.IosAnonymousWorkspaceStore
+import io.ferventio.shared.workspace.WorkspaceLoadStatus
 import platform.UIKit.UIViewController
 
 private val iosRuntimeState = FerventioRuntimeState(
@@ -33,6 +39,14 @@ private val iosRuntimeState = FerventioRuntimeState(
     localUiPreferences = SharedLocalUiPreferencesStateHolder(IosLocalUiPreferencesStore()),
 )
 private val iosSettingsBackupRuntime = IosSettingsBackupRuntime(iosRuntimeState)
+private val iosAnonymousWorkspaceCoordinator = AnonymousWorkspaceCoordinator(
+    IosAnonymousWorkspaceStore(),
+)
+private val iosAnonymousChatRuntime = AnonymousChatRuntimeCoordinator(
+    state = iosRuntimeState.chat,
+    attention = iosRuntimeState.attention,
+    messageRules = iosRuntimeState.messageRules,
+)
 
 fun IosRuntimeState(): FerventioRuntimeState = iosRuntimeState
 
@@ -74,6 +88,15 @@ fun MainViewController(
     onRevokeAllSessions: (() -> Unit)? = null,
 ): UIViewController = ComposeUIViewController {
     val preferences = iosRuntimeState.settings.preferences
+    val authenticationState = iosRuntimeState.authentication.state
+    val anonymousMode = authenticationState.status == MobileAuthenticationStatus.SIGNED_OUT ||
+        authenticationState.status == MobileAuthenticationStatus.FAILED
+    val lifecyclePhase = iosRuntimeState.lifecycle.phase
+    val anonymousTransportLogins = iosRuntimeState.workspace.channels
+        .map { channel -> channel.login.trim().lowercase() }
+        .filter(String::isNotEmpty)
+        .distinct()
+        .sorted()
     val authenticationRequired = iosRuntimeState.chat.authenticationRequired
     val backupStatus = iosSettingsBackupRuntime.state.status
     val backupLocked = backupStatus == SharedSettingsBackupStatus.EXPORTING ||
@@ -113,9 +136,83 @@ fun MainViewController(
             },
         )
     }
+
     LaunchedEffect(authenticationRequired) {
         if (authenticationRequired) onAuthenticationRequired()
     }
+    LaunchedEffect(anonymousMode, lifecyclePhase, anonymousTransportLogins) {
+        if (!anonymousMode) {
+            iosAnonymousChatRuntime.close()
+            return@LaunchedEffect
+        }
+
+        if (iosRuntimeState.workspace.loadStatus != WorkspaceLoadStatus.READY) {
+            runCatching {
+                iosAnonymousWorkspaceCoordinator.restore(iosRuntimeState.workspace)
+            }
+            return@LaunchedEffect
+        }
+        if (lifecyclePhase != AppLifecyclePhase.ACTIVE || iosRuntimeState.workspace.channels.isEmpty()) {
+            iosAnonymousChatRuntime.close()
+            return@LaunchedEffect
+        }
+        runCatching {
+            iosAnonymousChatRuntime.run(iosRuntimeState.workspace)
+        }
+    }
+
+    val selectChannelAction: (String) -> Unit = { channelId ->
+        if (anonymousMode) {
+            runCatching {
+                iosAnonymousWorkspaceCoordinator.selectChannel(
+                    channelId = channelId,
+                    state = iosRuntimeState.workspace,
+                )
+            }
+        } else {
+            onSelectChannel(channelId)
+        }
+    }
+    val addChannelAction: (String) -> Unit = { login ->
+        if (anonymousMode) {
+            runCatching {
+                iosAnonymousWorkspaceCoordinator.addChannel(
+                    loginInput = login,
+                    state = iosRuntimeState.workspace,
+                )
+            }
+        } else {
+            onAddChannel(login)
+        }
+    }
+    val removeChannelAction: (String) -> Unit = { channelId ->
+        if (anonymousMode) {
+            runCatching {
+                iosAnonymousWorkspaceCoordinator.removeChannel(
+                    channelId = channelId,
+                    state = iosRuntimeState.workspace,
+                )
+                iosRuntimeState.chat.retainChannels(iosRuntimeState.workspace.channelIds)
+                iosRuntimeState.attention.retainChannels(iosRuntimeState.workspace.channelIds)
+            }
+        } else {
+            onRemoveChannel(channelId)
+        }
+    }
+    val moveChannelAction: (String, Int) -> Unit = { channelId, targetIndex ->
+        if (anonymousMode) {
+            runCatching {
+                iosAnonymousWorkspaceCoordinator.moveChannel(
+                    channelId = channelId,
+                    targetIndex = targetIndex,
+                    state = iosRuntimeState.workspace,
+                )
+            }
+        } else {
+            onMoveChannel(channelId, targetIndex)
+        }
+    }
+
     ProvideFerventioRuntimeState(iosRuntimeState) {
         ProvideFerventioAboutInfo(aboutInfo) {
             ProvideFerventioAccountActions(accountActions) {
@@ -131,7 +228,7 @@ fun MainViewController(
                                 fontScalePercent = preferences.fontScalePercent,
                             ) {
                                 FerventioAuthenticationRoot(
-                                    state = iosRuntimeState.authentication.state,
+                                    state = authenticationState,
                                     workspace = iosRuntimeState.workspace,
                                     onAuthenticate = onAuthenticate,
                                     onSignOut = onSignOut,
@@ -147,12 +244,12 @@ fun MainViewController(
                                     onDeleteSavedFilter = onDeleteSavedFilter,
                                     onImportSavedFilters = onImportSavedFilters,
                                     onAddSavedFilterSplit = onAddSavedFilterSplit,
-                                    onSelectChannel = onSelectChannel,
-                                    onAddChannel = onAddChannel,
+                                    onSelectChannel = selectChannelAction,
+                                    onAddChannel = addChannelAction,
                                     onSetChannelPinned = onSetChannelPinned,
                                     onRenameChannel = onRenameChannel,
-                                    onRemoveChannel = onRemoveChannel,
-                                    onMoveChannel = onMoveChannel,
+                                    onRemoveChannel = removeChannelAction,
+                                    onMoveChannel = moveChannelAction,
                                     onSetSplitFilterQuery = onSetSplitFilterQuery,
                                     onSetSplitChannel = onSetSplitChannel,
                                     onFocusSplit = onFocusSplit,
