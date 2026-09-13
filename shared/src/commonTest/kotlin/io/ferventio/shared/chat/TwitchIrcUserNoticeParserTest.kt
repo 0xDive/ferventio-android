@@ -9,6 +9,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class TwitchIrcUserNoticeParserTest {
@@ -31,9 +32,9 @@ class TwitchIrcUserNoticeParserTest {
     }
 
     @Test
-    fun subGiftMapsRecipientAndGifterMetadata() {
+    fun subGiftMapsCurrentRecipientAndGiftMetadata() {
         val message = parseMessage(
-            """@badges=staff/1;color=#0000FF;display-name=TWW2;id=gift-1;login=tww2;msg-id=subgift;msg-param-months=1;msg-param-recipient-display-name=Mr_Woodchuck;msg-param-recipient-id=55554444;msg-param-recipient-name=mr_woodchuck;msg-param-sub-plan=1000;room-id=19571752;system-msg=TWW2\sgifted\sa\sTier\s1\ssub\sto\sMr_Woodchuck!;tmi-sent-ts=1521159445153;user-id=87654321 :tmi.twitch.tv USERNOTICE #forstycup""",
+            """@badges=staff/1;color=#0000FF;display-name=TWW2;id=gift-1;login=tww2;msg-id=subgift;msg-param-gift-months=3;msg-param-months=12;msg-param-origin-id=community-wave-1;msg-param-recipient-display-name=Mr_Woodchuck;msg-param-recipient-id=55554444;msg-param-recipient-user-name=mr_woodchuck;msg-param-sender-count=38;msg-param-sub-plan=1000;room-id=19571752;system-msg=TWW2\sgifted\s3\smonths\sto\sMr_Woodchuck!;tmi-sent-ts=1521159445153;user-id=87654321 :tmi.twitch.tv USERNOTICE #forstycup""",
         )
 
         assertEquals(ChatMessageType.GIFT_SUBSCRIPTION, message.type)
@@ -45,7 +46,34 @@ class TwitchIrcUserNoticeParserTest {
         assertEquals("55554444", message.notice?.recipientUserId)
         assertEquals("mr_woodchuck", message.notice?.recipientUserLogin)
         assertEquals("Mr_Woodchuck", message.notice?.recipientUserName)
+        assertEquals(3, message.notice?.durationMonths)
+        assertEquals(38, message.notice?.cumulativeGiftTotal)
+        assertEquals("community-wave-1", message.notice?.communityGiftId)
+    }
+
+    @Test
+    fun subGiftKeepsLegacyRecipientNameFallback() {
+        val message = parseMessage(
+            """@display-name=Gifter;id=gift-legacy;login=gifter;msg-id=subgift;msg-param-months=1;msg-param-recipient-display-name=LegacyUser;msg-param-recipient-id=55;msg-param-recipient-name=legacyuser;msg-param-sub-plan=1000;room-id=42;tmi-sent-ts=1700000000000;user-id=7 :tmi.twitch.tv USERNOTICE #channel""",
+        )
+
+        assertEquals("legacyuser", message.notice?.recipientUserLogin)
         assertEquals(1, message.notice?.durationMonths)
+    }
+
+    @Test
+    fun communityGiftMapsWaveTotalsAndCommunityId() {
+        val message = parseMessage(
+            """@display-name=Gifter;id=gift-wave;login=gifter;msg-id=submysterygift;msg-param-mass-gift-count=5;msg-param-origin-id=community-wave-2;msg-param-sender-count=13;msg-param-sub-plan=1000;room-id=42;system-msg=Gifter\sis\sgifting\s5\sTier\s1\sSubs!;tmi-sent-ts=1700000000000;user-id=7 :tmi.twitch.tv USERNOTICE #channel""",
+        )
+
+        assertEquals(ChatMessageType.GIFT_SUBSCRIPTION, message.type)
+        assertEquals(true, message.notice?.isGift)
+        assertEquals(5, message.notice?.giftTotal)
+        assertEquals(13, message.notice?.cumulativeGiftTotal)
+        assertEquals("community-wave-2", message.notice?.communityGiftId)
+        assertNull(message.notice?.recipientUserId)
+        assertNull(message.notice?.recipientUserLogin)
     }
 
     @Test

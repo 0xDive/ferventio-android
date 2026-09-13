@@ -233,9 +233,14 @@ object TwitchIrcParser {
         val subPlan = line.tags["msg-param-sub-plan"]?.takeIf(String::isNotBlank)
         val cumulativeMonths = line.tags["msg-param-cumulative-months"]?.toIntOrNull()
         val shareStreak = line.tags["msg-param-should-share-streak"] != "0"
-        val giftNotice = noticeType == "subgift" || noticeType == "submysterygift"
+        val directGiftNotice = noticeType == "subgift"
+        val communityGiftNotice = noticeType == "submysterygift" || noticeType == "anonsubmysterygift"
+        val giftNotice = directGiftNotice || communityGiftNotice
         val anonymousNotice = userId == null || noticeType.startsWith("anon")
         val raidNotice = noticeType == "raid"
+        val communityGiftId = line.tags["msg-param-community-gift-id"]
+            ?.takeIf(String::isNotBlank)
+            ?: line.tags["msg-param-origin-id"]?.takeIf(String::isNotBlank)
 
         return ChatMessage(
             id = messageId,
@@ -264,19 +269,33 @@ object TwitchIrcParser {
                 userMessage = userMessage,
                 subTier = subPlan,
                 isPrime = subPlan?.equals("prime", ignoreCase = true),
-                durationMonths = line.tags["msg-param-months"]?.toIntOrNull()
-                    ?: cumulativeMonths.takeIf { messageType == ChatMessageType.SUBSCRIPTION },
+                durationMonths = when {
+                    directGiftNotice -> line.tags["msg-param-gift-months"]?.toIntOrNull()
+                        ?: line.tags["msg-param-months"]?.toIntOrNull()
+                    messageType == ChatMessageType.SUBSCRIPTION ->
+                        line.tags["msg-param-months"]?.toIntOrNull() ?: cumulativeMonths
+                    else -> line.tags["msg-param-months"]?.toIntOrNull()
+                },
                 cumulativeMonths = cumulativeMonths,
                 streakMonths = line.tags["msg-param-streak-months"]
                     ?.toIntOrNull()
                     ?.takeIf { shareStreak },
                 isGift = giftNotice,
+                giftTotal = line.tags["msg-param-mass-gift-count"]
+                    ?.toIntOrNull()
+                    ?.takeIf { communityGiftNotice },
+                cumulativeGiftTotal = line.tags["msg-param-sender-count"]
+                    ?.toIntOrNull()
+                    ?.takeIf { giftNotice },
+                communityGiftId = communityGiftId.takeIf { giftNotice },
                 gifterIsAnonymous = anonymousNotice.takeIf { giftNotice },
                 gifterUserId = userId.takeIf { giftNotice },
                 gifterUserLogin = userLogin.takeIf { giftNotice && !anonymousNotice },
                 gifterUserName = displayName.takeIf { giftNotice && !anonymousNotice },
                 recipientUserId = line.tags["msg-param-recipient-id"]?.takeIf(String::isNotBlank),
-                recipientUserLogin = line.tags["msg-param-recipient-name"]?.takeIf(String::isNotBlank),
+                recipientUserLogin = line.tags["msg-param-recipient-user-name"]
+                    ?.takeIf(String::isNotBlank)
+                    ?: line.tags["msg-param-recipient-name"]?.takeIf(String::isNotBlank),
                 recipientUserName = line.tags["msg-param-recipient-display-name"]?.takeIf(String::isNotBlank),
                 raidUserId = userId.takeIf { raidNotice },
                 raidUserLogin = line.tags["msg-param-login"]
@@ -302,7 +321,7 @@ object TwitchIrcParser {
     private fun userNoticeMessageType(noticeType: String): ChatMessageType = when (noticeType) {
         "sub" -> ChatMessageType.SUBSCRIPTION
         "resub" -> ChatMessageType.RESUBSCRIPTION
-        "subgift", "submysterygift" -> ChatMessageType.GIFT_SUBSCRIPTION
+        "subgift", "submysterygift", "anonsubmysterygift" -> ChatMessageType.GIFT_SUBSCRIPTION
         "raid" -> ChatMessageType.RAID
         "announcement" -> ChatMessageType.ANNOUNCEMENT
         else -> ChatMessageType.SYSTEM
