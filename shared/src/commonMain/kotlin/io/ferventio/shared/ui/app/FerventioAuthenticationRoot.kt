@@ -25,6 +25,7 @@ fun FerventioAuthenticationRoot(
     onRequestNotificationPermission: () -> Unit = {},
     onOpenNotificationSettings: () -> Unit = {},
     onSaveSettings: (SharedAppPreferences) -> Unit = {},
+    onSaveAnonymousHistoryPreferences: (SharedAppPreferences) -> Unit = {},
     onUpsertHighlightRule: (HighlightRule) -> Unit = {},
     onDeleteHighlightRule: (String) -> Unit = {},
     onUpsertIgnoreRule: (IgnoreRule) -> Unit = {},
@@ -70,6 +71,7 @@ fun FerventioAuthenticationRoot(
             onRenameChannel = onRenameChannel,
             onRemoveChannel = onRemoveChannel,
             onMoveChannel = onMoveChannel,
+            onSaveHistoryPreferences = onSaveAnonymousHistoryPreferences,
             modifier = modifier,
         ) { channel, filterQuery, contentModifier ->
             key(channel.id) {

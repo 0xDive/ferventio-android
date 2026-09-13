@@ -13,6 +13,8 @@ import io.ferventio.shared.history.IosChatHistoryStore
 import io.ferventio.shared.runtime.AppLifecyclePhase
 import io.ferventio.shared.runtime.FerventioRuntimeState
 import io.ferventio.shared.runtime.ProvideFerventioRuntimeState
+import io.ferventio.shared.settings.AnonymousHistoryPreferencesCoordinator
+import io.ferventio.shared.settings.IosAnonymousHistoryPreferencesStore
 import io.ferventio.shared.settings.IosLocalUiPreferencesStore
 import io.ferventio.shared.settings.SharedAppPreferences
 import io.ferventio.shared.settings.SharedLocalUiPreferencesStateHolder
@@ -41,6 +43,9 @@ private val iosRuntimeState = FerventioRuntimeState(
 private val iosSettingsBackupRuntime = IosSettingsBackupRuntime(iosRuntimeState)
 private val iosAnonymousWorkspaceCoordinator = AnonymousWorkspaceCoordinator(
     IosAnonymousWorkspaceStore(),
+)
+private val iosAnonymousHistoryPreferencesCoordinator = AnonymousHistoryPreferencesCoordinator(
+    IosAnonymousHistoryPreferencesStore(),
 )
 private val iosAnonymousChatRuntime = AnonymousChatRuntimeCoordinator(
     state = iosRuntimeState.chat,
@@ -142,6 +147,13 @@ fun MainViewController(
     LaunchedEffect(authenticationRequired) {
         if (authenticationRequired) onAuthenticationRequired()
     }
+    LaunchedEffect(anonymousMode) {
+        if (anonymousMode) {
+            runCatching {
+                iosAnonymousHistoryPreferencesCoordinator.restore(iosRuntimeState.settings)
+            }
+        }
+    }
     LaunchedEffect(anonymousMode, lifecyclePhase, anonymousTransportLogins) {
         if (!anonymousMode) {
             iosAnonymousChatRuntime.close()
@@ -150,6 +162,7 @@ fun MainViewController(
 
         if (iosRuntimeState.workspace.loadStatus != WorkspaceLoadStatus.READY) {
             runCatching {
+                iosAnonymousHistoryPreferencesCoordinator.restore(iosRuntimeState.settings)
                 iosAnonymousWorkspaceCoordinator.restore(iosRuntimeState.workspace)
             }
             return@LaunchedEffect
@@ -240,6 +253,11 @@ fun MainViewController(
             onMoveChannel(channelId, targetIndex)
         }
     }
+    val saveAnonymousHistoryPreferencesAction: (SharedAppPreferences) -> Unit = { value ->
+        if (anonymousMode) {
+            runCatching { iosAnonymousHistoryPreferencesCoordinator.save(value) }
+        }
+    }
 
     ProvideFerventioRuntimeState(iosRuntimeState) {
         ProvideFerventioAboutInfo(aboutInfo) {
@@ -264,6 +282,7 @@ fun MainViewController(
                                     onRequestNotificationPermission = onRequestNotificationPermission,
                                     onOpenNotificationSettings = onOpenNotificationSettings,
                                     onSaveSettings = onSaveSettings,
+                                    onSaveAnonymousHistoryPreferences = saveAnonymousHistoryPreferencesAction,
                                     onUpsertHighlightRule = onUpsertHighlightRule,
                                     onDeleteHighlightRule = onDeleteHighlightRule,
                                     onUpsertIgnoreRule = onUpsertIgnoreRule,

@@ -39,6 +39,7 @@ import io.ferventio.app.domain.ChatChannel
 import io.ferventio.shared.generated.resources.Res
 import io.ferventio.shared.generated.resources.attention_open
 import io.ferventio.shared.generated.resources.auth_sign_in_with_twitch
+import io.ferventio.shared.generated.resources.settings_open
 import io.ferventio.shared.generated.resources.workspace_anonymous_no_channels_summary
 import io.ferventio.shared.generated.resources.workspace_chats
 import io.ferventio.shared.generated.resources.workspace_load_failed
@@ -46,6 +47,7 @@ import io.ferventio.shared.generated.resources.workspace_loading
 import io.ferventio.shared.generated.resources.workspace_menu
 import io.ferventio.shared.generated.resources.workspace_no_channels
 import io.ferventio.shared.runtime.LocalFerventioRuntimeState
+import io.ferventio.shared.settings.SharedAppPreferences
 import io.ferventio.shared.workspace.WorkspaceLoadStatus
 import io.ferventio.shared.workspace.WorkspaceRuntimeStateHolder
 import io.ferventio.shared.workspace.resolveWorkspaceActiveChannelId
@@ -64,6 +66,7 @@ internal fun FerventioAnonymousWorkspaceShell(
     onRenameChannel: (String, String?) -> Unit,
     onRemoveChannel: (String) -> Unit,
     onMoveChannel: (String, Int) -> Unit,
+    onSaveHistoryPreferences: (SharedAppPreferences) -> Unit = {},
     modifier: Modifier = Modifier,
     content: @Composable (ChatChannel, String, Modifier) -> Unit,
 ) {
@@ -71,6 +74,7 @@ internal fun FerventioAnonymousWorkspaceShell(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     var attentionVisible by remember { mutableStateOf(false) }
+    var historySettingsVisible by remember { mutableStateOf(false) }
     val selectedChannelId = resolveWorkspaceActiveChannelId(
         layout = state.workspaceLayout,
         selectedChannelId = state.selectedChannelId,
@@ -103,6 +107,17 @@ internal fun FerventioAnonymousWorkspaceShell(
                         modifier = Modifier.weight(1f),
                     )
                     HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+                    TextButton(
+                        onClick = {
+                            scope.launch {
+                                drawerState.close()
+                                historySettingsVisible = true
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                    ) {
+                        Text(stringResource(Res.string.settings_open))
+                    }
                     TextButton(
                         onClick = onAuthenticate,
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
@@ -204,6 +219,14 @@ internal fun FerventioAnonymousWorkspaceShell(
                 attentionVisible = false
             },
             onDismiss = { attentionVisible = false },
+        )
+    }
+
+    if (historySettingsVisible) {
+        FerventioAnonymousHistorySettingsSheet(
+            state = runtime.settings,
+            onSave = onSaveHistoryPreferences,
+            onDismiss = { historySettingsVisible = false },
         )
     }
 }
