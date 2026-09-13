@@ -129,6 +129,53 @@ class AnonymousChatSessionRuntimeTest {
     }
 
     @Test
+    fun durableHistoryStartsOnlyAfterCanonicalRoomResolution() {
+        val operations = mutableListOf<String>()
+        val state = ChatRuntimeStateHolder()
+        val attention = ChatAttentionStateHolder()
+        val workspace = workspace()
+        val runtime = AnonymousChatSessionRuntime(
+            state = state,
+            attention = attention,
+            workspace = workspace,
+            persistMessage = { message -> operations += "save:${message.channelId}:${message.id}" },
+            persistMessageDeleted = { channelId, messageId ->
+                operations += "delete:$channelId:$messageId"
+            },
+            persistUserMessagesDeleted = { channelId, userId ->
+                operations += "user-clear:$channelId:$userId"
+            },
+            persistChannelCleared = { channelId -> operations += "channel-clear:$channelId" },
+            onCanonicalChannelResolved = { channel -> operations += "resolved:${channel.id}" },
+        )
+
+        runtime.onEvent(ChatEvent.Message(message("early", PLACEHOLDER_ID, authorId = "viewer")))
+        runtime.onEvent(ChatEvent.MessageDeleted(PLACEHOLDER_ID, "early"))
+        runtime.onRoomResolved("alpha", "1234")
+        runtime.onEvent(ChatEvent.Message(message("real", "1234", authorId = "viewer")))
+        runtime.onEvent(ChatEvent.MessageDeleted("1234", "real"))
+        runtime.onEvent(
+            ChatEvent.UserMessagesCleared(
+                channelId = "1234",
+                userId = "viewer",
+                isPermanent = false,
+            ),
+        )
+        runtime.onEvent(ChatEvent.ChatCleared("1234"))
+
+        assertEquals(
+            listOf(
+                "resolved:1234",
+                "save:1234:real",
+                "delete:1234:real",
+                "user-clear:1234:viewer",
+                "channel-clear:1234",
+            ),
+            operations,
+        )
+    }
+
+    @Test
     fun connectionAndNoticeStateStayInSharedHolder() {
         val state = ChatRuntimeStateHolder()
         val runtime = AnonymousChatSessionRuntime(

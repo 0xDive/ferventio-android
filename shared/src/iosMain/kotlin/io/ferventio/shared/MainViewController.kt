@@ -45,6 +45,8 @@ private val iosAnonymousWorkspaceCoordinator = AnonymousWorkspaceCoordinator(
 private val iosAnonymousChatRuntime = AnonymousChatRuntimeCoordinator(
     state = iosRuntimeState.chat,
     attention = iosRuntimeState.attention,
+    historyStore = iosRuntimeState.history,
+    settings = iosRuntimeState.settings,
     messageRules = iosRuntimeState.messageRules,
 )
 
