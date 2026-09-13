@@ -89,6 +89,7 @@ object TwitchIrcParser {
                     )
                 }
                 val rewardId = line.tags["custom-reward-id"]?.takeIf(String::isNotBlank)
+                val bits = line.tags["bits"]?.toIntOrNull()?.takeIf { it > 0 }
                 val message = ChatMessage(
                     id = messageId,
                     channelId = channelId,
@@ -113,6 +114,7 @@ object TwitchIrcParser {
                     type = when {
                         isAction -> ChatMessageType.ACTION
                         rewardId != null -> ChatMessageType.REWARD
+                        bits != null -> ChatMessageType.CHEER
                         else -> ChatMessageType.CHAT
                     },
                     flags = MessageFlags(
