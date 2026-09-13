@@ -14,7 +14,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -45,7 +47,11 @@ class TwitchRecentMessagesClientTest {
             baseUrl = "https://recent.test/api/v2/recent-messages",
         )
 
-        val result = client.load(channel)
+        // The client deliberately has a real request timeout. Keep MockEngine execution off the
+        // runTest virtual-time dispatcher so the timeout cannot win before MockEngine responds.
+        val result = withContext(Dispatchers.Default) {
+            client.load(channel)
+        }
 
         assertEquals(listOf("message-1"), result.messages.map { it.id })
         assertEquals("channel-id", result.messages.single().channelId)

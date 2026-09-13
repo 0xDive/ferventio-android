@@ -2,11 +2,23 @@ package io.ferventio.shared.chat
 
 import io.ferventio.app.domain.ChatChannel
 import io.ferventio.shared.history.ChatHistoryPersistenceRuntime
+import io.ferventio.shared.workspace.WorkspaceRuntimeSnapshot
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+
+/** Matches Android's Recent Messages target set: visible active-tab splits plus legacy selection. */
+internal fun WorkspaceRuntimeSnapshot.activeRecentMessageChannels(): List<ChatChannel> {
+    val activeIds = buildSet {
+        workspaceLayout?.activeTab?.splits
+            ?.mapNotNull { split -> split.channelId?.trim()?.takeIf(String::isNotEmpty) }
+            ?.forEach(::add)
+        selectedChannelId?.trim()?.takeIf(String::isNotEmpty)?.let(::add)
+    }
+    return channels.filter { channel -> channel.id in activeIds }
+}
 
 /** Loads Recent Messages without routing historical rows through unread/highlight side effects. */
 internal class TwitchRecentMessagesRuntime(
@@ -42,10 +54,16 @@ internal class TwitchRecentMessagesRuntime(
             val result = loadRecentMessages(channel, TwitchRecentMessagesClient.DEFAULT_LIMIT)
             if (result.messages.isEmpty()) return
 
-            // Historical rows are intentionally inserted through the history overlay. Live rows
-            // win duplicate Twitch message IDs and append() later evicts a matching overlay row.
-            state.prependHistory(channel.id, result.messages)
-            result.messages.forEach { message ->
+            // Android parity: rows already held locally win duplicate Twitch message IDs. This
+            // preserves richer local moderation/hydration state and also keeps live rows canonical.
+            val existingIds = state.messages(channel.id).mapTo(hashSetOf()) { message -> message.id }
+            val novelMessages = result.messages.filterNot { message -> message.id in existingIds }
+            if (novelMessages.isEmpty()) return
+
+            // Historical rows are intentionally inserted through the history overlay. They never
+            // route through append()/attention and therefore cannot create unread or highlight UI.
+            state.prependHistory(channel.id, novelMessages)
+            novelMessages.forEach { message ->
                 history?.saveMessage(message)
             }
         } catch (error: CancellationException) {

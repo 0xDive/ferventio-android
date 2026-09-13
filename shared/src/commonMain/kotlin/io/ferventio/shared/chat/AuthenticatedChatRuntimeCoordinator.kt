@@ -166,7 +166,9 @@ class AuthenticatedChatRuntimeCoordinator(
                                         .distinctUntilChanged()
                                         .collectLatest { enabled ->
                                             if (enabled) {
-                                                recentMessagesRuntime.loadChannels(workspace.channels)
+                                                recentMessagesRuntime.loadChannels(
+                                                    workspace.activeRecentMessageChannels(),
+                                                )
                                             }
                                         }
                                 }
