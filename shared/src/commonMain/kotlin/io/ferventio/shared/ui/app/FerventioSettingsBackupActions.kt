@@ -98,11 +98,24 @@ data class FerventioSettingsBackupActions(
     val onUseServer: (() -> Unit)? = null,
 ) {
     val fileTransferAvailable: Boolean
-        get() = onExport != null || onImport != null
+        get() = onExport != null || onImport != null || state.status.impliesFileTransferSupport
 
     val conflictResolutionAvailable: Boolean
         get() = onKeepLocal != null && onUseServer != null
 }
+
+private val SharedSettingsBackupStatus.impliesFileTransferSupport: Boolean
+    get() = when (this) {
+        SharedSettingsBackupStatus.EXPORTING,
+        SharedSettingsBackupStatus.IMPORTING,
+        SharedSettingsBackupStatus.RESOLVING,
+        SharedSettingsBackupStatus.CONFLICT,
+        -> true
+        SharedSettingsBackupStatus.IDLE,
+        SharedSettingsBackupStatus.SYNCED,
+        SharedSettingsBackupStatus.FAILED,
+        -> false
+    }
 
 internal val LocalFerventioSettingsBackupActions = staticCompositionLocalOf {
     FerventioSettingsBackupActions()

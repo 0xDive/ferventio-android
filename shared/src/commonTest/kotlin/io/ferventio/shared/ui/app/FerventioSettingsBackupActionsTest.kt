@@ -8,10 +8,31 @@ import kotlin.test.assertTrue
 
 class FerventioSettingsBackupActionsTest {
     @Test
-    fun fileTransferAvailabilityRequiresAtLeastOnePlatformAction() {
+    fun fileTransferAvailabilityRequiresPlatformActionWhileIdle() {
         assertFalse(FerventioSettingsBackupActions().fileTransferAvailable)
         assertTrue(FerventioSettingsBackupActions(onExport = {}).fileTransferAvailable)
         assertTrue(FerventioSettingsBackupActions(onImport = {}).fileTransferAvailable)
+    }
+
+    @Test
+    fun activeFileTransactionKeepsTransferSupportVisibleWhileActionsAreLocked() {
+        val state = SharedSettingsBackupStateHolder()
+        val actions = FerventioSettingsBackupActions(state = state)
+
+        state.markExporting()
+        assertTrue(actions.fileTransferAvailable)
+
+        state.markImporting()
+        assertTrue(actions.fileTransferAvailable)
+
+        state.markConflict(revision = 4L)
+        assertTrue(actions.fileTransferAvailable)
+
+        state.markResolving()
+        assertTrue(actions.fileTransferAvailable)
+
+        state.markIdle()
+        assertFalse(actions.fileTransferAvailable)
     }
 
     @Test
