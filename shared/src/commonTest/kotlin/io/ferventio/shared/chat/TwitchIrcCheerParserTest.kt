@@ -36,7 +36,7 @@ class TwitchIrcCheerParserTest {
     @Test
     fun actionKeepsActionPrecedenceWhenBitsTagIsPresent() {
         val message = parseMessage(
-            """@badges=bits/100;color=#1E90FF;display-name=Viewer;id=action-cheer;login=viewer;bits=100;room-id=42;tmi-sent-ts=1700000000000;user-id=7 :viewer!viewer@viewer.tmi.twitch.tv PRIVMSG #channel :\u0001ACTION Cheer100 waves\u0001""",
+            "@badges=bits/100;color=#1E90FF;display-name=Viewer;id=action-cheer;login=viewer;bits=100;room-id=42;tmi-sent-ts=1700000000000;user-id=7 :viewer!viewer@viewer.tmi.twitch.tv PRIVMSG #channel :\u0001ACTION Cheer100 waves\u0001",
         )
 
         assertEquals(ChatMessageType.ACTION, message.type)
