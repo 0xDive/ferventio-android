@@ -60,6 +60,18 @@ class FerventioRuntimeState(
         history = history,
         localUiPreferences = localUiPreferences,
     )
+
+    /** Clears durable history and its in-memory presentation without resetting live transport state. */
+    suspend fun clearLocalHistory(channelIds: Iterable<String> = workspace.channelIds) {
+        val store = history ?: return
+        store.clearAll()
+        val affectedChannelIds = buildSet {
+            channelIds.map(String::trim).filter(String::isNotEmpty).forEach(::add)
+            chat.messagesByChannel.keys.forEach(::add)
+        }
+        affectedChannelIds.forEach(chat::clearChannelMessages)
+        attention.clear()
+    }
 }
 
 val LocalFerventioRuntimeState = staticCompositionLocalOf<FerventioRuntimeState> {
