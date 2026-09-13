@@ -1,5 +1,6 @@
 package io.ferventio.shared.chat
 
+import androidx.compose.runtime.snapshotFlow
 import io.ferventio.app.domain.ChatHistoryStore
 import io.ferventio.app.domain.ConnectionStatus
 import io.ferventio.app.domain.HighlightAlert
@@ -14,6 +15,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
@@ -95,11 +98,12 @@ class AuthenticatedChatRuntimeCoordinator(
             state.retainChannels(workspace.channelIds)
             attention.retainChannels(workspace.channelIds)
 
+            val sessionSettings = settings
             val sessionHistory = historyStore?.let { store ->
                 ChatHistoryPersistenceRuntime(
                     store = store,
                     configProvider = {
-                        checkNotNull(settings).preferences.toChatHistoryConfig()
+                        checkNotNull(sessionSettings).preferences.toChatHistoryConfig()
                     },
                 )
             }
@@ -108,6 +112,12 @@ class AuthenticatedChatRuntimeCoordinator(
                 state = state,
                 channelIds = workspace.channelIds,
             )
+            val recentMessagesRuntime = sessionSettings?.let {
+                TwitchRecentMessagesRuntime(
+                    state = state,
+                    history = sessionHistory,
+                )
+            }
 
             lateinit var client: TwitchEventSubSocketClient
             val runtime = TwitchChatSessionRuntime(
@@ -132,26 +142,41 @@ class AuthenticatedChatRuntimeCoordinator(
 
             try {
                 coroutineScope {
-                    val presentationAssetsJob = launch {
+                    val auxiliaryRuntimeJob = launch {
                         coroutineScope {
                             launch {
-                                refreshBadgeAssets(
-                                    authentication = authentication,
-                                    workspace = workspace,
-                                )
+                                coroutineScope {
+                                    launch {
+                                        refreshBadgeAssets(
+                                            authentication = authentication,
+                                            workspace = workspace,
+                                        )
+                                    }
+                                    launch {
+                                        refreshCheermoteAssets(
+                                            authentication = authentication,
+                                            workspace = workspace,
+                                        )
+                                    }
+                                }
                             }
-                            launch {
-                                refreshCheermoteAssets(
-                                    authentication = authentication,
-                                    workspace = workspace,
-                                )
+                            if (sessionSettings != null && recentMessagesRuntime != null) {
+                                launch {
+                                    snapshotFlow { sessionSettings.preferences.recentMessagesEnabled }
+                                        .distinctUntilChanged()
+                                        .collectLatest { enabled ->
+                                            if (enabled) {
+                                                recentMessagesRuntime.loadChannels(workspace.channels)
+                                            }
+                                        }
+                                }
                             }
                         }
                     }
                     try {
                         client.run()
                     } finally {
-                        presentationAssetsJob.cancelAndJoin()
+                        auxiliaryRuntimeJob.cancelAndJoin()
                     }
                 }
             } finally {
