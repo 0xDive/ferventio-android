@@ -19,6 +19,8 @@ class PushRegistrationStateHolderTest {
         assertEquals(PushBackendRegistrationStatus.IDLE, holder.backendRegistrationStatus)
         assertNull(holder.backendRegisteredDeviceToken)
         assertNull(holder.lastBackendRegistrationError)
+        assertEquals(PushSelfTestStatus.IDLE, holder.selfTestStatus)
+        assertNull(holder.lastSelfTestError)
         assertFalse(holder.needsBackendRegistration)
     }
 
@@ -66,17 +68,21 @@ class PushRegistrationStateHolderTest {
     }
 
     @Test
-    fun rotatedDeviceTokenInvalidatesBackendRegistration() {
+    fun rotatedDeviceTokenInvalidatesBackendRegistrationAndSelfTestState() {
         val holder = PushRegistrationStateHolder()
         holder.markRegistered("old-token")
         holder.markBackendRegistrationStarted()
         holder.markBackendRegistered()
+        holder.markSelfTestStarted()
+        holder.markSelfTestSent()
 
         holder.markRegistered("new-token")
 
         assertEquals("new-token", holder.deviceToken)
         assertEquals(PushBackendRegistrationStatus.IDLE, holder.backendRegistrationStatus)
         assertNull(holder.backendRegisteredDeviceToken)
+        assertEquals(PushSelfTestStatus.IDLE, holder.selfTestStatus)
+        assertNull(holder.lastSelfTestError)
         assertTrue(holder.needsBackendRegistration)
     }
 
@@ -96,11 +102,52 @@ class PushRegistrationStateHolderTest {
     }
 
     @Test
+    fun selfTestTracksProgressSuccessAndFailureSeparatelyFromRegistration() {
+        val holder = PushRegistrationStateHolder()
+        holder.markRegistered("abc123")
+        holder.markBackendRegistrationStarted()
+        holder.markBackendRegistered()
+
+        holder.markSelfTestStarted()
+        assertEquals(PushSelfTestStatus.SENDING, holder.selfTestStatus)
+        assertNull(holder.lastSelfTestError)
+        assertEquals(PushBackendRegistrationStatus.REGISTERED, holder.backendRegistrationStatus)
+
+        holder.markSelfTestSent()
+        assertEquals(PushSelfTestStatus.SENT, holder.selfTestStatus)
+        assertNull(holder.lastSelfTestError)
+        assertEquals(PushBackendRegistrationStatus.REGISTERED, holder.backendRegistrationStatus)
+
+        holder.markSelfTestStarted()
+        holder.markSelfTestFailed("  delivery unavailable  ")
+        assertEquals(PushSelfTestStatus.FAILED, holder.selfTestStatus)
+        assertEquals("delivery unavailable", holder.lastSelfTestError)
+        assertEquals(PushBackendRegistrationStatus.REGISTERED, holder.backendRegistrationStatus)
+        assertFalse(holder.needsBackendRegistration)
+    }
+
+    @Test
+    fun backendRegistrationRestartClearsPreviousSelfTestResult() {
+        val holder = PushRegistrationStateHolder()
+        holder.markRegistered("abc123")
+        holder.markBackendRegistrationStarted()
+        holder.markBackendRegistered()
+        holder.markSelfTestFailed("old failure")
+
+        holder.markBackendRegistrationStarted()
+
+        assertEquals(PushSelfTestStatus.IDLE, holder.selfTestStatus)
+        assertNull(holder.lastSelfTestError)
+    }
+
+    @Test
     fun failedRegistrationClearsStaleTokenAndBackendState() {
         val holder = PushRegistrationStateHolder()
         holder.markRegistered("abc123")
         holder.markBackendRegistrationStarted()
         holder.markBackendRegistered()
+        holder.markSelfTestStarted()
+        holder.markSelfTestSent()
 
         holder.markRegistrationFailed("  unavailable  ")
 
@@ -109,6 +156,7 @@ class PushRegistrationStateHolderTest {
         assertEquals("unavailable", holder.lastRegistrationError)
         assertEquals(PushBackendRegistrationStatus.IDLE, holder.backendRegistrationStatus)
         assertNull(holder.backendRegisteredDeviceToken)
+        assertEquals(PushSelfTestStatus.IDLE, holder.selfTestStatus)
         assertFalse(holder.needsBackendRegistration)
     }
 
@@ -118,6 +166,8 @@ class PushRegistrationStateHolderTest {
         holder.markRegistered("abc123")
         holder.markBackendRegistrationStarted()
         holder.markBackendRegistered()
+        holder.markSelfTestStarted()
+        holder.markSelfTestSent()
 
         holder.clearRegistration()
 
@@ -126,6 +176,7 @@ class PushRegistrationStateHolderTest {
         assertNull(holder.deviceToken)
         assertNull(holder.lastRegistrationError)
         assertEquals(PushBackendRegistrationStatus.IDLE, holder.backendRegistrationStatus)
+        assertEquals(PushSelfTestStatus.IDLE, holder.selfTestStatus)
         assertFalse(holder.needsBackendRegistration)
     }
 

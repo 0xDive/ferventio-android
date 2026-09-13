@@ -27,6 +27,13 @@ enum class PushBackendRegistrationStatus {
     FAILED,
 }
 
+enum class PushSelfTestStatus {
+    IDLE,
+    SENDING,
+    SENT,
+    FAILED,
+}
+
 /**
  * Shared push state fed by platform adapters and backend-registration orchestration.
  *
@@ -57,6 +64,12 @@ class PushRegistrationStateHolder(
         private set
 
     var lastBackendRegistrationError by mutableStateOf<String?>(null)
+        private set
+
+    var selfTestStatus by mutableStateOf(PushSelfTestStatus.IDLE)
+        private set
+
+    var lastSelfTestError by mutableStateOf<String?>(null)
         private set
 
     val needsBackendRegistration: Boolean
@@ -132,6 +145,7 @@ class PushRegistrationStateHolder(
         backendRegistrationStatus = PushBackendRegistrationStatus.REGISTERING
         backendRegisteredDeviceToken = null
         lastBackendRegistrationError = null
+        clearSelfTest()
     }
 
     fun markBackendRegistered() {
@@ -146,11 +160,33 @@ class PushRegistrationStateHolder(
         backendRegistrationStatus = PushBackendRegistrationStatus.FAILED
         backendRegisteredDeviceToken = null
         lastBackendRegistrationError = message?.trim()?.takeIf(String::isNotEmpty)
+        clearSelfTest()
     }
 
     fun clearBackendRegistration() {
         backendRegistrationStatus = PushBackendRegistrationStatus.IDLE
         backendRegisteredDeviceToken = null
         lastBackendRegistrationError = null
+        clearSelfTest()
+    }
+
+    fun markSelfTestStarted() {
+        selfTestStatus = PushSelfTestStatus.SENDING
+        lastSelfTestError = null
+    }
+
+    fun markSelfTestSent() {
+        selfTestStatus = PushSelfTestStatus.SENT
+        lastSelfTestError = null
+    }
+
+    fun markSelfTestFailed(message: String?) {
+        selfTestStatus = PushSelfTestStatus.FAILED
+        lastSelfTestError = message?.trim()?.takeIf(String::isNotEmpty)
+    }
+
+    fun clearSelfTest() {
+        selfTestStatus = PushSelfTestStatus.IDLE
+        lastSelfTestError = null
     }
 }
