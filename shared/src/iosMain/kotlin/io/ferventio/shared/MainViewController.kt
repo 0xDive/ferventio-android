@@ -13,9 +13,11 @@ import io.ferventio.shared.history.IosChatHistoryStore
 import io.ferventio.shared.runtime.AppLifecyclePhase
 import io.ferventio.shared.runtime.FerventioRuntimeState
 import io.ferventio.shared.runtime.ProvideFerventioRuntimeState
+import io.ferventio.shared.settings.AnonymousDisplayPreferencesCoordinator
 import io.ferventio.shared.settings.AnonymousHistoryPreferencesCoordinator
 import io.ferventio.shared.settings.AnonymousMessageRulesCoordinator
 import io.ferventio.shared.settings.AnonymousSavedFiltersCoordinator
+import io.ferventio.shared.settings.IosAnonymousDisplayPreferencesStore
 import io.ferventio.shared.settings.IosAnonymousHistoryPreferencesStore
 import io.ferventio.shared.settings.IosAnonymousMessageRulesStore
 import io.ferventio.shared.settings.IosAnonymousSavedFiltersStore
@@ -47,6 +49,9 @@ private val iosRuntimeState = FerventioRuntimeState(
 private val iosSettingsBackupRuntime = IosSettingsBackupRuntime(iosRuntimeState)
 private val iosAnonymousWorkspaceCoordinator = AnonymousWorkspaceCoordinator(
     IosAnonymousWorkspaceStore(),
+)
+private val iosAnonymousDisplayPreferencesCoordinator = AnonymousDisplayPreferencesCoordinator(
+    IosAnonymousDisplayPreferencesStore(),
 )
 private val iosAnonymousHistoryPreferencesCoordinator = AnonymousHistoryPreferencesCoordinator(
     IosAnonymousHistoryPreferencesStore(),
@@ -160,6 +165,9 @@ fun MainViewController(
     LaunchedEffect(anonymousMode) {
         if (anonymousMode) {
             runCatching {
+                iosAnonymousDisplayPreferencesCoordinator.restore(iosRuntimeState.settings)
+            }
+            runCatching {
                 iosAnonymousHistoryPreferencesCoordinator.restore(iosRuntimeState.settings)
             }
             runCatching {
@@ -177,6 +185,9 @@ fun MainViewController(
         }
 
         if (iosRuntimeState.workspace.loadStatus != WorkspaceLoadStatus.READY) {
+            runCatching {
+                iosAnonymousDisplayPreferencesCoordinator.restore(iosRuntimeState.settings)
+            }
             runCatching {
                 iosAnonymousHistoryPreferencesCoordinator.restore(iosRuntimeState.settings)
             }
@@ -393,6 +404,7 @@ fun MainViewController(
     }
     val saveAnonymousHistoryPreferencesAction: (SharedAppPreferences) -> Unit = { value ->
         if (anonymousMode) {
+            runCatching { iosAnonymousDisplayPreferencesCoordinator.save(value) }
             runCatching { iosAnonymousHistoryPreferencesCoordinator.save(value) }
         }
     }
