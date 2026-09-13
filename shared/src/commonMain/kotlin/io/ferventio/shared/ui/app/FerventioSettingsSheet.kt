@@ -177,7 +177,7 @@ internal fun FerventioSettingsSheet(
                     onOpenNotificationSettings = onOpenNotificationSettings,
                     update = ::update,
                 )
-                SharedSettingsPage.HISTORY -> HistorySettingsPage(
+                SharedSettingsPage.HISTORY -> FerventioHistorySettingsPage(
                     preferences = state.preferences,
                     update = ::update,
                 )
