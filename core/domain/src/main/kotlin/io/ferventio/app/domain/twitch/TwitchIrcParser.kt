@@ -6,6 +6,7 @@ import io.ferventio.app.domain.ChatEvent
 import io.ferventio.app.domain.ChatFragment
 import io.ferventio.app.domain.ChatMessage
 import io.ferventio.app.domain.ChatMessageType
+import io.ferventio.app.domain.ChatNotice
 import io.ferventio.app.domain.ChatReward
 import io.ferventio.app.domain.MessageFlags
 import io.ferventio.app.domain.ModerationAction
@@ -133,6 +134,14 @@ object TwitchIrcParser {
                 events += TwitchIrcEvent.Chat(ChatEvent.Message(message))
             }
 
+            "USERNOTICE" -> {
+                val login = channelLogin ?: return events
+                val channelId = roomId ?: channelIdForLogin(login) ?: return events
+                events += TwitchIrcEvent.Chat(
+                    ChatEvent.Message(parseUserNotice(line, login, channelId)),
+                )
+            }
+
             "CLEARMSG" -> {
                 val login = channelLogin ?: return events
                 val channelId = roomId ?: channelIdForLogin(login) ?: return events
@@ -187,6 +196,114 @@ object TwitchIrcParser {
         }
 
         return events
+    }
+
+    private fun parseUserNotice(
+        line: ParsedIrcLine,
+        channelLogin: String,
+        channelId: String,
+    ): ChatMessage {
+        val noticeType = line.tags["msg-id"]
+            ?.trim()
+            ?.lowercase()
+            ?.takeIf(String::isNotEmpty)
+            ?: "usernotice"
+        val userMessage = line.trailing?.takeIf(String::isNotBlank)
+        val systemMessage = line.tags["system-msg"]?.takeIf(String::isNotBlank)
+        val userLogin = line.tags["login"]
+            ?.takeIf(String::isNotBlank)
+            ?: line.tags["msg-param-login"]
+                ?.takeIf(String::isNotBlank)
+            ?: "twitch"
+        val displayName = line.tags["display-name"]
+            ?.takeIf(String::isNotBlank)
+            ?: line.tags["msg-param-displayName"]
+                ?.takeIf(String::isNotBlank)
+            ?: userLogin
+        val userId = line.tags["user-id"]?.takeIf(String::isNotBlank)
+        val sentAtMillis = line.receivedAtMillis()
+            ?: Clock.System.now().toEpochMilliseconds()
+        val messageId = line.tags["id"]
+            ?.takeIf(String::isNotBlank)
+            ?: "irc:usernotice:$channelId:$sentAtMillis:$noticeType"
+        val messageType = userNoticeMessageType(noticeType)
+        val text = userMessage ?: systemMessage ?: noticeType
+        val subPlan = line.tags["msg-param-sub-plan"]?.takeIf(String::isNotBlank)
+        val cumulativeMonths = line.tags["msg-param-cumulative-months"]?.toIntOrNull()
+        val shareStreak = line.tags["msg-param-should-share-streak"] != "0"
+        val giftNotice = noticeType == "subgift" || noticeType == "submysterygift"
+        val anonymousNotice = userId == null || noticeType.startsWith("anon")
+        val raidNotice = noticeType == "raid"
+
+        return ChatMessage(
+            id = messageId,
+            channelId = channelId,
+            channelLogin = channelLogin,
+            author = ChatAuthor(
+                id = userId ?: "anonymous:$userLogin",
+                login = userLogin,
+                displayName = displayName,
+                color = line.tags["color"]?.takeIf(String::isNotBlank),
+                badges = parseBadges(line.tags["badges"]),
+            ),
+            text = text,
+            fragments = userMessage?.let { value ->
+                parseFragments(
+                    text = value,
+                    emoteTag = line.tags["emotes"],
+                    codePointOffset = 0,
+                )
+            } ?: listOf(ChatFragment.Text(text)),
+            timestamp = Instant.fromEpochMilliseconds(sentAtMillis).toString(),
+            timestampMillis = sentAtMillis,
+            notice = ChatNotice(
+                type = noticeType,
+                systemMessage = systemMessage,
+                userMessage = userMessage,
+                subTier = subPlan,
+                isPrime = subPlan?.equals("prime", ignoreCase = true),
+                durationMonths = line.tags["msg-param-months"]?.toIntOrNull()
+                    ?: cumulativeMonths.takeIf { messageType == ChatMessageType.SUBSCRIPTION },
+                cumulativeMonths = cumulativeMonths,
+                streakMonths = line.tags["msg-param-streak-months"]
+                    ?.toIntOrNull()
+                    ?.takeIf { shareStreak },
+                isGift = giftNotice,
+                gifterIsAnonymous = anonymousNotice.takeIf { giftNotice },
+                gifterUserId = userId.takeIf { giftNotice },
+                gifterUserLogin = userLogin.takeIf { giftNotice && !anonymousNotice },
+                gifterUserName = displayName.takeIf { giftNotice && !anonymousNotice },
+                recipientUserId = line.tags["msg-param-recipient-id"]?.takeIf(String::isNotBlank),
+                recipientUserLogin = line.tags["msg-param-recipient-name"]?.takeIf(String::isNotBlank),
+                recipientUserName = line.tags["msg-param-recipient-display-name"]?.takeIf(String::isNotBlank),
+                raidUserId = userId.takeIf { raidNotice },
+                raidUserLogin = line.tags["msg-param-login"]
+                    ?.takeIf(String::isNotBlank)
+                    ?.takeIf { raidNotice },
+                raidUserName = line.tags["msg-param-displayName"]
+                    ?.takeIf(String::isNotBlank)
+                    ?.takeIf { raidNotice },
+                raidViewerCount = line.tags["msg-param-viewerCount"]
+                    ?.toIntOrNull()
+                    ?.takeIf { raidNotice },
+                announcementColor = line.tags["msg-param-color"]
+                    ?.takeIf(String::isNotBlank)
+                    ?.takeIf { messageType == ChatMessageType.ANNOUNCEMENT },
+                isAnonymous = anonymousNotice,
+            ),
+            type = messageType,
+            flags = MessageFlags(isSystem = true),
+            serverMessageId = messageId,
+        )
+    }
+
+    private fun userNoticeMessageType(noticeType: String): ChatMessageType = when (noticeType) {
+        "sub" -> ChatMessageType.SUBSCRIPTION
+        "resub" -> ChatMessageType.RESUBSCRIPTION
+        "subgift", "submysterygift" -> ChatMessageType.GIFT_SUBSCRIPTION
+        "raid" -> ChatMessageType.RAID
+        "announcement" -> ChatMessageType.ANNOUNCEMENT
+        else -> ChatMessageType.SYSTEM
     }
 
     private fun ParsedIrcLine.receivedAtMillis(): Long? =
