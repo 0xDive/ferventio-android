@@ -1,5 +1,6 @@
 package io.ferventio.shared.chat
 
+import androidx.compose.runtime.snapshotFlow
 import io.ferventio.app.domain.ChatChannel
 import io.ferventio.app.domain.ChatEvent
 import io.ferventio.app.domain.ChatHistoryStore
@@ -15,8 +16,12 @@ import io.ferventio.shared.settings.SharedMessageRulesSnapshot
 import io.ferventio.shared.settings.SharedMessageRulesStateHolder
 import io.ferventio.shared.workspace.WorkspaceRuntimeStateHolder
 import kotlin.Throws
+import kotlin.time.Clock
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -77,6 +82,13 @@ class AnonymousChatRuntimeCoordinator(
                 }.getOrNull()
             }
             historyRuntime = sessionHistory
+            val recentMessagesRuntime = sessionSettings?.let {
+                TwitchRecentMessagesRuntime(
+                    state = state,
+                    history = sessionHistory,
+                )
+            }
+            val recentMessagesAttemptPolicy = AnonymousRecentMessagesAttemptPolicy()
 
             try {
                 coroutineScope {
@@ -114,10 +126,34 @@ class AnonymousChatRuntimeCoordinator(
                         onError = runtime::onSocketError,
                     )
                     runningClient = client
+                    val recentMessagesJob = if (
+                        sessionSettings != null && recentMessagesRuntime != null
+                    ) {
+                        launch {
+                            snapshotFlow {
+                                workspace.anonymousRecentMessagesTarget(
+                                    enabled = sessionSettings.preferences.recentMessagesEnabled,
+                                )
+                            }
+                                .distinctUntilChanged()
+                                .collectLatest { target ->
+                                    val channel = target.channel ?: return@collectLatest
+                                    if (!target.enabled) return@collectLatest
+                                    val nowMillis = Clock.System.now().toEpochMilliseconds()
+                                    if (!recentMessagesAttemptPolicy.shouldAttempt(channel, nowMillis)) {
+                                        return@collectLatest
+                                    }
+                                    recentMessagesRuntime.loadChannels(listOf(channel))
+                                }
+                        }
+                    } else {
+                        null
+                    }
 
                     try {
                         client.run()
                     } finally {
+                        recentMessagesJob?.cancelAndJoin()
                         client.close()
                         if (runningClient === client) runningClient = null
                     }
@@ -138,6 +174,43 @@ class AnonymousChatRuntimeCoordinator(
     fun close() {
         historyRuntime?.close()
         runningClient?.close()
+    }
+}
+
+internal data class AnonymousRecentMessagesTarget(
+    val enabled: Boolean,
+    val channel: ChatChannel?,
+)
+
+internal fun WorkspaceRuntimeStateHolder.anonymousRecentMessagesTarget(
+    enabled: Boolean,
+): AnonymousRecentMessagesTarget {
+    val selected = selectedChannelId?.let { selectedId ->
+        channels.firstOrNull { channel ->
+            channel.id == selectedId && channel.id.isCanonicalAnonymousChannelId()
+        }
+    }
+    return AnonymousRecentMessagesTarget(
+        enabled = enabled,
+        channel = selected,
+    )
+}
+
+internal class AnonymousRecentMessagesAttemptPolicy(
+    private val cooldownMillis: Long = RETRY_COOLDOWN_MILLIS,
+) {
+    private val lastAttemptByLogin = mutableMapOf<String, Long>()
+
+    fun shouldAttempt(channel: ChatChannel, nowMillis: Long): Boolean {
+        val login = channel.login.trim().lowercase().takeIf(String::isNotEmpty) ?: return false
+        val lastAttempt = lastAttemptByLogin[login]
+        if (lastAttempt != null && nowMillis - lastAttempt < cooldownMillis) return false
+        lastAttemptByLogin[login] = nowMillis
+        return true
+    }
+
+    private companion object {
+        const val RETRY_COOLDOWN_MILLIS = 60_000L
     }
 }
 
