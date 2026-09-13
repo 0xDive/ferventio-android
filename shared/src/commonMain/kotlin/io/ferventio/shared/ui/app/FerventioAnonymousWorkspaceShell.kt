@@ -60,6 +60,8 @@ internal fun FerventioAnonymousWorkspaceShell(
     onAuthenticate: () -> Unit,
     onSelectChannel: (String) -> Unit,
     onAddChannel: (String) -> Unit,
+    onSetChannelPinned: (String, Boolean) -> Unit,
+    onRenameChannel: (String, String?) -> Unit,
     onRemoveChannel: (String) -> Unit,
     onMoveChannel: (String, Int) -> Unit,
     modifier: Modifier = Modifier,
@@ -94,16 +96,8 @@ internal fun FerventioAnonymousWorkspaceShell(
                             scope.launch { drawerState.close() }
                         },
                         onAddChannel = onAddChannel,
-                        onSetChannelPinned = { channelId, pinned ->
-                            state.updatePinnedChannelIds(
-                                if (pinned) {
-                                    state.pinnedChannelIds + channelId
-                                } else {
-                                    state.pinnedChannelIds - channelId
-                                },
-                            )
-                        },
-                        onRenameChannel = state::setChannelTabTitle,
+                        onSetChannelPinned = onSetChannelPinned,
+                        onRenameChannel = onRenameChannel,
                         onRemoveChannel = onRemoveChannel,
                         onMoveChannel = onMoveChannel,
                         modifier = Modifier.weight(1f),

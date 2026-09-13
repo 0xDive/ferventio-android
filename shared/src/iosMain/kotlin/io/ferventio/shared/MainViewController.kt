@@ -185,6 +185,32 @@ fun MainViewController(
             onAddChannel(login)
         }
     }
+    val setChannelPinnedAction: (String, Boolean) -> Unit = { channelId, pinned ->
+        if (anonymousMode) {
+            runCatching {
+                iosAnonymousWorkspaceCoordinator.setChannelPinned(
+                    channelId = channelId,
+                    pinned = pinned,
+                    state = iosRuntimeState.workspace,
+                )
+            }
+        } else {
+            onSetChannelPinned(channelId, pinned)
+        }
+    }
+    val renameChannelAction: (String, String?) -> Unit = { channelId, title ->
+        if (anonymousMode) {
+            runCatching {
+                iosAnonymousWorkspaceCoordinator.renameChannel(
+                    channelId = channelId,
+                    title = title,
+                    state = iosRuntimeState.workspace,
+                )
+            }
+        } else {
+            onRenameChannel(channelId, title)
+        }
+    }
     val removeChannelAction: (String) -> Unit = { channelId ->
         if (anonymousMode) {
             runCatching {
@@ -246,8 +272,8 @@ fun MainViewController(
                                     onAddSavedFilterSplit = onAddSavedFilterSplit,
                                     onSelectChannel = selectChannelAction,
                                     onAddChannel = addChannelAction,
-                                    onSetChannelPinned = onSetChannelPinned,
-                                    onRenameChannel = onRenameChannel,
+                                    onSetChannelPinned = setChannelPinnedAction,
+                                    onRenameChannel = renameChannelAction,
                                     onRemoveChannel = removeChannelAction,
                                     onMoveChannel = moveChannelAction,
                                     onSetSplitFilterQuery = onSetSplitFilterQuery,

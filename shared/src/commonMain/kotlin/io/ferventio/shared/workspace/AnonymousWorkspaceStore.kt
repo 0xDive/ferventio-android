@@ -7,6 +7,8 @@ import kotlin.Throws
 data class AnonymousWorkspaceSnapshot(
     val channelLogins: List<String> = emptyList(),
     val selectedChannelLogin: String? = null,
+    val pinnedChannelLogins: List<String> = emptyList(),
+    val channelTitlesByLogin: Map<String, String> = emptyMap(),
 )
 
 /** Device-local channel storage used before a Twitch account is authorized. */
@@ -99,6 +101,34 @@ class AnonymousWorkspaceCoordinator(
         persist(state)
     }
 
+    @Throws(Exception::class)
+    fun setChannelPinned(
+        channelId: String,
+        pinned: Boolean,
+        state: WorkspaceRuntimeStateHolder,
+    ): AnonymousWorkspaceSnapshot = mutate(state) {
+        val normalizedId = requireWorkspaceChannelId(channelId, state)
+        state.updatePinnedChannelIds(
+            if (pinned) {
+                state.pinnedChannelIds + normalizedId
+            } else {
+                state.pinnedChannelIds - normalizedId
+            },
+        )
+        persist(state)
+    }
+
+    @Throws(Exception::class)
+    fun renameChannel(
+        channelId: String,
+        title: String?,
+        state: WorkspaceRuntimeStateHolder,
+    ): AnonymousWorkspaceSnapshot = mutate(state) {
+        val normalizedId = requireWorkspaceChannelId(channelId, state)
+        state.setChannelTabTitle(normalizedId, title)
+        persist(state)
+    }
+
     /** Replaces a temporary anonymous id with Twitch's canonical room id without changing storage. */
     @Throws(IllegalArgumentException::class)
     fun onRoomResolved(
@@ -132,22 +162,34 @@ class AnonymousWorkspaceCoordinator(
         snapshot: AnonymousWorkspaceSnapshot,
     ) {
         val channels = snapshot.channelLogins.map(::anonymousChannel)
+        val channelIdByLogin = channels.associate { channel -> channel.login to channel.id }
         state.replaceChannels(channels)
         val selectedChannel = snapshot.selectedChannelLogin?.let { selectedLogin ->
             channels.firstOrNull { channel -> channel.login == selectedLogin }
         }
         selectedChannel?.let { state.selectChannel(it.id) }
+        state.updatePinnedChannelIds(
+            snapshot.pinnedChannelLogins.mapNotNull(channelIdByLogin::get),
+        )
+        state.updateChannelTabTitles(
+            snapshot.channelTitlesByLogin.mapNotNull { (login, title) ->
+                channelIdByLogin[login]?.let { channelId -> channelId to title }
+            }.toMap(),
+        )
         state.restoreWorkspaceLayout(WorkspaceLayout.default(state.selectedChannelId))
     }
 
     private fun persist(state: WorkspaceRuntimeStateHolder): AnonymousWorkspaceSnapshot {
-        val selectedLogin = state.selectedChannelId?.let { selectedId ->
-            state.channels.firstOrNull { channel -> channel.id == selectedId }?.login
-        }
+        val loginById = state.channels.associate { channel -> channel.id to channel.login.lowercase() }
+        val selectedLogin = state.selectedChannelId?.let(loginById::get)
         return normalizeSnapshot(
             AnonymousWorkspaceSnapshot(
                 channelLogins = state.channels.map(ChatChannel::login),
                 selectedChannelLogin = selectedLogin,
+                pinnedChannelLogins = state.pinnedChannelIds.mapNotNull(loginById::get),
+                channelTitlesByLogin = state.channelTabTitles.mapNotNull { (channelId, title) ->
+                    loginById[channelId]?.let { login -> login to title }
+                }.toMap(),
             ),
         ).also(store::save)
     }
@@ -160,14 +202,37 @@ class AnonymousWorkspaceCoordinator(
         val selected = normalizeStoredLogin(value.selectedChannelLogin.orEmpty())
             ?.takeIf(logins::contains)
             ?: logins.firstOrNull()
+        val pinned = value.pinnedChannelLogins
+            .mapNotNull(::normalizeStoredLogin)
+            .filter(logins::contains)
+            .distinct()
+        val titles = buildMap {
+            value.channelTitlesByLogin.forEach { (rawLogin, rawTitle) ->
+                val login = normalizeStoredLogin(rawLogin) ?: return@forEach
+                if (login !in logins) return@forEach
+                val title = rawTitle.trim().take(MAX_TAB_TITLE_LENGTH)
+                if (title.isNotEmpty()) put(login, title)
+            }
+        }
         return AnonymousWorkspaceSnapshot(
             channelLogins = logins,
             selectedChannelLogin = selected,
+            pinnedChannelLogins = pinned,
+            channelTitlesByLogin = titles,
         )
     }
 
     private fun requireLogin(value: String): String = normalizeStoredLogin(value)
         ?: throw AnonymousWorkspaceMutationException("Enter a valid Twitch channel login")
+
+    private fun requireWorkspaceChannelId(
+        channelId: String,
+        state: WorkspaceRuntimeStateHolder,
+    ): String {
+        val normalized = channelId.trim()
+        return normalized.takeIf { id -> state.channels.any { channel -> channel.id == id } }
+            ?: throw AnonymousWorkspaceMutationException("Channel is not in the workspace")
+    }
 
     private fun normalizeStoredLogin(value: String): String? = value
         .trim()
@@ -184,6 +249,7 @@ class AnonymousWorkspaceCoordinator(
     private companion object {
         val CHANNEL_LOGIN_PATTERN = Regex("[a-z0-9_]{1,25}")
         const val MAX_CHANNELS = 20
+        const val MAX_TAB_TITLE_LENGTH = 32
     }
 }
 
@@ -193,6 +259,8 @@ internal fun anonymousWorkspaceChannelId(login: String): String =
 internal const val ANONYMOUS_WORKSPACE_CHANNELS_KEY = "channels"
 internal const val ANONYMOUS_WORKSPACE_SELECTED_CHANNEL_KEY = "selected_channel"
 internal const val ANONYMOUS_WORKSPACE_EXPLICITLY_EMPTY_KEY = "channels_explicitly_empty"
+internal const val ANONYMOUS_WORKSPACE_PINNED_LOGINS_KEY = "anonymous_pinned_channel_logins"
+internal const val ANONYMOUS_WORKSPACE_TITLES_KEY = "anonymous_channel_titles"
 
 private class InMemoryAnonymousWorkspaceStore : AnonymousWorkspaceStore {
     private var snapshot = AnonymousWorkspaceSnapshot()

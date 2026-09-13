@@ -66,6 +66,8 @@ fun FerventioAuthenticationRoot(
             onAuthenticate = onAuthenticate,
             onSelectChannel = onSelectChannel,
             onAddChannel = onAddChannel,
+            onSetChannelPinned = onSetChannelPinned,
+            onRenameChannel = onRenameChannel,
             onRemoveChannel = onRemoveChannel,
             onMoveChannel = onMoveChannel,
             modifier = modifier,
