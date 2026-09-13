@@ -1,6 +1,7 @@
 package io.ferventio.shared.workspace
 
 import io.ferventio.app.domain.ChatChannel
+import io.ferventio.app.domain.WorkspaceLayout
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -85,6 +86,32 @@ class WorkspaceRuntimeStateHolderTest {
         assertEquals(listOf("1", "2"), holder.channelIds)
         assertEquals("Alpha Live", holder.channels.first().displayName)
         assertEquals(revision, holder.pushContextRevision)
+    }
+
+    @Test
+    fun remappingChannelIdPreservesWorkspacePresentationMembership() {
+        val holder = WorkspaceRuntimeStateHolder(
+            WorkspaceRuntimeSnapshot(
+                channels = listOf(alpha, beta),
+                selectedChannelId = "1",
+                pinnedChannelIds = listOf("1"),
+                channelTabTitles = mapOf("1" to "Alpha tab"),
+                moderatorChannelIds = setOf("1"),
+                workspaceLayout = WorkspaceLayout.default("1"),
+            ),
+        )
+        val revision = holder.pushContextRevision
+
+        assertTrue(holder.remapChannelId("1", "101"))
+
+        assertEquals(listOf("101", "2"), holder.channelIds)
+        assertEquals("101", holder.selectedChannelId)
+        assertEquals(listOf("101"), holder.pinnedChannelIds)
+        assertEquals(mapOf("101" to "Alpha tab"), holder.channelTabTitles)
+        assertEquals(setOf("101"), holder.moderatorChannelIds)
+        assertEquals("101", holder.workspaceLayout.activeTab?.activeSplit?.channelId)
+        assertEquals(revision + 1L, holder.pushContextRevision)
+        assertFalse(holder.remapChannelId("missing", "102"))
     }
 
     @Test

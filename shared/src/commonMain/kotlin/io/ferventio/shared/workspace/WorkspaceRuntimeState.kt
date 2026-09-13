@@ -148,6 +148,56 @@ class WorkspaceRuntimeStateHolder(
         if (index < 0) bumpPushContextRevision()
     }
 
+    /**
+     * Replaces a channel's runtime identity while preserving workspace presentation membership.
+     * Used by anonymous IRC when Twitch upgrades a login-only placeholder to the canonical room id.
+     */
+    fun remapChannelId(channelId: String, replacementId: String): Boolean {
+        val currentId = channelId.trim().takeIf(String::isNotEmpty)
+            ?: throw IllegalArgumentException("Workspace channel id must not be blank")
+        val nextId = replacementId.trim().takeIf(String::isNotEmpty)
+            ?: throw IllegalArgumentException("Replacement channel id must not be blank")
+        if (currentId == nextId) return false
+
+        val index = channels.indexOfFirst { channel -> channel.id == currentId }
+        if (index < 0) return false
+        require(channels.none { channel -> channel.id == nextId }) {
+            "Replacement channel id is already present in the workspace"
+        }
+
+        channels = channels.toMutableList().apply {
+            this[index] = this[index].copy(id = nextId)
+        }
+        if (selectedChannelId == currentId) selectedChannelId = nextId
+        pinnedChannelIds = pinnedChannelIds.map { id -> if (id == currentId) nextId else id }.distinct()
+        channelTabTitles = buildMap {
+            channelTabTitles.forEach { (id, title) ->
+                put(if (id == currentId) nextId else id, title)
+            }
+        }
+        moderatorChannelIds = moderatorChannelIds
+            .mapTo(linkedSetOf()) { id -> if (id == currentId) nextId else id }
+        workspaceLayout = workspaceLayout.copy(
+            workspaces = workspaceLayout.workspaces.map { workspace ->
+                workspace.copy(
+                    tabs = workspace.tabs.map { tab ->
+                        tab.copy(
+                            splits = tab.splits.map { split ->
+                                if (split.channelId == currentId) {
+                                    split.withChannelId(nextId)
+                                } else {
+                                    split
+                                }
+                            },
+                        )
+                    },
+                )
+            },
+        ).normalized(channelIds.toSet())
+        bumpPushContextRevision()
+        return true
+    }
+
     fun removeChannel(channelId: String) {
         val normalizedId = channelId.trim()
         if (normalizedId.isEmpty() || channels.none { it.id == normalizedId }) return
