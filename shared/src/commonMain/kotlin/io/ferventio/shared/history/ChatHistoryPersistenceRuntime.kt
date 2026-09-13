@@ -6,6 +6,7 @@ import io.ferventio.app.domain.ChatMessage
 import io.ferventio.shared.chat.ChatRuntimeStateHolder
 import io.ferventio.shared.settings.SharedAppPreferences
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -29,20 +30,30 @@ internal fun SharedAppPreferences.toChatHistoryConfig(): ChatHistoryConfig = Cha
  * coordinator's non-cancellable cleanup path.
  */
 internal class ChatHistoryPersistenceRuntime(
-    private val store: ChatHistoryStore,
+    store: ChatHistoryStore,
     private val configProvider: () -> ChatHistoryConfig,
 ) {
+    private val runtimeBoundStore = store as? RuntimeBoundChatHistoryStore
+    private val mutationStore = runtimeBoundStore?.delegate ?: store
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val queue = Channel<Mutation>(Channel.UNLIMITED)
-    private val worker: Job = scope.launch {
-        for (mutation in queue) {
-            try {
-                mutation.apply(store)
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: Exception) {
-                // Local history must never take down live chat. Search can still use the last
-                // successfully persisted snapshot and a later accepted event retries naturally.
+    private val worker: Job
+
+    init {
+        runtimeBoundStore?.bind(this)
+        worker = scope.launch {
+            for (mutation in queue) {
+                try {
+                    mutation.apply(mutationStore)
+                    mutation.complete(Result.success(Unit))
+                } catch (error: CancellationException) {
+                    mutation.complete(Result.failure(error))
+                    throw error
+                } catch (error: Exception) {
+                    mutation.complete(Result.failure(error))
+                    // Local history must never take down live chat. Search can still use the last
+                    // successfully persisted snapshot and a later accepted event retries naturally.
+                }
             }
         }
     }
@@ -54,7 +65,7 @@ internal class ChatHistoryPersistenceRuntime(
         val config = configProvider()
         if (!config.enabled || channelIds.isEmpty()) return
         val restored = runCatching {
-            store.loadRecentMessages(
+            mutationStore.loadRecentMessages(
                 channelIds = channelIds,
                 config = config,
             )
@@ -82,14 +93,30 @@ internal class ChatHistoryPersistenceRuntime(
         enqueue(Mutation.ChannelCleared(channelId))
     }
 
+    /**
+     * Inserts a barrier into the durable mutation queue and waits until all older writes and this
+     * clear operation have completed. New messages accepted after the barrier are persisted again.
+     */
+    suspend fun clearAll() {
+        val completion = CompletableDeferred<Result<Unit>>()
+        check(queue.trySend(Mutation.AllCleared(completion)).isSuccess) {
+            "Chat history persistence queue is closed"
+        }
+        completion.await().getOrThrow()
+    }
+
     fun close() {
         queue.close()
     }
 
     suspend fun flushAndClose() {
         close()
-        worker.join()
-        scope.cancel()
+        try {
+            worker.join()
+        } finally {
+            runtimeBoundStore?.unbind(this)
+            scope.cancel()
+        }
     }
 
     private fun enqueue(mutation: Mutation) {
@@ -98,6 +125,8 @@ internal class ChatHistoryPersistenceRuntime(
 
     private sealed interface Mutation {
         suspend fun apply(store: ChatHistoryStore)
+
+        fun complete(result: Result<Unit>) = Unit
 
         data class SaveMessage(
             val message: ChatMessage,
@@ -131,6 +160,18 @@ internal class ChatHistoryPersistenceRuntime(
         ) : Mutation {
             override suspend fun apply(store: ChatHistoryStore) {
                 store.clearChannel(channelId)
+            }
+        }
+
+        data class AllCleared(
+            val completion: CompletableDeferred<Result<Unit>>,
+        ) : Mutation {
+            override suspend fun apply(store: ChatHistoryStore) {
+                store.clearAll()
+            }
+
+            override fun complete(result: Result<Unit>) {
+                completion.complete(result)
             }
         }
     }

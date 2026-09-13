@@ -10,6 +10,7 @@ import io.ferventio.shared.chat.ChatAttentionStateHolder
 import io.ferventio.shared.chat.ChatRuntimeStateHolder
 import io.ferventio.shared.chat.TwitchChatMessageRuntime
 import io.ferventio.shared.chat.TwitchInteractiveRuntime
+import io.ferventio.shared.history.RuntimeBoundChatHistoryStore
 import io.ferventio.shared.moderation.TwitchModerationRuntime
 import io.ferventio.shared.push.PushNavigationInbox
 import io.ferventio.shared.push.PushRegistrationStateHolder
@@ -30,10 +31,14 @@ class FerventioRuntimeState(
     val attention: ChatAttentionStateHolder,
     val pushRegistration: PushRegistrationStateHolder,
     val pushNavigation: PushNavigationInbox,
-    val history: ChatHistoryStore? = null,
+    history: ChatHistoryStore? = null,
     val localUiPreferences: SharedLocalUiPreferencesStateHolder = SharedLocalUiPreferencesStateHolder(),
     val account: AccountMutationStateHolder = AccountMutationStateHolder(),
 ) {
+    val history: ChatHistoryStore? = history?.let { store ->
+        if (store is RuntimeBoundChatHistoryStore) store else RuntimeBoundChatHistoryStore(store)
+    }
+
     val moderation: TwitchModerationRuntime by lazy { TwitchModerationRuntime(chat) }
     val interactive: TwitchInteractiveRuntime by lazy { TwitchInteractiveRuntime(chat) }
     val chatMessages: TwitchChatMessageRuntime by lazy { TwitchChatMessageRuntime(chat) }
