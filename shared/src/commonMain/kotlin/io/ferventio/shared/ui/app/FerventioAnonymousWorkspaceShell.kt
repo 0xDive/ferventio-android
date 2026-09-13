@@ -39,6 +39,7 @@ import io.ferventio.app.domain.ChatChannel
 import io.ferventio.shared.generated.resources.Res
 import io.ferventio.shared.generated.resources.attention_open
 import io.ferventio.shared.generated.resources.auth_sign_in_with_twitch
+import io.ferventio.shared.generated.resources.history_search_open
 import io.ferventio.shared.generated.resources.settings_open
 import io.ferventio.shared.generated.resources.workspace_anonymous_no_channels_summary
 import io.ferventio.shared.generated.resources.workspace_chats
@@ -74,6 +75,7 @@ internal fun FerventioAnonymousWorkspaceShell(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     var attentionVisible by remember { mutableStateOf(false) }
+    var historySearchVisible by remember { mutableStateOf(false) }
     var historySettingsVisible by remember { mutableStateOf(false) }
     val selectedChannelId = resolveWorkspaceActiveChannelId(
         layout = state.workspaceLayout,
@@ -81,8 +83,14 @@ internal fun FerventioAnonymousWorkspaceShell(
         channelIds = state.channelIds,
     )
     val selectedChannel = state.channels.firstOrNull { channel -> channel.id == selectedChannelId }
+    val selectedCanonicalChannelId = selectedChannel?.id
+        ?.takeUnless { channelId -> channelId.startsWith("anonymous:") }
+    val canonicalChannelIds = state.channelIds
+        .filterNot { channelId -> channelId.startsWith("anonymous:") }
+        .toSet()
     val menuDescription = stringResource(Res.string.workspace_menu)
     val attentionDescription = stringResource(Res.string.attention_open)
+    val historySearchDescription = stringResource(Res.string.history_search_open)
 
     ModalNavigationDrawer(
         modifier = modifier,
@@ -155,6 +163,20 @@ internal fun FerventioAnonymousWorkspaceShell(
                         )
                     },
                     actions = {
+                        if (runtime.history != null && selectedCanonicalChannelId != null) {
+                            TextButton(
+                                onClick = { historySearchVisible = true },
+                                modifier = Modifier.semantics {
+                                    contentDescription = historySearchDescription
+                                },
+                            ) {
+                                Text(
+                                    text = "⌕",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                        }
                         TextButton(
                             onClick = { attentionVisible = true },
                             modifier = Modifier.semantics { contentDescription = attentionDescription },
@@ -219,6 +241,29 @@ internal fun FerventioAnonymousWorkspaceShell(
                 attentionVisible = false
             },
             onDismiss = { attentionVisible = false },
+        )
+    }
+
+    val history = runtime.history
+    if (historySearchVisible && history != null) {
+        FerventioHistorySearchSheet(
+            history = history,
+            currentChannelId = selectedCanonicalChannelId,
+            navigableChannelIds = canonicalChannelIds,
+            onOpenMessage = { message ->
+                scope.launch {
+                    if (message.channelId !in canonicalChannelIds) return@launch
+                    val contextMessages = runCatching {
+                        history.loadMessageContext(message.id)
+                    }.getOrDefault(emptyList()).ifEmpty { listOf(message) }
+                    runtime.chat.prependHistory(message.channelId, contextMessages)
+                    runtime.attention.requestMessageNavigation(message.channelId, message.id)
+                    state.selectChannel(message.channelId)
+                    onSelectChannel(message.channelId)
+                    historySearchVisible = false
+                }
+            },
+            onDismiss = { historySearchVisible = false },
         )
     }
 
