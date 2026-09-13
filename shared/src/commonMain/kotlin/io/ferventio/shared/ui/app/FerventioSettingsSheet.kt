@@ -675,6 +675,7 @@ private fun NotificationsSettingsPage(
             },
         )
     }
+    FerventioPushSettingsSection()
 }
 
 @Composable
