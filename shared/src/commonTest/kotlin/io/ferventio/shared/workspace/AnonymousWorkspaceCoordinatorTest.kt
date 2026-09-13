@@ -4,6 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class AnonymousWorkspaceCoordinatorTest {
@@ -102,6 +103,46 @@ class AnonymousWorkspaceCoordinatorTest {
             ),
             store.snapshot,
         )
+    }
+
+    @Test
+    fun layoutPersistsWithStableLoginIdsAcrossRoomResolution() {
+        val store = RecordingStore()
+        val state = WorkspaceRuntimeStateHolder()
+        val coordinator = AnonymousWorkspaceCoordinator(store)
+        coordinator.restore(state)
+        coordinator.addChannel("alpha", state)
+        coordinator.addChannel("beta", state)
+
+        val firstSplitId = assertNotNull(state.workspaceLayout.activeTab?.activeSplit?.id)
+        coordinator.addSplit(state)
+        val secondSplitId = assertNotNull(state.workspaceLayout.activeTab?.activeSplit?.id)
+        coordinator.setSplitChannel(secondSplitId, "anonymous:beta", state)
+        coordinator.setSplitFilterQuery(
+            secondSplitId,
+            "message.content contains \"hello\"",
+            state,
+        )
+
+        assertTrue(coordinator.onRoomResolved("alpha", "111", state))
+        assertTrue(coordinator.onRoomResolved("beta", "222", state))
+        coordinator.setPrimaryFraction(0.65f, state)
+
+        val persistedLayout = assertNotNull(store.snapshot.workspaceLayoutJson)
+        assertTrue("anonymous:alpha" in persistedLayout)
+        assertTrue("anonymous:beta" in persistedLayout)
+        assertFalse("\"111\"" in persistedLayout)
+        assertFalse("\"222\"" in persistedLayout)
+
+        val restoredState = WorkspaceRuntimeStateHolder()
+        coordinator.restore(restoredState)
+        val restoredTab = assertNotNull(restoredState.workspaceLayout.activeTab)
+        assertEquals(2, restoredTab.splits.size)
+        assertEquals(firstSplitId, restoredTab.splits.first().id)
+        val restoredSecond = restoredTab.splits.first { split -> split.id == secondSplitId }
+        assertEquals("anonymous:beta", restoredSecond.channelId)
+        assertEquals("message.content contains \"hello\"", restoredSecond.filterQuery)
+        assertEquals(0.65f, restoredTab.primaryFraction)
     }
 
     @Test

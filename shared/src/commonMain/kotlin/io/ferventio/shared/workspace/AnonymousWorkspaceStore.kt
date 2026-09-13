@@ -2,6 +2,7 @@ package io.ferventio.shared.workspace
 
 import io.ferventio.app.domain.ChatChannel
 import io.ferventio.app.domain.WorkspaceLayout
+import io.ferventio.app.domain.WorkspaceLayoutCodec
 import kotlin.Throws
 
 data class AnonymousWorkspaceSnapshot(
@@ -9,6 +10,7 @@ data class AnonymousWorkspaceSnapshot(
     val selectedChannelLogin: String? = null,
     val pinnedChannelLogins: List<String> = emptyList(),
     val channelTitlesByLogin: Map<String, String> = emptyMap(),
+    val workspaceLayoutJson: String? = null,
 )
 
 /** Device-local channel storage used before a Twitch account is authorized. */
@@ -129,6 +131,60 @@ class AnonymousWorkspaceCoordinator(
         persist(state)
     }
 
+    @Throws(Exception::class)
+    fun setSplitFilterQuery(
+        splitId: String,
+        filterQuery: String,
+        state: WorkspaceRuntimeStateHolder,
+    ): AnonymousWorkspaceSnapshot = mutateLayout(state) { layout ->
+        updateWorkspaceSplitFilterQuery(layout, splitId, filterQuery)
+    }
+
+    @Throws(Exception::class)
+    fun setSplitChannel(
+        splitId: String,
+        channelId: String,
+        state: WorkspaceRuntimeStateHolder,
+    ): AnonymousWorkspaceSnapshot {
+        val normalizedChannelId = requireWorkspaceChannelId(channelId, state)
+        return mutateLayout(state) { layout ->
+            updateWorkspaceSplitChannel(layout, splitId, normalizedChannelId)
+        }.also {
+            state.selectChannel(normalizedChannelId)
+            persist(state)
+        }
+    }
+
+    @Throws(Exception::class)
+    fun focusSplit(
+        splitId: String,
+        state: WorkspaceRuntimeStateHolder,
+    ): AnonymousWorkspaceSnapshot = mutateLayout(state) { layout ->
+        focusWorkspaceSplit(layout, splitId)
+    }
+
+    @Throws(Exception::class)
+    fun addSplit(state: WorkspaceRuntimeStateHolder): AnonymousWorkspaceSnapshot =
+        mutateLayout(state) { layout ->
+            addWorkspaceChatSplit(layout, state.selectedChannelId)
+        }
+
+    @Throws(Exception::class)
+    fun removeSplit(
+        splitId: String,
+        state: WorkspaceRuntimeStateHolder,
+    ): AnonymousWorkspaceSnapshot = mutateLayout(state) { layout ->
+        removeWorkspaceSplit(layout, splitId)
+    }
+
+    @Throws(Exception::class)
+    fun setPrimaryFraction(
+        fraction: Float,
+        state: WorkspaceRuntimeStateHolder,
+    ): AnonymousWorkspaceSnapshot = mutateLayout(state) { layout ->
+        updateWorkspaceSplitPrimaryFraction(layout, fraction)
+    }
+
     /** Replaces a temporary anonymous id with Twitch's canonical room id without changing storage. */
     @Throws(IllegalArgumentException::class)
     fun onRoomResolved(
@@ -157,6 +213,16 @@ class AnonymousWorkspaceCoordinator(
         }
     }
 
+    private inline fun mutateLayout(
+        state: WorkspaceRuntimeStateHolder,
+        transform: (WorkspaceLayout) -> WorkspaceLayout,
+    ): AnonymousWorkspaceSnapshot = mutate(state) {
+        state.restoreWorkspaceLayout(
+            transform(state.workspaceLayout).normalized(state.channelIds.toSet()),
+        )
+        persist(state)
+    }
+
     private fun applySnapshot(
         state: WorkspaceRuntimeStateHolder,
         snapshot: AnonymousWorkspaceSnapshot,
@@ -176,12 +242,24 @@ class AnonymousWorkspaceCoordinator(
                 channelIdByLogin[login]?.let { channelId -> channelId to title }
             }.toMap(),
         )
-        state.restoreWorkspaceLayout(WorkspaceLayout.default(state.selectedChannelId))
+        state.restoreWorkspaceLayout(
+            WorkspaceLayoutCodec.decodeOrDefault(
+                raw = snapshot.workspaceLayoutJson,
+                fallbackChannelId = state.selectedChannelId,
+            ).normalized(state.channelIds.toSet()),
+        )
     }
 
     private fun persist(state: WorkspaceRuntimeStateHolder): AnonymousWorkspaceSnapshot {
         val loginById = state.channels.associate { channel -> channel.id to channel.login.lowercase() }
+        val stableIdById = state.channels.associate { channel ->
+            channel.id to anonymousWorkspaceChannelId(channel.login)
+        }
         val selectedLogin = state.selectedChannelId?.let(loginById::get)
+        val stableLayout = remapWorkspaceLayoutChannelIds(
+            layout = state.workspaceLayout,
+            replacementIdByCurrentId = stableIdById,
+        ).normalized(stableIdById.values.toSet())
         return normalizeSnapshot(
             AnonymousWorkspaceSnapshot(
                 channelLogins = state.channels.map(ChatChannel::login),
@@ -190,6 +268,7 @@ class AnonymousWorkspaceCoordinator(
                 channelTitlesByLogin = state.channelTabTitles.mapNotNull { (channelId, title) ->
                     loginById[channelId]?.let { login -> login to title }
                 }.toMap(),
+                workspaceLayoutJson = WorkspaceLayoutCodec.encode(stableLayout),
             ),
         ).also(store::save)
     }
@@ -214,11 +293,20 @@ class AnonymousWorkspaceCoordinator(
                 if (title.isNotEmpty()) put(login, title)
             }
         }
+        val stableChannelIds = logins.mapTo(linkedSetOf(), ::anonymousWorkspaceChannelId)
+        val selectedStableId = selected?.let(::anonymousWorkspaceChannelId)
+        val layoutJson = value.workspaceLayoutJson?.let { raw ->
+            WorkspaceLayoutCodec.encode(
+                WorkspaceLayoutCodec.decodeOrDefault(raw, selectedStableId)
+                    .normalized(stableChannelIds),
+            )
+        }
         return AnonymousWorkspaceSnapshot(
             channelLogins = logins,
             selectedChannelLogin = selected,
             pinnedChannelLogins = pinned,
             channelTitlesByLogin = titles,
+            workspaceLayoutJson = layoutJson,
         )
     }
 
@@ -253,6 +341,25 @@ class AnonymousWorkspaceCoordinator(
     }
 }
 
+internal fun remapWorkspaceLayoutChannelIds(
+    layout: WorkspaceLayout,
+    replacementIdByCurrentId: Map<String, String>,
+): WorkspaceLayout = layout.copy(
+    workspaces = layout.workspaces.map { workspace ->
+        workspace.copy(
+            tabs = workspace.tabs.map { tab ->
+                tab.copy(
+                    splits = tab.splits.map { split ->
+                        val currentId = split.channelId
+                        val replacementId = currentId?.let(replacementIdByCurrentId::get) ?: currentId
+                        if (replacementId != currentId) split.withChannelId(replacementId) else split
+                    },
+                )
+            },
+        )
+    },
+)
+
 internal fun anonymousWorkspaceChannelId(login: String): String =
     "anonymous:${login.trim().lowercase()}"
 
@@ -261,6 +368,7 @@ internal const val ANONYMOUS_WORKSPACE_SELECTED_CHANNEL_KEY = "selected_channel"
 internal const val ANONYMOUS_WORKSPACE_EXPLICITLY_EMPTY_KEY = "channels_explicitly_empty"
 internal const val ANONYMOUS_WORKSPACE_PINNED_LOGINS_KEY = "anonymous_pinned_channel_logins"
 internal const val ANONYMOUS_WORKSPACE_TITLES_KEY = "anonymous_channel_titles"
+internal const val ANONYMOUS_WORKSPACE_LAYOUT_KEY = "workspace_layout_json"
 
 private class InMemoryAnonymousWorkspaceStore : AnonymousWorkspaceStore {
     private var snapshot = AnonymousWorkspaceSnapshot()

@@ -37,6 +37,7 @@ class AndroidAnonymousWorkspaceStore(
         channelTitlesByLogin = decodeTitles(
             preferences.getString(ANONYMOUS_WORKSPACE_TITLES_KEY, null),
         ),
+        workspaceLayoutJson = preferences.getString(ANONYMOUS_WORKSPACE_LAYOUT_KEY, null),
     )
 
     override fun save(snapshot: AnonymousWorkspaceSnapshot) {
@@ -64,6 +65,11 @@ class AndroidAnonymousWorkspaceStore(
                 ANONYMOUS_WORKSPACE_SELECTED_CHANNEL_KEY,
                 snapshot.selectedChannelLogin,
             )
+        }
+        if (snapshot.workspaceLayoutJson == null) {
+            editor.remove(ANONYMOUS_WORKSPACE_LAYOUT_KEY)
+        } else {
+            editor.putString(ANONYMOUS_WORKSPACE_LAYOUT_KEY, snapshot.workspaceLayoutJson)
         }
         check(editor.commit()) { "Failed to persist anonymous workspace" }
     }

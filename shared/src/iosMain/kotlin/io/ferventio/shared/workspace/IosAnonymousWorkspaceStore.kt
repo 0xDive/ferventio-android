@@ -29,6 +29,7 @@ class IosAnonymousWorkspaceStore(
         channelTitlesByLogin = decodeTitles(
             defaults.stringForKey(ANONYMOUS_WORKSPACE_TITLES_KEY),
         ),
+        workspaceLayoutJson = defaults.stringForKey(ANONYMOUS_WORKSPACE_LAYOUT_KEY),
     )
 
     override fun save(snapshot: AnonymousWorkspaceSnapshot) {
@@ -51,6 +52,9 @@ class IosAnonymousWorkspaceStore(
         snapshot.selectedChannelLogin?.let { login ->
             defaults.setObject(login, forKey = ANONYMOUS_WORKSPACE_SELECTED_CHANNEL_KEY)
         } ?: defaults.removeObjectForKey(ANONYMOUS_WORKSPACE_SELECTED_CHANNEL_KEY)
+        snapshot.workspaceLayoutJson?.let { layout ->
+            defaults.setObject(layout, forKey = ANONYMOUS_WORKSPACE_LAYOUT_KEY)
+        } ?: defaults.removeObjectForKey(ANONYMOUS_WORKSPACE_LAYOUT_KEY)
     }
 
     private fun encodeTitles(value: Map<String, String>): String = JsonObject(
