@@ -119,6 +119,7 @@ fun MainViewController(
         .filter(String::isNotEmpty)
         .distinct()
         .sorted()
+    val anonymousMetadataServerUrl = remember { currentIosFerventioServerUrl() }
     val authenticationRequired = iosRuntimeState.chat.authenticationRequired
     val backupStatus = iosSettingsBackupRuntime.state.status
     val backupLocked = backupStatus == SharedSettingsBackupStatus.EXPORTING ||
@@ -178,7 +179,12 @@ fun MainViewController(
             }
         }
     }
-    LaunchedEffect(anonymousMode, lifecyclePhase, anonymousTransportLogins) {
+    LaunchedEffect(
+        anonymousMode,
+        lifecyclePhase,
+        anonymousTransportLogins,
+        anonymousMetadataServerUrl,
+    ) {
         if (!anonymousMode) {
             iosAnonymousChatRuntime.close()
             return@LaunchedEffect
@@ -207,7 +213,10 @@ fun MainViewController(
             return@LaunchedEffect
         }
         runCatching {
-            iosAnonymousChatRuntime.run(iosRuntimeState.workspace)
+            iosAnonymousChatRuntime.run(
+                workspace = iosRuntimeState.workspace,
+                metadataServerUrl = anonymousMetadataServerUrl,
+            )
         }
     }
 
