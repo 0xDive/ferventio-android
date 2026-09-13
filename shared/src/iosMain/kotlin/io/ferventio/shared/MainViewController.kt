@@ -14,7 +14,9 @@ import io.ferventio.shared.runtime.AppLifecyclePhase
 import io.ferventio.shared.runtime.FerventioRuntimeState
 import io.ferventio.shared.runtime.ProvideFerventioRuntimeState
 import io.ferventio.shared.settings.AnonymousHistoryPreferencesCoordinator
+import io.ferventio.shared.settings.AnonymousSavedFiltersCoordinator
 import io.ferventio.shared.settings.IosAnonymousHistoryPreferencesStore
+import io.ferventio.shared.settings.IosAnonymousSavedFiltersStore
 import io.ferventio.shared.settings.IosLocalUiPreferencesStore
 import io.ferventio.shared.settings.SharedAppPreferences
 import io.ferventio.shared.settings.SharedLocalUiPreferencesStateHolder
@@ -46,6 +48,9 @@ private val iosAnonymousWorkspaceCoordinator = AnonymousWorkspaceCoordinator(
 )
 private val iosAnonymousHistoryPreferencesCoordinator = AnonymousHistoryPreferencesCoordinator(
     IosAnonymousHistoryPreferencesStore(),
+)
+private val iosAnonymousSavedFiltersCoordinator = AnonymousSavedFiltersCoordinator(
+    IosAnonymousSavedFiltersStore(),
 )
 private val iosAnonymousChatRuntime = AnonymousChatRuntimeCoordinator(
     state = iosRuntimeState.chat,
@@ -152,6 +157,9 @@ fun MainViewController(
             runCatching {
                 iosAnonymousHistoryPreferencesCoordinator.restore(iosRuntimeState.settings)
             }
+            runCatching {
+                iosAnonymousSavedFiltersCoordinator.restore(iosRuntimeState.savedFilters)
+            }
         }
     }
     LaunchedEffect(anonymousMode, lifecyclePhase, anonymousTransportLogins) {
@@ -163,6 +171,11 @@ fun MainViewController(
         if (iosRuntimeState.workspace.loadStatus != WorkspaceLoadStatus.READY) {
             runCatching {
                 iosAnonymousHistoryPreferencesCoordinator.restore(iosRuntimeState.settings)
+            }
+            runCatching {
+                iosAnonymousSavedFiltersCoordinator.restore(iosRuntimeState.savedFilters)
+            }
+            runCatching {
                 iosAnonymousWorkspaceCoordinator.restore(iosRuntimeState.workspace)
             }
             return@LaunchedEffect
@@ -176,6 +189,33 @@ fun MainViewController(
         }
     }
 
+    val upsertSavedFilterAction: (SavedMessageFilter) -> Unit = { filter ->
+        if (anonymousMode) {
+            runCatching {
+                iosAnonymousSavedFiltersCoordinator.upsert(filter, iosRuntimeState.savedFilters)
+            }
+        } else {
+            onUpsertSavedFilter(filter)
+        }
+    }
+    val deleteSavedFilterAction: (String) -> Unit = { filterId ->
+        if (anonymousMode) {
+            runCatching {
+                iosAnonymousSavedFiltersCoordinator.delete(filterId, iosRuntimeState.savedFilters)
+            }
+        } else {
+            onDeleteSavedFilter(filterId)
+        }
+    }
+    val importSavedFiltersAction: (String) -> Unit = { raw ->
+        if (anonymousMode) {
+            runCatching {
+                iosAnonymousSavedFiltersCoordinator.importAndMerge(raw, iosRuntimeState.savedFilters)
+            }
+        } else {
+            onImportSavedFilters(raw)
+        }
+    }
     val selectChannelAction: (String) -> Unit = { channelId ->
         if (anonymousMode) {
             runCatching {
@@ -338,9 +378,9 @@ fun MainViewController(
                                     onDeleteHighlightRule = onDeleteHighlightRule,
                                     onUpsertIgnoreRule = onUpsertIgnoreRule,
                                     onDeleteIgnoreRule = onDeleteIgnoreRule,
-                                    onUpsertSavedFilter = onUpsertSavedFilter,
-                                    onDeleteSavedFilter = onDeleteSavedFilter,
-                                    onImportSavedFilters = onImportSavedFilters,
+                                    onUpsertSavedFilter = upsertSavedFilterAction,
+                                    onDeleteSavedFilter = deleteSavedFilterAction,
+                                    onImportSavedFilters = importSavedFiltersAction,
                                     onAddSavedFilterSplit = onAddSavedFilterSplit,
                                     onSelectChannel = selectChannelAction,
                                     onAddChannel = addChannelAction,

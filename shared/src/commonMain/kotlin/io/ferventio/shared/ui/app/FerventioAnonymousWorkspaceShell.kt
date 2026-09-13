@@ -36,10 +36,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.ferventio.app.domain.ChatChannel
+import io.ferventio.app.domain.SavedMessageFilter
 import io.ferventio.shared.generated.resources.Res
 import io.ferventio.shared.generated.resources.attention_open
 import io.ferventio.shared.generated.resources.auth_sign_in_with_twitch
 import io.ferventio.shared.generated.resources.history_search_open
+import io.ferventio.shared.generated.resources.saved_filters_title
 import io.ferventio.shared.generated.resources.settings_open
 import io.ferventio.shared.generated.resources.workspace_anonymous_no_channels_summary
 import io.ferventio.shared.generated.resources.workspace_chats
@@ -69,6 +71,9 @@ internal fun FerventioAnonymousWorkspaceShell(
     onRemoveChannel: (String) -> Unit,
     onMoveChannel: (String, Int) -> Unit,
     onSaveHistoryPreferences: (SharedAppPreferences) -> Unit = {},
+    onUpsertSavedFilter: (SavedMessageFilter) -> Unit = {},
+    onDeleteSavedFilter: (String) -> Unit = {},
+    onImportSavedFilters: (String) -> Unit = {},
     onSetSplitFilterQuery: (String, String) -> Unit = { _, _ -> },
     onSetSplitChannel: (String, String) -> Unit = { _, _ -> },
     onFocusSplit: (String) -> Unit = {},
@@ -84,6 +89,7 @@ internal fun FerventioAnonymousWorkspaceShell(
     var attentionVisible by remember { mutableStateOf(false) }
     var historySearchVisible by remember { mutableStateOf(false) }
     var historySettingsVisible by remember { mutableStateOf(false) }
+    var savedFiltersVisible by remember { mutableStateOf(false) }
     val selectedChannelId = resolveWorkspaceActiveChannelId(
         layout = state.workspaceLayout,
         selectedChannelId = state.selectedChannelId,
@@ -127,6 +133,17 @@ internal fun FerventioAnonymousWorkspaceShell(
                         modifier = Modifier.weight(1f),
                     )
                     HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
+                    TextButton(
+                        onClick = {
+                            scope.launch {
+                                drawerState.close()
+                                savedFiltersVisible = true
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
+                    ) {
+                        Text(stringResource(Res.string.saved_filters_title))
+                    }
                     TextButton(
                         onClick = {
                             scope.launch {
@@ -288,6 +305,16 @@ internal fun FerventioAnonymousWorkspaceShell(
                 }
             },
             onDismiss = { historySearchVisible = false },
+        )
+    }
+
+    if (savedFiltersVisible) {
+        FerventioSavedFiltersSheet(
+            state = runtime.savedFilters,
+            onUpsert = onUpsertSavedFilter,
+            onDelete = onDeleteSavedFilter,
+            onImport = onImportSavedFilters,
+            onDismiss = { savedFiltersVisible = false },
         )
     }
 
