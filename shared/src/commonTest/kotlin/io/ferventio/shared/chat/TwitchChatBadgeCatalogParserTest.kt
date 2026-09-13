@@ -1,34 +1,23 @@
 package io.ferventio.shared.chat
 
 import io.ferventio.app.domain.chatBadgeAssetKey
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.respond
+import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
+import io.ktor.http.headersOf
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+import kotlinx.coroutines.test.runTest
 
 class TwitchChatBadgeCatalogParserTest {
     @Test
     fun parsesRelayCompatibleHelixEnvelope() {
-        val assets = TwitchChatBadgeCatalogParser.parse(
-            """
-            {
-              "data": [
-                {
-                  "set_id": "subscriber",
-                  "versions": [
-                    {
-                      "id": "12",
-                      "image_url_1x": "https://cdn.example/sub-1.png",
-                      "image_url_2x": "https://cdn.example/sub-2.png",
-                      "title": "Subscriber",
-                      "description": "Subscriber badge"
-                    }
-                  ]
-                }
-              ]
-            }
-            """.trimIndent(),
-        )
+        val assets = TwitchChatBadgeCatalogParser.parse(BADGE_PAYLOAD)
 
         val asset = assets.getValue(chatBadgeAssetKey("subscriber", "12"))
         assertEquals("subscriber", asset.setId)
@@ -96,5 +85,79 @@ class TwitchChatBadgeCatalogParserTest {
         assertFailsWith<IllegalArgumentException> { requireTwitchBroadcasterId("abc") }
         assertFailsWith<IllegalArgumentException> { requireTwitchBroadcasterId("12/34") }
         assertFailsWith<IllegalArgumentException> { requireTwitchBroadcasterId("1".repeat(33)) }
+    }
+
+    @Test
+    fun relayClientUsesPublicGlobalAndChannelRoutes() = runTest {
+        val requestedUrls = mutableListOf<String>()
+        val engine = MockEngine { request ->
+            requestedUrls += request.url.toString()
+            respond(
+                content = BADGE_PAYLOAD,
+                status = HttpStatusCode.OK,
+                headers = headersOf(
+                    HttpHeaders.ContentType,
+                    ContentType.Application.Json.toString(),
+                ),
+            )
+        }
+        val httpClient = HttpClient(engine)
+        try {
+            val client = FerventioBadgeRelayClient(httpClient)
+            client.loadGlobal("https://ferventio.example/")
+            client.loadChannel("https://ferventio.example", "12345")
+
+            assertEquals(
+                listOf(
+                    "https://ferventio.example/v1/twitch/badges/global",
+                    "https://ferventio.example/v1/twitch/badges/12345",
+                ),
+                requestedUrls,
+            )
+        } finally {
+            httpClient.close()
+        }
+    }
+
+    @Test
+    fun relayClientSurfacesBackendStatusWithoutLeakingLargeBodies() = runTest {
+        val engine = MockEngine {
+            respond(
+                content = "x".repeat(1_000),
+                status = HttpStatusCode.BadGateway,
+            )
+        }
+        val httpClient = HttpClient(engine)
+        try {
+            val error = assertFailsWith<FerventioBadgeRelayException> {
+                FerventioBadgeRelayClient(httpClient).loadGlobal("https://ferventio.example")
+            }
+            assertEquals(502, error.statusCode)
+            assertEquals(300, error.responseBody.length)
+        } finally {
+            httpClient.close()
+        }
+    }
+
+    private companion object {
+        val BADGE_PAYLOAD =
+            """
+            {
+              "data": [
+                {
+                  "set_id": "subscriber",
+                  "versions": [
+                    {
+                      "id": "12",
+                      "image_url_1x": "https://cdn.example/sub-1.png",
+                      "image_url_2x": "https://cdn.example/sub-2.png",
+                      "title": "Subscriber",
+                      "description": "Subscriber badge"
+                    }
+                  ]
+                }
+              ]
+            }
+            """.trimIndent()
     }
 }

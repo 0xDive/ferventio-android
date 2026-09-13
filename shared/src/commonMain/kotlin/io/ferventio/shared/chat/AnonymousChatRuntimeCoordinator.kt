@@ -17,6 +17,7 @@ import io.ferventio.shared.settings.SharedMessageRulesStateHolder
 import io.ferventio.shared.workspace.WorkspaceRuntimeStateHolder
 import kotlin.Throws
 import kotlin.time.Clock
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
@@ -54,11 +55,15 @@ class AnonymousChatRuntimeCoordinator(
     }
 
     private val runGate = ChatSessionRunGate()
+    private val badgeRelayClient = FerventioBadgeRelayClient()
     private var runningClient: TwitchAnonymousChatSocketClient? = null
     private var historyRuntime: ChatHistoryPersistenceRuntime? = null
 
     @Throws(Exception::class)
-    suspend fun run(workspace: WorkspaceRuntimeStateHolder) {
+    suspend fun run(
+        workspace: WorkspaceRuntimeStateHolder,
+        metadataServerUrl: String? = null,
+    ) {
         runGate.run {
             require(workspace.channels.isNotEmpty()) {
                 "Anonymous chat runtime requires at least one workspace channel"
@@ -68,6 +73,7 @@ class AnonymousChatRuntimeCoordinator(
             attention.retainChannels(workspace.channelIds)
 
             val sessionSettings = settings
+            val badgeServerUrl = metadataServerUrl?.trim()?.takeIf(String::isNotEmpty)
             // Authenticated and anonymous transports can briefly overlap while one cancelled KMP
             // task drains history writes. History is optional, so a busy bound store must never
             // prevent read-only IRC from starting.
@@ -115,6 +121,14 @@ class AnonymousChatRuntimeCoordinator(
                                     channelIds = listOf(channel.id),
                                 )
                             }
+                            badgeServerUrl?.let { serverUrl ->
+                                launch {
+                                    refreshChannelBadgeAssets(
+                                        serverUrl = serverUrl,
+                                        channelId = channel.id,
+                                    )
+                                }
+                            }
                         },
                     )
                     val client = TwitchAnonymousChatSocketClient(
@@ -126,6 +140,28 @@ class AnonymousChatRuntimeCoordinator(
                         onError = runtime::onSocketError,
                     )
                     runningClient = client
+                    val badgeMetadataJob = badgeServerUrl?.let { serverUrl ->
+                        launch {
+                            coroutineScope {
+                                launch {
+                                    refreshGlobalBadgeAssets(serverUrl)
+                                }
+                                workspace.channelIds
+                                    .asSequence()
+                                    .map(String::trim)
+                                    .filter(String::isCanonicalAnonymousChannelId)
+                                    .distinct()
+                                    .forEach { channelId ->
+                                        launch {
+                                            refreshChannelBadgeAssets(
+                                                serverUrl = serverUrl,
+                                                channelId = channelId,
+                                            )
+                                        }
+                                    }
+                            }
+                        }
+                    }
                     val recentMessagesJob = if (
                         sessionSettings != null && recentMessagesRuntime != null
                     ) {
@@ -154,6 +190,7 @@ class AnonymousChatRuntimeCoordinator(
                         client.run()
                     } finally {
                         recentMessagesJob?.cancelAndJoin()
+                        badgeMetadataJob?.cancelAndJoin()
                         client.close()
                         if (runningClient === client) runningClient = null
                     }
@@ -174,6 +211,39 @@ class AnonymousChatRuntimeCoordinator(
     fun close() {
         historyRuntime?.close()
         runningClient?.close()
+    }
+
+    private suspend fun refreshGlobalBadgeAssets(serverUrl: String) {
+        bestEffort {
+            state.replaceGlobalBadgeAssets(
+                badgeRelayClient.loadGlobal(serverUrl),
+            )
+        }
+    }
+
+    private suspend fun refreshChannelBadgeAssets(
+        serverUrl: String,
+        channelId: String,
+    ) {
+        bestEffort {
+            state.replaceChannelBadgeAssets(
+                channelId = channelId,
+                value = badgeRelayClient.loadChannel(
+                    serverUrl = serverUrl,
+                    broadcasterId = channelId,
+                ),
+            )
+        }
+    }
+
+    private suspend fun bestEffort(block: suspend () -> Unit) {
+        try {
+            block()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            // Presentation metadata is optional; read-only IRC must continue without it.
+        }
     }
 }
 
