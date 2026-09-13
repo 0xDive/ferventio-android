@@ -3,7 +3,6 @@ package io.ferventio.shared.chat
 import io.ferventio.app.domain.AuthenticationPersistenceValidation
 import io.ferventio.app.domain.ChatBadgeAsset
 import io.ferventio.app.domain.StoredAuthentication
-import io.ferventio.app.domain.chatBadgeAssetKey
 import io.ferventio.shared.auth.createPlatformMobileAuthenticationHttpClient
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
@@ -11,12 +10,6 @@ import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import kotlin.Throws
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 
 class TwitchChatBadgeException(
     val statusCode: Int,
@@ -28,8 +21,6 @@ class TwitchChatBadgeClient(
     private val client: HttpClient = createPlatformMobileAuthenticationHttpClient(),
 ) {
     constructor() : this(createPlatformMobileAuthenticationHttpClient())
-
-    private val json = Json { ignoreUnknownKeys = true }
 
     @Throws(Exception::class)
     suspend fun loadGlobal(
@@ -74,39 +65,7 @@ class TwitchChatBadgeClient(
                 responseBody = body.take(300),
             )
         }
-        return parse(body)
-    }
-
-    private fun parse(body: String): Map<String, ChatBadgeAsset> {
-        val data = runCatching {
-            json.parseToJsonElement(body).jsonObject["data"]?.jsonArray ?: JsonArray(emptyList())
-        }.getOrElse {
-            throw IllegalStateException("Twitch returned malformed chat-badges JSON", it)
-        }
-        return buildMap {
-            for (setElement in data) {
-                val set = setElement.runCatching { jsonObject }.getOrNull() ?: continue
-                val setId = set.string("set_id") ?: continue
-                val versions = set["versions"]?.runCatching { jsonArray }?.getOrNull() ?: continue
-                for (versionElement in versions) {
-                    val version = versionElement.runCatching { jsonObject }.getOrNull() ?: continue
-                    val id = version.string("id") ?: continue
-                    val imageUrl1x = version.string("image_url_1x") ?: continue
-                    val imageUrl2x = version.string("image_url_2x") ?: imageUrl1x
-                    val imageUrl4x = version.string("image_url_4x") ?: imageUrl2x
-                    val asset = ChatBadgeAsset(
-                        setId = setId,
-                        id = id,
-                        imageUrl1x = imageUrl1x,
-                        imageUrl2x = imageUrl2x,
-                        imageUrl4x = imageUrl4x,
-                        title = version.string("title").orEmpty(),
-                        description = version.string("description").orEmpty(),
-                    )
-                    put(chatBadgeAssetKey(setId, id), asset)
-                }
-            }
-        }
+        return TwitchChatBadgeCatalogParser.parse(body)
     }
 
     private fun requireAccessLease(authentication: StoredAuthentication) =
@@ -116,9 +75,6 @@ class TwitchChatBadgeClient(
                 it.accessLease,
             )
         }.accessLease ?: error("Twitch chat badges require an access lease")
-
-    private fun kotlinx.serialization.json.JsonObject.string(name: String): String? =
-        this[name]?.jsonPrimitive?.contentOrNull?.trim()?.takeIf(String::isNotEmpty)
 
     private companion object {
         const val TWITCH_GLOBAL_BADGES_URL = "https://api.twitch.tv/helix/chat/badges/global"
