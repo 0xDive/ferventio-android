@@ -88,7 +88,12 @@ final class MobileAuthenticationRuntimeBridge {
     }
 
     func refreshForForeground() async -> ForegroundAuthenticationRefreshDisposition {
-        await refreshAuthentication(reason: .foreground)
+        // Signed-out mode owns a device-local workspace. Once there is no active authentication,
+        // foreground activation must not ask the host to clear that guest workspace and timeline.
+        guard stateHolder.state.authentication != nil else {
+            return .deferred
+        }
+        return await refreshAuthentication(reason: .foreground)
     }
 
     func refreshAfterAuthenticationRejection() async -> ForegroundAuthenticationRefreshDisposition {
