@@ -1,0 +1,25 @@
+<resources>
+    <string name="diagnostics_title">Диагностика</string>
+    <string name="diagnostics_summary">Состояние подключения и локального runtime. Текст ошибок остаётся только на устройстве и не попадает в копируемый отчёт.</string>
+    <string name="diagnostics_eventsub_title">EventSub</string>
+    <string name="diagnostics_runtime_title">Runtime</string>
+    <string name="diagnostics_status">Состояние</string>
+    <string name="diagnostics_connection_detail">Подробности</string>
+    <string name="diagnostics_attempt">Попытка переподключения</string>
+    <string name="diagnostics_auth_required">Нужна авторизация</string>
+    <string name="diagnostics_last_error">Последняя ошибка</string>
+    <string name="diagnostics_workspace_state">Workspace</string>
+    <string name="diagnostics_channels">Каналы</string>
+    <string name="diagnostics_moderator_channels">Каналы модератора</string>
+    <string name="diagnostics_settings_revision">Ревизия настроек</string>
+    <string name="diagnostics_live_channels">Активные каналы</string>
+    <string name="diagnostics_live_messages">Сообщения в live-буфере</string>
+    <string name="diagnostics_history">Локальная история</string>
+    <string name="diagnostics_available">Доступна</string>
+    <string name="diagnostics_unavailable">Недоступна</string>
+    <string name="diagnostics_yes">Да</string>
+    <string name="diagnostics_no">Нет</string>
+    <string name="diagnostics_report_description">Копируемый отчёт содержит только статусы и счётчики. В него никогда не входят ID каналов, сообщения чата, токены авторизации или текст ошибок.</string>
+    <string name="diagnostics_copy">Копировать диагностику</string>
+    <string name="diagnostics_copied">Диагностика скопирована.</string>
+</resources>

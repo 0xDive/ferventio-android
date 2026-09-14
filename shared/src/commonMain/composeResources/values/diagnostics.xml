@@ -1,0 +1,25 @@
+<resources>
+    <string name="diagnostics_title">Diagnostics</string>
+    <string name="diagnostics_summary">Live connection and local runtime state. Raw errors stay on this device and are excluded from the copied report.</string>
+    <string name="diagnostics_eventsub_title">EventSub</string>
+    <string name="diagnostics_runtime_title">Runtime</string>
+    <string name="diagnostics_status">Status</string>
+    <string name="diagnostics_connection_detail">Detail</string>
+    <string name="diagnostics_attempt">Reconnect attempt</string>
+    <string name="diagnostics_auth_required">Authentication required</string>
+    <string name="diagnostics_last_error">Last error</string>
+    <string name="diagnostics_workspace_state">Workspace</string>
+    <string name="diagnostics_channels">Channels</string>
+    <string name="diagnostics_moderator_channels">Moderator channels</string>
+    <string name="diagnostics_settings_revision">Settings revision</string>
+    <string name="diagnostics_live_channels">Live channels</string>
+    <string name="diagnostics_live_messages">Live messages</string>
+    <string name="diagnostics_history">Local history</string>
+    <string name="diagnostics_available">Available</string>
+    <string name="diagnostics_unavailable">Unavailable</string>
+    <string name="diagnostics_yes">Yes</string>
+    <string name="diagnostics_no">No</string>
+    <string name="diagnostics_report_description">The copied report contains only statuses and counters. It never includes channel IDs, chat messages, authentication tokens or raw errors.</string>
+    <string name="diagnostics_copy">Copy diagnostics</string>
+    <string name="diagnostics_copied">Diagnostics copied.</string>
+</resources>

@@ -134,6 +134,8 @@ internal fun FerventioAboutSettingsPage(
                 onClick = onOpenLicenses,
             )
         }
+
+        FerventioDiagnosticsSettingsSection(versionName = info.versionName)
     }
 }
 
