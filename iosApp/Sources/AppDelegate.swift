@@ -207,7 +207,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
             },
             onRestoreSettingsRevision: { [weak self] revision in
                 Task { @MainActor [weak self] in
-                    await self?.restoreSettingsRevision(revision)
+                    await self?.restoreSettingsRevision(revision.int64Value)
                 }
             },
             onUpsertHighlightRule: { [weak self] rule in
