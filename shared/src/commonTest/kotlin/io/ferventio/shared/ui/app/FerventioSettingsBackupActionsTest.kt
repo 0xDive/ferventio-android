@@ -15,6 +15,23 @@ class FerventioSettingsBackupActionsTest {
     }
 
     @Test
+    fun revisionHistoryAvailabilityRequiresRefreshAndRestoreActions() {
+        assertFalse(FerventioSettingsBackupActions().revisionHistoryAvailable)
+        assertFalse(
+            FerventioSettingsBackupActions(onRefreshRevisionHistory = {}).revisionHistoryAvailable,
+        )
+        assertFalse(
+            FerventioSettingsBackupActions(onRestoreRevision = {}).revisionHistoryAvailable,
+        )
+        assertTrue(
+            FerventioSettingsBackupActions(
+                onRefreshRevisionHistory = {},
+                onRestoreRevision = {},
+            ).revisionHistoryAvailable,
+        )
+    }
+
+    @Test
     fun activeFileTransactionKeepsTransferSupportVisibleWhileActionsAreLocked() {
         val state = SharedSettingsBackupStateHolder()
         val actions = FerventioSettingsBackupActions(state = state)

@@ -47,6 +47,7 @@ private val iosRuntimeState = FerventioRuntimeState(
     localUiPreferences = SharedLocalUiPreferencesStateHolder(IosLocalUiPreferencesStore()),
 )
 private val iosSettingsBackupRuntime = IosSettingsBackupRuntime(iosRuntimeState)
+private val iosSettingsRevisionHistoryRuntime = IosSettingsRevisionHistoryRuntime(iosRuntimeState)
 private val iosAnonymousWorkspaceCoordinator = AnonymousWorkspaceCoordinator(
     IosAnonymousWorkspaceStore(),
 )
@@ -74,6 +75,9 @@ fun IosRuntimeState(): FerventioRuntimeState = iosRuntimeState
 
 fun IosSettingsBackupRuntimeState(): IosSettingsBackupRuntime = iosSettingsBackupRuntime
 
+fun IosSettingsRevisionHistoryRuntimeState(): IosSettingsRevisionHistoryRuntime =
+    iosSettingsRevisionHistoryRuntime
+
 fun MainViewController(
     onAuthenticate: () -> Unit = {},
     onSignOut: () -> Unit = {},
@@ -85,6 +89,8 @@ fun MainViewController(
     onImportSettingsBackup: (() -> Unit)? = null,
     onKeepLocalSettingsBackup: (() -> Unit)? = null,
     onUseServerSettingsBackup: (() -> Unit)? = null,
+    onRefreshSettingsRevisionHistory: (() -> Unit)? = null,
+    onRestoreSettingsRevision: ((Long) -> Unit)? = null,
     onUpsertHighlightRule: (HighlightRule) -> Unit = {},
     onDeleteHighlightRule: (String) -> Unit = {},
     onUpsertIgnoreRule: (IgnoreRule) -> Unit = {},
@@ -141,10 +147,13 @@ fun MainViewController(
         onImportSettingsBackup,
         onKeepLocalSettingsBackup,
         onUseServerSettingsBackup,
+        onRefreshSettingsRevisionHistory,
+        onRestoreSettingsRevision,
         backupStatus,
     ) {
         FerventioSettingsBackupActions(
             state = iosSettingsBackupRuntime.state,
+            revisionHistoryState = iosSettingsRevisionHistoryRuntime.state,
             onExport = if (backupLocked) null else onExportSettingsBackup,
             onImport = if (backupLocked) null else onImportSettingsBackup,
             onKeepLocal = if (backupStatus == SharedSettingsBackupStatus.CONFLICT) {
@@ -157,6 +166,8 @@ fun MainViewController(
             } else {
                 null
             },
+            onRefreshRevisionHistory = onRefreshSettingsRevisionHistory,
+            onRestoreRevision = onRestoreSettingsRevision,
         )
     }
 

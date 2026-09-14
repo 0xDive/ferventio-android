@@ -71,4 +71,12 @@ class SharedSettingsRevisionHistoryStateHolder {
             errorMessage = null
         }
     }
+
+    fun clear() {
+        status = SharedSettingsRevisionHistoryStatus.IDLE
+        entries = emptyList()
+        restoringRevision = null
+        lastRestoredRevision = null
+        errorMessage = null
+    }
 }

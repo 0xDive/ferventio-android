@@ -4,22 +4,29 @@ import Foundation
 @MainActor
 final class SettingsBackupRuntimeBridge {
     private let runtime: IosSettingsBackupRuntime
+    private let revisionHistoryRuntime: IosSettingsRevisionHistoryRuntime
     private let identityStore: DeviceIdentityStore
     private let timestampFormatter = ISO8601DateFormatter()
 
     private init(
         runtime: IosSettingsBackupRuntime,
+        revisionHistoryRuntime: IosSettingsRevisionHistoryRuntime,
         identityStore: DeviceIdentityStore
     ) {
         self.runtime = runtime
+        self.revisionHistoryRuntime = revisionHistoryRuntime
         self.identityStore = identityStore
     }
 
-    static func live(runtime: IosSettingsBackupRuntime) throws -> SettingsBackupRuntimeBridge {
+    static func live(
+        runtime: IosSettingsBackupRuntime,
+        revisionHistoryRuntime: IosSettingsRevisionHistoryRuntime
+    ) throws -> SettingsBackupRuntimeBridge {
         let configuration = try AppConfiguration.live()
         let keychain = KeychainStore(service: configuration.keychainService)
         return SettingsBackupRuntimeBridge(
             runtime: runtime,
+            revisionHistoryRuntime: revisionHistoryRuntime,
             identityStore: DeviceIdentityStore(store: keychain)
         )
     }
@@ -71,6 +78,26 @@ final class SettingsBackupRuntimeBridge {
     func useServer(authentication: StoredAuthentication?) async throws -> Bool {
         let authentication = try requireAuthentication(authentication)
         return try await runtime.useServer(authentication: authentication).boolValue
+    }
+
+    func loadRevisionHistory(authentication: StoredAuthentication?) async throws {
+        let authentication = try requireAuthentication(authentication)
+        _ = try await revisionHistoryRuntime.loadHistory(
+            identity: identityStore.loadOrCreate(),
+            authentication: authentication
+        )
+    }
+
+    func restoreRevision(
+        authentication: StoredAuthentication?,
+        revision: Int64
+    ) async throws -> Int64 {
+        let authentication = try requireAuthentication(authentication)
+        return try await revisionHistoryRuntime.restoreRevision(
+            identity: identityStore.loadOrCreate(),
+            authentication: authentication,
+            revision: revision
+        ).int64Value
     }
 
     func reportExported() {

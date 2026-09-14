@@ -92,16 +92,22 @@ class SharedSettingsBackupStateHolder {
 
 data class FerventioSettingsBackupActions(
     val state: SharedSettingsBackupStateHolder = SharedSettingsBackupStateHolder(),
+    val revisionHistoryState: SharedSettingsRevisionHistoryStateHolder = SharedSettingsRevisionHistoryStateHolder(),
     val onExport: (() -> Unit)? = null,
     val onImport: (() -> Unit)? = null,
     val onKeepLocal: (() -> Unit)? = null,
     val onUseServer: (() -> Unit)? = null,
+    val onRefreshRevisionHistory: (() -> Unit)? = null,
+    val onRestoreRevision: ((Long) -> Unit)? = null,
 ) {
     val fileTransferAvailable: Boolean
         get() = onExport != null || onImport != null || state.status.impliesFileTransferSupport
 
     val conflictResolutionAvailable: Boolean
         get() = onKeepLocal != null && onUseServer != null
+
+    val revisionHistoryAvailable: Boolean
+        get() = onRefreshRevisionHistory != null && onRestoreRevision != null
 }
 
 private val SharedSettingsBackupStatus.impliesFileTransferSupport: Boolean

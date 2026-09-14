@@ -7,6 +7,7 @@ import UserNotifications
 final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterDelegate {
     private let runtimeState = MainViewControllerKt.IosRuntimeState()
     private let settingsBackupRuntime = MainViewControllerKt.IosSettingsBackupRuntimeState()
+    private let settingsRevisionHistoryRuntime = MainViewControllerKt.IosSettingsRevisionHistoryRuntimeState()
     private var authenticationRuntimeBridge: MobileAuthenticationRuntimeBridge?
     private var workspaceRuntimeBridge: WorkspaceRuntimeBridge?
     private var pushBackendRegistrationRuntimeBridge: PushBackendRegistrationRuntimeBridge?
@@ -15,7 +16,8 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
     private var settingsSaveTask: Task<Void, Never>?
     private var isPrimarySceneActive = false
     private lazy var settingsBackupRuntimeBridge = try? SettingsBackupRuntimeBridge.live(
-        runtime: settingsBackupRuntime
+        runtime: settingsBackupRuntime,
+        revisionHistoryRuntime: settingsRevisionHistoryRuntime
     )
     private let settingsBackupDocumentBridge = SettingsBackupDocumentBridge()
     private lazy var workspaceLayoutRuntimeBridge = try? WorkspaceLayoutRuntimeBridge.live(
@@ -196,6 +198,16 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
             onUseServerSettingsBackup: { [weak self] in
                 Task { @MainActor [weak self] in
                     await self?.useServerSettingsBackup()
+                }
+            },
+            onRefreshSettingsRevisionHistory: { [weak self] in
+                Task { @MainActor [weak self] in
+                    await self?.refreshSettingsRevisionHistory()
+                }
+            },
+            onRestoreSettingsRevision: { [weak self] revision in
+                Task { @MainActor [weak self] in
+                    await self?.restoreSettingsRevision(revision)
                 }
             },
             onUpsertHighlightRule: { [weak self] rule in
@@ -568,6 +580,44 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         }
     }
 
+    private func refreshSettingsRevisionHistory() async {
+        guard let bridge = settingsBackupRuntimeBridge else {
+            settingsRevisionHistoryRuntime.reportFailure(
+                message: "Settings revision history runtime is unavailable"
+            )
+            return
+        }
+        do {
+            try await bridge.loadRevisionHistory(
+                authentication: runtimeState.authentication.state.authentication
+            )
+        } catch {
+            settingsRevisionHistoryRuntime.reportFailure(message: String(describing: error))
+        }
+    }
+
+    private func restoreSettingsRevision(_ revision: Int64) async {
+        await awaitPendingSettingsSave()
+        guard let bridge = settingsBackupRuntimeBridge else {
+            settingsRevisionHistoryRuntime.reportFailure(
+                message: "Settings revision history runtime is unavailable"
+            )
+            return
+        }
+        do {
+            let restoredRevision = try await bridge.restoreRevision(
+                authentication: runtimeState.authentication.state.authentication,
+                revision: revision
+            )
+            guard restoredRevision > 0 else { return }
+            runtimeState.chat.retainChannels(channelIds: runtimeState.workspace.channelIds)
+            runtimeState.attention.retainChannels(channelIds: runtimeState.workspace.channelIds)
+            await synchronizeWorkspaceTransportAfterChannelSetChanged()
+        } catch {
+            settingsRevisionHistoryRuntime.reportFailure(message: String(describing: error))
+        }
+    }
+
     private func resumePendingSettingsBackupIfNeeded(
         authentication: StoredAuthentication
     ) async {
@@ -758,6 +808,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         runtimeState.settings.clear()
         runtimeState.messageRules.clear()
         runtimeState.savedFilters.clear()
+        settingsRevisionHistoryRuntime.clear()
         try? settingsBackupRuntime.discardPendingImport()
     }
 

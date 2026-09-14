@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -25,6 +26,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -431,6 +433,53 @@ private fun SettingsBackupPage(
     actions: FerventioSettingsBackupActions,
     onBeforeExport: () -> Unit,
 ) {
+    val historyState = actions.revisionHistoryState
+    val backupBusy = when (actions.state.status) {
+        SharedSettingsBackupStatus.EXPORTING,
+        SharedSettingsBackupStatus.IMPORTING,
+        SharedSettingsBackupStatus.RESOLVING,
+        SharedSettingsBackupStatus.CONFLICT,
+        -> true
+        SharedSettingsBackupStatus.IDLE,
+        SharedSettingsBackupStatus.SYNCED,
+        SharedSettingsBackupStatus.FAILED,
+        -> false
+    }
+    val historyBusy = historyState.status == SharedSettingsRevisionHistoryStatus.LOADING ||
+        historyState.status == SharedSettingsRevisionHistoryStatus.RESTORING
+    var pendingRestoreRevision by remember { mutableStateOf<Long?>(null) }
+
+    LaunchedEffect(actions.revisionHistoryAvailable) {
+        if (actions.revisionHistoryAvailable) {
+            actions.onRefreshRevisionHistory?.invoke()
+        }
+    }
+
+    pendingRestoreRevision?.let { revision ->
+        AlertDialog(
+            onDismissRequest = { pendingRestoreRevision = null },
+            title = {
+                Text(stringResource(Res.string.settings_revision_history_confirm_title, revision))
+            },
+            text = { Text(stringResource(Res.string.settings_revision_history_confirm_text)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingRestoreRevision = null
+                        actions.onRestoreRevision?.invoke(revision)
+                    },
+                ) {
+                    Text(stringResource(Res.string.settings_revision_history_restore))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingRestoreRevision = null }) {
+                    Text(stringResource(Res.string.settings_revision_history_cancel))
+                }
+            },
+        )
+    }
+
     SettingsSectionTitle(stringResource(Res.string.settings_export_sync))
     Text(
         text = stringResource(Res.string.settings_backup_description),
@@ -457,14 +506,14 @@ private fun SettingsBackupPage(
                 onBeforeExport()
                 actions.onExport?.invoke()
             },
-            enabled = actions.onExport != null,
+            enabled = actions.onExport != null && !historyBusy,
             modifier = Modifier.weight(1f),
         ) {
             Text(stringResource(Res.string.settings_backup_export))
         }
         TextButton(
             onClick = { actions.onImport?.invoke() },
-            enabled = actions.onImport != null,
+            enabled = actions.onImport != null && !historyBusy,
             modifier = Modifier.weight(1f),
         ) {
             Text(stringResource(Res.string.settings_backup_import))
@@ -477,6 +526,129 @@ private fun SettingsBackupPage(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 6.dp),
         )
+    }
+
+    if (actions.revisionHistoryAvailable) {
+        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+        SettingsSectionTitle(stringResource(Res.string.settings_revision_history_title))
+        Text(
+            text = stringResource(Res.string.settings_revision_history_description),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        TextButton(
+            onClick = { actions.onRefreshRevisionHistory?.invoke() },
+            enabled = !backupBusy && !historyBusy,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(Res.string.settings_revision_history_refresh))
+        }
+
+        when (historyState.status) {
+            SharedSettingsRevisionHistoryStatus.LOADING -> Row(
+                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                Text(
+                    text = stringResource(Res.string.settings_revision_history_loading),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            SharedSettingsRevisionHistoryStatus.RESTORING -> historyState.restoringRevision?.let { revision ->
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                    Text(
+                        text = stringResource(Res.string.settings_revision_history_restoring, revision),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+            SharedSettingsRevisionHistoryStatus.FAILED -> Text(
+                text = stringResource(
+                    Res.string.settings_revision_history_error,
+                    historyState.errorMessage.orEmpty(),
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                modifier = Modifier.padding(vertical = 8.dp),
+            )
+            SharedSettingsRevisionHistoryStatus.IDLE -> historyState.lastRestoredRevision?.let { revision ->
+                Text(
+                    text = stringResource(Res.string.settings_revision_history_restored, revision),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
+            }
+        }
+
+        if (historyState.entries.isEmpty() && historyState.status == SharedSettingsRevisionHistoryStatus.IDLE) {
+            Text(
+                text = stringResource(Res.string.settings_revision_history_empty),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(vertical = 8.dp),
+            )
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            historyState.entries.forEach { entry ->
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.large,
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                ) {
+                    Column(Modifier.padding(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(
+                                    text = stringResource(
+                                        Res.string.settings_revision_history_revision,
+                                        entry.revision,
+                                    ),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                )
+                                Text(
+                                    text = stringResource(
+                                        Res.string.settings_revision_history_updated,
+                                        entry.updatedAt,
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                entry.appVersion?.takeIf(String::isNotBlank)?.let { appVersion ->
+                                    Text(
+                                        text = stringResource(
+                                            Res.string.settings_revision_history_app_version,
+                                            appVersion,
+                                        ),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                            TextButton(
+                                onClick = { pendingRestoreRevision = entry.revision },
+                                enabled = !backupBusy && !historyBusy,
+                            ) {
+                                Text(stringResource(Res.string.settings_revision_history_restore))
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

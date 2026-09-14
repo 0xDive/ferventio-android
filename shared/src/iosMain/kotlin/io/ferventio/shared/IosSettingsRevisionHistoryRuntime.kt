@@ -64,4 +64,12 @@ class IosSettingsRevisionHistoryRuntime(
             throw error
         }
     }
+
+    fun reportFailure(message: String?) {
+        state.markFailed(message)
+    }
+
+    fun clear() {
+        state.clear()
+    }
 }
