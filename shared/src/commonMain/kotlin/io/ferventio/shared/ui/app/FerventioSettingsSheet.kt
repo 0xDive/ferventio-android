@@ -43,6 +43,7 @@ import io.ferventio.app.domain.MentionColors
 import io.ferventio.app.domain.MessageDensity
 import io.ferventio.shared.generated.resources.*
 import io.ferventio.shared.push.PushAuthorizationStatus
+import io.ferventio.shared.settings.AppearanceSettingsPresets
 import io.ferventio.shared.settings.SharedAppPreferences
 import io.ferventio.shared.settings.SharedAppSettingsStateHolder
 import io.ferventio.shared.settings.SharedSettingsSaveStatus
@@ -668,17 +669,11 @@ private fun AppearanceSettingsPage(
         selected = preferences.themeMode,
         onSelected = { value -> update { it.copy(themeMode = value) } },
     )
-    Text(
-        text = stringResource(Res.string.settings_font_size, preferences.fontScalePercent),
-        style = MaterialTheme.typography.bodyMedium,
-    )
-    Slider(
-        value = preferences.fontScalePercent.toFloat(),
-        onValueChange = { raw ->
-            val value = (raw / 5f).roundToInt() * 5
-            update { it.copy(fontScalePercent = value) }
-        },
-        valueRange = 80f..150f,
+    SettingsChoiceGroup(
+        title = stringResource(Res.string.settings_font_size, preferences.fontScalePercent),
+        options = AppearanceSettingsPresets.FONT_SCALE_PERCENT.map { value -> value to "$value%" },
+        selected = preferences.fontScalePercent,
+        onSelected = { value -> update { it.copy(fontScalePercent = value) } },
     )
 
     SettingsChoiceGroup(
@@ -749,17 +744,11 @@ private fun AppearanceSettingsPage(
         checked = preferences.animateEmotes,
         onCheckedChange = { value -> update { it.copy(animateEmotes = value) } },
     )
-    Text(
-        text = stringResource(Res.string.settings_emote_size, preferences.emoteScalePercent),
-        style = MaterialTheme.typography.bodyMedium,
-    )
-    Slider(
-        value = preferences.emoteScalePercent.toFloat(),
-        onValueChange = { raw ->
-            val value = (raw / 5f).roundToInt() * 5
-            update { it.copy(emoteScalePercent = value) }
-        },
-        valueRange = 75f..200f,
+    SettingsChoiceGroup(
+        title = stringResource(Res.string.settings_emote_size, preferences.emoteScalePercent),
+        options = AppearanceSettingsPresets.EMOTE_SCALE_PERCENT.map { value -> value to "$value%" },
+        selected = preferences.emoteScalePercent,
+        onSelected = { value -> update { it.copy(emoteScalePercent = value) } },
     )
     SettingsSwitchRow(
         label = stringResource(Res.string.settings_bttv),
