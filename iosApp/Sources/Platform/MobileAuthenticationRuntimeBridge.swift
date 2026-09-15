@@ -23,6 +23,7 @@ final class MobileAuthenticationRuntimeBridge {
     private struct AuthenticationRefreshFlight {
         let generation: Int
         let reason: AuthenticationRefreshReason
+        let sceneGeneration: UInt64?
         let task: Task<ForegroundAuthenticationRefreshDisposition, Never>
     }
 
@@ -297,16 +298,33 @@ final class MobileAuthenticationRuntimeBridge {
         guard !initialRestorePending, !authorizationInFlight, !signOutInFlight else {
             return .deferred
         }
+        guard ActiveSceneRecoveryGeneration.currentTaskIsValid else {
+            return .deferred
+        }
 
         while true {
+            guard ActiveSceneRecoveryGeneration.currentTaskIsValid else {
+                return .deferred
+            }
             guard stateHolder.state.authentication != nil else {
                 return .signedOut
             }
 
             if let flight = refreshFlight {
+                if !ActiveSceneRecoveryGeneration.isCurrent(flight.sceneGeneration) {
+                    flight.task.cancel()
+                    if refreshFlight?.generation == flight.generation {
+                        refreshFlight = nil
+                    }
+                    continue
+                }
+
                 let disposition = await flight.task.value
                 if refreshFlight?.generation == flight.generation {
                     refreshFlight = nil
+                }
+                guard ActiveSceneRecoveryGeneration.currentTaskIsValid else {
+                    return .deferred
                 }
 
                 // A foreground refresh may safely reuse a stronger rejection refresh. A
@@ -326,6 +344,7 @@ final class MobileAuthenticationRuntimeBridge {
             refreshFlightGeneration += 1
             let generation = refreshFlightGeneration
             let expectedSessionGeneration = sessionGeneration
+            let sceneGeneration = ActiveSceneRecoveryContext.generation
             let task = Task { @MainActor [weak self] in
                 guard let self else {
                     return ForegroundAuthenticationRefreshDisposition.unavailable
@@ -338,12 +357,16 @@ final class MobileAuthenticationRuntimeBridge {
             refreshFlight = AuthenticationRefreshFlight(
                 generation: generation,
                 reason: reason,
+                sceneGeneration: sceneGeneration,
                 task: task
             )
 
             let disposition = await task.value
             if refreshFlight?.generation == generation {
                 refreshFlight = nil
+            }
+            guard ActiveSceneRecoveryGeneration.currentTaskIsValid else {
+                return .deferred
             }
             return disposition
         }
@@ -353,7 +376,11 @@ final class MobileAuthenticationRuntimeBridge {
         reason: AuthenticationRefreshReason,
         expectedSessionGeneration: Int
     ) async -> ForegroundAuthenticationRefreshDisposition {
-        guard sessionGeneration == expectedSessionGeneration, !Task.isCancelled else {
+        guard
+            sessionGeneration == expectedSessionGeneration,
+            !Task.isCancelled,
+            ActiveSceneRecoveryGeneration.currentTaskIsValid
+        else {
             return .deferred
         }
         guard await pauseAuthenticatedWorkspaceOperations() else {
@@ -361,7 +388,11 @@ final class MobileAuthenticationRuntimeBridge {
         }
         defer { authenticatedWorkspaceOperationGate.resume() }
 
-        guard sessionGeneration == expectedSessionGeneration, !Task.isCancelled else {
+        guard
+            sessionGeneration == expectedSessionGeneration,
+            !Task.isCancelled,
+            ActiveSceneRecoveryGeneration.currentTaskIsValid
+        else {
             return stateHolder.state.authentication == nil ? .signedOut : .deferred
         }
         guard let authentication = stateHolder.state.authentication else {
@@ -384,12 +415,20 @@ final class MobileAuthenticationRuntimeBridge {
                 )
             }
 
-            guard sessionGeneration == expectedSessionGeneration, !Task.isCancelled else {
+            guard
+                sessionGeneration == expectedSessionGeneration,
+                !Task.isCancelled,
+                ActiveSceneRecoveryGeneration.currentTaskIsValid
+            else {
                 return stateHolder.state.authentication == nil ? .signedOut : .deferred
             }
             return try applyRefreshResult(result)
         } catch {
-            if Task.isCancelled || sessionGeneration != expectedSessionGeneration {
+            if
+                Task.isCancelled ||
+                sessionGeneration != expectedSessionGeneration ||
+                !ActiveSceneRecoveryGeneration.currentTaskIsValid
+            {
                 return stateHolder.state.authentication == nil ? .signedOut : .deferred
             }
             return .unavailable

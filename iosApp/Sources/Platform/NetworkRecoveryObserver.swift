@@ -7,6 +7,8 @@ final class NetworkRecoveryObserver {
     private let onReachable: @MainActor @Sendable () async -> Void
     private var monitor: NWPathMonitor?
     private var lastReachable: Bool?
+    private var recoveryInFlight = false
+    private var recoveryPending = false
 
     init(onReachable: @escaping @MainActor @Sendable () async -> Void) {
         self.onReachable = onReachable
@@ -32,6 +34,7 @@ final class NetworkRecoveryObserver {
         monitor?.cancel()
         monitor = nil
         lastReachable = nil
+        recoveryPending = false
     }
 
     private func handlePathUpdate(reachable: Bool) async {
@@ -43,6 +46,20 @@ final class NetworkRecoveryObserver {
         guard wasReachable == false, reachable else {
             return
         }
-        await onReachable()
+
+        recoveryPending = true
+        guard !recoveryInFlight else {
+            return
+        }
+
+        recoveryInFlight = true
+        defer { recoveryInFlight = false }
+        while recoveryPending, monitor != nil {
+            recoveryPending = false
+            let generation = ActiveSceneRecoveryGeneration.current
+            await ActiveSceneRecoveryContext.$generation.withValue(generation) {
+                await onReachable()
+            }
+        }
     }
 }

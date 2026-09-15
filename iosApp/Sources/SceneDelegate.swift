@@ -25,10 +25,14 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func sceneDidBecomeActive(_ scene: UIScene) {
-        appDelegate?.sceneDidBecomeActive()
+        let generation = ActiveSceneRecoveryGeneration.beginActive()
+        ActiveSceneRecoveryContext.$generation.withValue(generation) {
+            appDelegate?.sceneDidBecomeActive()
+        }
     }
 
     func sceneWillResignActive(_ scene: UIScene) {
+        ActiveSceneRecoveryGeneration.invalidate()
         appDelegate?.sceneWillResignActive()
     }
 
@@ -37,10 +41,12 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func sceneDidEnterBackground(_ scene: UIScene) {
+        ActiveSceneRecoveryGeneration.invalidate()
         appDelegate?.sceneDidEnterBackground()
     }
 
     func sceneDidDisconnect(_ scene: UIScene) {
+        ActiveSceneRecoveryGeneration.invalidate()
         appDelegate?.sceneDidDisconnect()
         window = nil
     }
