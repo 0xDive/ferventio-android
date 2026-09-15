@@ -77,6 +77,20 @@ class TwitchModerationRuntime(
         gateway.unbanUser(authentication, broadcasterId, targetUserId)
     }
 
+    suspend fun warnUser(
+        authentication: StoredAuthentication,
+        broadcasterId: String,
+        targetUserId: String,
+        reason: String,
+    ) = executeMutation {
+        gateway.warnUser(
+            authentication = authentication,
+            broadcasterId = broadcasterId,
+            targetUserId = targetUserId,
+            reason = reason,
+        )
+    }
+
     suspend fun clearChatMessages(
         authentication: StoredAuthentication,
         broadcasterId: String,

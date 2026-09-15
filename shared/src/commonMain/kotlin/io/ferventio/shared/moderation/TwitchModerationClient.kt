@@ -71,6 +71,15 @@ interface TwitchModerationGateway {
         targetUserId: String,
     )
 
+    suspend fun warnUser(
+        authentication: StoredAuthentication,
+        broadcasterId: String,
+        targetUserId: String,
+        reason: String,
+    ) {
+        throw UnsupportedOperationException("Twitch moderation warnings are not supported by this gateway")
+    }
+
     suspend fun deleteChatMessage(
         authentication: StoredAuthentication,
         broadcasterId: String,
@@ -129,6 +138,42 @@ class TwitchModerationClient(
             parameter("user_id", normalizedTargetUserId)
         }
         requireSuccess(response, "unban")
+    }
+
+    override suspend fun warnUser(
+        authentication: StoredAuthentication,
+        broadcasterId: String,
+        targetUserId: String,
+        reason: String,
+    ) {
+        val context = moderationContext(authentication, broadcasterId, WARNINGS_SCOPE)
+        val normalizedTargetUserId = requireTargetUserId(
+            targetUserId,
+            context.broadcasterId,
+            context.moderatorId,
+        )
+        val normalizedReason = reason.trim()
+        require(normalizedReason.isNotBlank()) { "Twitch moderation warning reason must not be blank" }
+        require(normalizedReason.length <= MAX_REASON_LENGTH) {
+            "Twitch moderation reason must not exceed $MAX_REASON_LENGTH characters"
+        }
+        val body = buildJsonObject {
+            put(
+                "data",
+                buildJsonObject {
+                    put("user_id", normalizedTargetUserId)
+                    put("reason", normalizedReason)
+                },
+            )
+        }
+        val response = client.post(MODERATION_WARNINGS_URL) {
+            applyAuthentication(context)
+            parameter("broadcaster_id", context.broadcasterId)
+            parameter("moderator_id", context.moderatorId)
+            contentType(ContentType.Application.Json)
+            setBody(json.encodeToString(JsonObject.serializer(), body))
+        }
+        requireSuccess(response, "warn")
     }
 
     override suspend fun deleteChatMessage(
@@ -281,8 +326,10 @@ class TwitchModerationClient(
 
     private companion object {
         const val MODERATION_BANS_URL = "https://api.twitch.tv/helix/moderation/bans"
+        const val MODERATION_WARNINGS_URL = "https://api.twitch.tv/helix/moderation/warnings"
         const val MODERATION_CHAT_URL = "https://api.twitch.tv/helix/moderation/chat"
         const val BANNED_USERS_SCOPE = "moderator:manage:banned_users"
+        const val WARNINGS_SCOPE = "moderator:manage:warnings"
         const val CHAT_MESSAGES_SCOPE = "moderator:manage:chat_messages"
         const val MIN_TIMEOUT_SECONDS = 1
         const val MAX_TIMEOUT_SECONDS = 1_209_600

@@ -107,6 +107,46 @@ internal class TwitchUserCardClient(
         )
     }
 
+    suspend fun loadPermanentBanState(
+        authentication: StoredAuthentication,
+        broadcasterId: String,
+        targetUserId: String,
+    ): Boolean {
+        AuthenticationPersistenceValidation.requireValid(
+            authentication.backendCredential,
+            authentication.accessLease,
+        )
+        val lease = requireNotNull(authentication.accessLease) {
+            "Twitch access lease is required for user-card moderation state"
+        }
+        require(
+            BANNED_USERS_READ_SCOPE in lease.session.scopes ||
+                BANNED_USERS_MANAGE_SCOPE in lease.session.scopes,
+        ) {
+            "Twitch banned-user lookup requires OAuth scope $BANNED_USERS_READ_SCOPE or $BANNED_USERS_MANAGE_SCOPE"
+        }
+        val normalizedBroadcasterId = broadcasterId.trim()
+        val normalizedTargetUserId = targetUserId.trim()
+        require(normalizedBroadcasterId.isNotBlank()) { "Twitch broadcaster id is required" }
+        require(normalizedTargetUserId.isNotBlank()) { "Twitch target user id is required" }
+
+        val response = client.get(TWITCH_BANNED_USERS_URL) {
+            header("Client-Id", lease.session.clientId)
+            header(HttpHeaders.Authorization, "Bearer ${lease.accessToken}")
+            parameter("broadcaster_id", normalizedBroadcasterId)
+            parameter("user_id", normalizedTargetUserId)
+            parameter("first", 1)
+            header(HttpHeaders.Accept, ContentType.Application.Json.toString())
+        }
+        val body = response.bodyAsText()
+        requireSuccess("Twitch", response.status.value, body)
+        val item = parseObject(body, "Twitch")["data"]
+            ?.runCatching { jsonArray.firstOrNull()?.jsonObject }
+            ?.getOrNull()
+            ?: return false
+        return item.string("expires_at").isNullOrBlank()
+    }
+
     suspend fun loadPublicRelationship(
         userLogin: String,
         channelLogin: String,
@@ -199,7 +239,10 @@ internal class TwitchUserCardClient(
 
     private companion object {
         const val TWITCH_USERS_URL = "https://api.twitch.tv/helix/users"
+        const val TWITCH_BANNED_USERS_URL = "https://api.twitch.tv/helix/moderation/banned"
         const val IVR_SUBAGE_BASE_URL = "https://api.ivr.fi/v2/twitch/subage"
+        const val BANNED_USERS_READ_SCOPE = "moderator:read:banned_users"
+        const val BANNED_USERS_MANAGE_SCOPE = "moderator:manage:banned_users"
         val TWITCH_LOGIN_REGEX = Regex("^[a-z0-9_]{1,25}$")
     }
 }
