@@ -33,8 +33,7 @@ final class WorkspaceLayoutRuntimeBridge {
         splitId: String,
         filterQuery: String
     ) async -> Bool {
-        guard let authentication else { return authenticationUnavailable() }
-        do {
+        await performOperation(authentication: authentication) { authentication in
             _ = try await coordinator.setSplitFilterQuery(
                 identity: identityStore.loadOrCreate(),
                 authentication: authentication,
@@ -42,9 +41,6 @@ final class WorkspaceLayoutRuntimeBridge {
                 splitId: splitId,
                 filterQuery: filterQuery
             )
-            return true
-        } catch {
-            return false
         }
     }
 
@@ -53,8 +49,7 @@ final class WorkspaceLayoutRuntimeBridge {
         splitId: String,
         channelId: String
     ) async -> Bool {
-        guard let authentication else { return authenticationUnavailable() }
-        do {
+        await performOperation(authentication: authentication) { authentication in
             _ = try await coordinator.setSplitChannel(
                 identity: identityStore.loadOrCreate(),
                 authentication: authentication,
@@ -62,9 +57,6 @@ final class WorkspaceLayoutRuntimeBridge {
                 splitId: splitId,
                 channelId: channelId
             )
-            return true
-        } catch {
-            return false
         }
     }
 
@@ -72,32 +64,24 @@ final class WorkspaceLayoutRuntimeBridge {
         authentication: StoredAuthentication?,
         splitId: String
     ) async -> Bool {
-        guard let authentication else { return authenticationUnavailable() }
-        do {
+        await performOperation(authentication: authentication) { authentication in
             _ = try await coordinator.focusSplit(
                 identity: identityStore.loadOrCreate(),
                 authentication: authentication,
                 state: stateHolder,
                 splitId: splitId
             )
-            return true
-        } catch {
-            return false
         }
     }
 
     func addSplit(authentication: StoredAuthentication?) async -> Bool {
-        guard let authentication else { return authenticationUnavailable() }
-        do {
+        await performOperation(authentication: authentication) { authentication in
             _ = try await coordinator.addSplit(
                 identity: identityStore.loadOrCreate(),
                 authentication: authentication,
                 state: stateHolder,
                 channelId: stateHolder.selectedChannelId
             )
-            return true
-        } catch {
-            return false
         }
     }
 
@@ -105,17 +89,13 @@ final class WorkspaceLayoutRuntimeBridge {
         authentication: StoredAuthentication?,
         filterId: String
     ) async -> Bool {
-        guard let authentication else { return authenticationUnavailable() }
-        do {
+        await performOperation(authentication: authentication) { authentication in
             _ = try await coordinator.addSavedFilterSplit(
                 identity: identityStore.loadOrCreate(),
                 authentication: authentication,
                 state: stateHolder,
                 filterId: filterId
             )
-            return true
-        } catch {
-            return false
         }
     }
 
@@ -123,17 +103,13 @@ final class WorkspaceLayoutRuntimeBridge {
         authentication: StoredAuthentication?,
         splitId: String
     ) async -> Bool {
-        guard let authentication else { return authenticationUnavailable() }
-        do {
+        await performOperation(authentication: authentication) { authentication in
             _ = try await coordinator.removeSplit(
                 identity: identityStore.loadOrCreate(),
                 authentication: authentication,
                 state: stateHolder,
                 splitId: splitId
             )
-            return true
-        } catch {
-            return false
         }
     }
 
@@ -141,14 +117,28 @@ final class WorkspaceLayoutRuntimeBridge {
         authentication: StoredAuthentication?,
         fraction: KotlinFloat
     ) async -> Bool {
-        guard let authentication else { return authenticationUnavailable() }
-        do {
+        await performOperation(authentication: authentication) { authentication in
             _ = try await coordinator.setPrimaryFraction(
                 identity: identityStore.loadOrCreate(),
                 authentication: authentication,
                 state: stateHolder,
                 fraction: fraction.floatValue
             )
+        }
+    }
+
+    private func performOperation(
+        authentication: StoredAuthentication?,
+        operation: @MainActor (StoredAuthentication) async throws -> Void
+    ) async -> Bool {
+        guard let authentication else { return authenticationUnavailable() }
+        guard authenticatedWorkspaceOperationGate.tryEnter() else {
+            return authenticationChanging()
+        }
+        defer { authenticatedWorkspaceOperationGate.leave() }
+
+        do {
+            try await operation(authentication)
             return true
         } catch {
             return false
@@ -157,6 +147,11 @@ final class WorkspaceLayoutRuntimeBridge {
 
     private func authenticationUnavailable() -> Bool {
         stateHolder.markMutationFailed(errorMessage: "Authentication is unavailable")
+        return false
+    }
+
+    private func authenticationChanging() -> Bool {
+        stateHolder.markMutationFailed(errorMessage: "Authentication is changing")
         return false
     }
 }
