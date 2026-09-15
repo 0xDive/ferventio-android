@@ -102,7 +102,20 @@ class SharedAppSettingsStateHolder(
     }
 
     fun updateLocally(transform: (SharedAppPreferences) -> SharedAppPreferences): SharedAppPreferences {
-        preferences = transform(preferences).normalized()
+        val previous = preferences
+        val transformed = transform(previous).normalized()
+        preferences = transformed.copy(
+            fontScalePercent = if (transformed.fontScalePercent != previous.fontScalePercent) {
+                AppearanceSettingsPresets.snapFontScalePercent(transformed.fontScalePercent)
+            } else {
+                transformed.fontScalePercent
+            },
+            emoteScalePercent = if (transformed.emoteScalePercent != previous.emoteScalePercent) {
+                AppearanceSettingsPresets.snapEmoteScalePercent(transformed.emoteScalePercent)
+            } else {
+                transformed.emoteScalePercent
+            },
+        ).normalized()
         saveErrorMessage = null
         return preferences
     }
