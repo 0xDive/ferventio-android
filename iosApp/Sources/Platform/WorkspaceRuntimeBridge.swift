@@ -51,6 +51,8 @@ final class WorkspaceRuntimeBridge {
             filtersState.clear()
             return false
         }
+        guard beginAuthenticatedOperation() else { return false }
+        defer { endAuthenticatedOperation() }
 
         stateHolder.markLoadStarted()
         do {
@@ -79,6 +81,12 @@ final class WorkspaceRuntimeBridge {
             settingsState.markSaveFailed(message: "Authentication is unavailable")
             return
         }
+        guard beginAuthenticatedOperation() else {
+            settingsState.markSaveFailed(message: "Authentication is changing")
+            return
+        }
+        defer { endAuthenticatedOperation() }
+
         do {
             let identity = try identityStore.loadOrCreate()
             _ = try await coordinator.savePreferences(
@@ -100,6 +108,12 @@ final class WorkspaceRuntimeBridge {
             rulesState.markSaveFailed(message: "Authentication is unavailable")
             return false
         }
+        guard beginAuthenticatedOperation() else {
+            rulesState.markSaveFailed(message: "Authentication is changing")
+            return false
+        }
+        defer { endAuthenticatedOperation() }
+
         do {
             let identity = try identityStore.loadOrCreate()
             _ = try await coordinator.upsertHighlightRule(
@@ -122,6 +136,12 @@ final class WorkspaceRuntimeBridge {
             rulesState.markSaveFailed(message: "Authentication is unavailable")
             return false
         }
+        guard beginAuthenticatedOperation() else {
+            rulesState.markSaveFailed(message: "Authentication is changing")
+            return false
+        }
+        defer { endAuthenticatedOperation() }
+
         do {
             let identity = try identityStore.loadOrCreate()
             _ = try await coordinator.deleteHighlightRule(
@@ -144,6 +164,12 @@ final class WorkspaceRuntimeBridge {
             rulesState.markSaveFailed(message: "Authentication is unavailable")
             return false
         }
+        guard beginAuthenticatedOperation() else {
+            rulesState.markSaveFailed(message: "Authentication is changing")
+            return false
+        }
+        defer { endAuthenticatedOperation() }
+
         do {
             let identity = try identityStore.loadOrCreate()
             _ = try await coordinator.upsertIgnoreRule(
@@ -166,6 +192,12 @@ final class WorkspaceRuntimeBridge {
             rulesState.markSaveFailed(message: "Authentication is unavailable")
             return false
         }
+        guard beginAuthenticatedOperation() else {
+            rulesState.markSaveFailed(message: "Authentication is changing")
+            return false
+        }
+        defer { endAuthenticatedOperation() }
+
         do {
             let identity = try identityStore.loadOrCreate()
             _ = try await coordinator.deleteIgnoreRule(
@@ -188,6 +220,12 @@ final class WorkspaceRuntimeBridge {
             filtersState.markSaveFailed(message: "Authentication is unavailable")
             return false
         }
+        guard beginAuthenticatedOperation() else {
+            filtersState.markSaveFailed(message: "Authentication is changing")
+            return false
+        }
+        defer { endAuthenticatedOperation() }
+
         do {
             let identity = try identityStore.loadOrCreate()
             _ = try await coordinator.upsertSavedFilter(
@@ -210,6 +248,12 @@ final class WorkspaceRuntimeBridge {
             filtersState.markSaveFailed(message: "Authentication is unavailable")
             return false
         }
+        guard beginAuthenticatedOperation() else {
+            filtersState.markSaveFailed(message: "Authentication is changing")
+            return false
+        }
+        defer { endAuthenticatedOperation() }
+
         do {
             let identity = try identityStore.loadOrCreate()
             _ = try await coordinator.deleteSavedFilter(
@@ -328,6 +372,12 @@ final class WorkspaceRuntimeBridge {
             stateHolder.markMutationFailed(errorMessage: "Authentication is unavailable")
             return false
         }
+        guard beginAuthenticatedOperation() else {
+            stateHolder.markMutationFailed(errorMessage: "Authentication is changing")
+            return false
+        }
+        defer { endAuthenticatedOperation() }
+
         stateHolder.markMutationStarted()
         do {
             let identity = try identityStore.loadOrCreate()
@@ -338,5 +388,13 @@ final class WorkspaceRuntimeBridge {
             stateHolder.markMutationFailed(errorMessage: String(describing: error))
             return false
         }
+    }
+
+    private func beginAuthenticatedOperation() -> Bool {
+        authenticatedWorkspaceOperationGate.tryEnter()
+    }
+
+    private func endAuthenticatedOperation() {
+        authenticatedWorkspaceOperationGate.leave()
     }
 }
