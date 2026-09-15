@@ -8,7 +8,7 @@ buildscript {
     dependencies {
         // AGP 9 ships built-in Kotlin support. Pin a newer KGP because
         // the Compose compiler plugin and the project use Kotlin 2.4.10.
-        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.10")
+        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:2.4.20")
     }
 }
 
