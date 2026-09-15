@@ -8,6 +8,7 @@
     <string name="diagnostics_attempt">Reconnect attempt</string>
     <string name="diagnostics_auth_required">Authentication required</string>
     <string name="diagnostics_last_error">Last error</string>
+    <string name="diagnostics_reconnect">Reconnect</string>
     <string name="diagnostics_workspace_state">Workspace</string>
     <string name="diagnostics_channels">Channels</string>
     <string name="diagnostics_moderator_channels">Moderator channels</string>

@@ -45,6 +45,13 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
             stateHolder: runtimeState.chat,
             messageRulesState: runtimeState.messageRules
         )
+        IosDiagnosticsActionsKt.SetIosAuthenticatedChatReconnectAction { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self, isPrimarySceneActive else { return }
+                authenticatedChatRuntimeBridge?.stop()
+                synchronizeAuthenticatedChatRuntime()
+            }
+        }
         Task {
             await pushRuntimeBridge.refreshAuthorizationAndRestoreRemoteRegistration()
         }

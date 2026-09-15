@@ -8,6 +8,7 @@
     <string name="diagnostics_attempt">Попытка переподключения</string>
     <string name="diagnostics_auth_required">Нужна авторизация</string>
     <string name="diagnostics_last_error">Последняя ошибка</string>
+    <string name="diagnostics_reconnect">Переподключить</string>
     <string name="diagnostics_workspace_state">Workspace</string>
     <string name="diagnostics_channels">Каналы</string>
     <string name="diagnostics_moderator_channels">Каналы модератора</string>

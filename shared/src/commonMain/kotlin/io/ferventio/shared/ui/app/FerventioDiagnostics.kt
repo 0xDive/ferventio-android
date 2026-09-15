@@ -75,6 +75,7 @@ internal fun FerventioDiagnosticsSnapshot.toDiagnosticReport(): String = buildSt
 @Composable
 internal fun FerventioDiagnosticsSettingsSection(versionName: String) {
     val runtime = LocalFerventioRuntimeState.current
+    val actions = currentFerventioDiagnosticsActions()
     val clipboardManager = LocalClipboardManager.current
     val snapshot = runtime.diagnosticsSnapshot(versionName)
     val report = snapshot.toDiagnosticReport()
@@ -130,6 +131,15 @@ internal fun FerventioDiagnosticsSettingsSection(versionName: String) {
                             value = error,
                             error = true,
                         )
+                    }
+                }
+
+                actions.onReconnect?.let { reconnect ->
+                    OutlinedButton(
+                        onClick = reconnect,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(Res.string.diagnostics_reconnect))
                     }
                 }
 
