@@ -378,7 +378,6 @@ class WorkspaceBootstrapCoordinator(
         cachedChannels: List<io.ferventio.app.domain.ChatChannel> = state.channels,
         requireDirectoryRefresh: Boolean = false,
     ) {
-        settingsState?.restore(snapshot.preferences, snapshot.revision)
         val refreshedResult = runCatching {
             directory.resolveByLogins(authentication, snapshot.channels.logins)
         }
@@ -389,6 +388,20 @@ class WorkspaceBootstrapCoordinator(
             refreshedChannels = refreshedResult.getOrDefault(emptyList()),
             selectedLogin = snapshot.channels.selectedLogin,
         )
+        val session = authentication.accessLease?.session
+            ?: error("Workspace update requires a Twitch access lease")
+        val moderatedChannelIds = runCatching {
+            directory.resolveModeratedChannelIds(authentication)
+        }.getOrDefault(state.moderatorChannelIds) + session.userId
+
+        if (!WorkspaceSnapshotApplyPolicy.canApply(snapshot.revision, state.settingsRevision)) {
+            return
+        }
+
+        // No suspension points below this line. This keeps a prepared snapshot atomic from the
+        // perspective of overlapping channel mutations: an older revision can no longer resume
+        // after a newer mutation and partially overwrite its local workspace/settings state.
+        settingsState?.restore(snapshot.preferences, snapshot.revision)
         state.replaceChannels(resolved.channels)
         resolved.selectedChannelId?.let(state::selectChannel)
         state.updatePinnedChannelIds(snapshot.channels.pinnedChannelIds)
@@ -399,12 +412,6 @@ class WorkspaceBootstrapCoordinator(
                 fallbackChannelId = state.selectedChannelId,
             ),
         )
-
-        val session = authentication.accessLease?.session
-            ?: error("Workspace update requires a Twitch access lease")
-        val moderatedChannelIds = runCatching {
-            directory.resolveModeratedChannelIds(authentication)
-        }.getOrDefault(state.moderatorChannelIds) + session.userId
         state.updateModeratorChannelIds(moderatedChannelIds)
         state.markLoadReady(snapshot.revision)
     }
