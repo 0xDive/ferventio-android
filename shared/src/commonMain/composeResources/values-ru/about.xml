@@ -18,5 +18,13 @@
     <string name="about_legal_information">Правовая информация</string>
     <string name="about_privacy_policy">Политика конфиденциальности</string>
     <string name="about_open_source_licenses">Лицензии open-source</string>
+    <string name="about_local_crash_reports">Локальные отчёты о сбоях</string>
+    <string name="about_local_crash_reports_description">FOSS-сборка хранит redacted crash reports только во внутреннем хранилище приложения. Автоматической отправки нет; сохраняются максимум 20 отчётов за 30 дней. Перед передачей экспортированного файла проверь диагностический контекст: он может содержать имена каналов.</string>
+    <string name="about_export_crash_reports">Экспортировать отчёты</string>
+    <string name="about_delete_local_crash_reports">Удалить локальные отчёты</string>
+    <string name="about_delete_local_crash_reports_confirm_title">Удалить локальные отчёты?</string>
+    <string name="about_delete_local_crash_reports_confirm_body">Все сохранённые FOSS crash reports будут удалены с устройства. Настройки, каналы и история чата не изменятся.</string>
+    <string name="about_delete">Удалить</string>
+    <string name="about_cancel">Отмена</string>
     <string name="about_version">Версия %1$s</string>
 </resources>

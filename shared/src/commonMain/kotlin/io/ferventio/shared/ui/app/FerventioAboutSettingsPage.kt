@@ -9,21 +9,36 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.ferventio.shared.generated.resources.Res
+import io.ferventio.shared.generated.resources.about_cancel
+import io.ferventio.shared.generated.resources.about_delete
+import io.ferventio.shared.generated.resources.about_delete_local_crash_reports
+import io.ferventio.shared.generated.resources.about_delete_local_crash_reports_confirm_body
+import io.ferventio.shared.generated.resources.about_delete_local_crash_reports_confirm_title
+import io.ferventio.shared.generated.resources.about_export_crash_reports
 import io.ferventio.shared.generated.resources.about_github
 import io.ferventio.shared.generated.resources.about_github_summary
 import io.ferventio.shared.generated.resources.about_legal_information
 import io.ferventio.shared.generated.resources.about_links_title
+import io.ferventio.shared.generated.resources.about_local_crash_reports
+import io.ferventio.shared.generated.resources.about_local_crash_reports_description
 import io.ferventio.shared.generated.resources.about_open_source_licenses
 import io.ferventio.shared.generated.resources.about_privacy_policy
 import io.ferventio.shared.generated.resources.about_project_description
@@ -48,6 +63,8 @@ internal fun FerventioAboutSettingsPage(
     onOpenLicenses: () -> Unit,
 ) {
     val uriHandler = LocalUriHandler.current
+    val crashReportActions = LocalFerventioCrashReportActions.current
+    var confirmClearCrashReports by remember { mutableStateOf(false) }
     val links = buildList {
         if (info.websiteUrl.isNotBlank()) {
             add(AboutLink(Res.string.about_website, Res.string.about_website_summary, info.websiteUrl))
@@ -82,6 +99,33 @@ internal fun FerventioAboutSettingsPage(
                 ),
             )
         }
+    }
+
+    if (confirmClearCrashReports) {
+        AlertDialog(
+            onDismissRequest = { confirmClearCrashReports = false },
+            title = {
+                Text(stringResource(Res.string.about_delete_local_crash_reports_confirm_title))
+            },
+            text = {
+                Text(stringResource(Res.string.about_delete_local_crash_reports_confirm_body))
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmClearCrashReports = false
+                        crashReportActions.onClear?.invoke()
+                    },
+                ) {
+                    Text(stringResource(Res.string.about_delete))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmClearCrashReports = false }) {
+                    Text(stringResource(Res.string.about_cancel))
+                }
+            },
+        )
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -133,6 +177,33 @@ internal fun FerventioAboutSettingsPage(
                 title = stringResource(Res.string.about_open_source_licenses),
                 onClick = onOpenLicenses,
             )
+        }
+
+        if (crashReportActions.localCrashReportsAvailable) {
+            AboutSection(title = stringResource(Res.string.about_local_crash_reports)) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = stringResource(Res.string.about_local_crash_reports_description),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Button(
+                        onClick = { crashReportActions.onExport?.invoke() },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(Res.string.about_export_crash_reports))
+                    }
+                    TextButton(
+                        onClick = { confirmClearCrashReports = true },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(stringResource(Res.string.about_delete_local_crash_reports))
+                    }
+                }
+            }
         }
 
         FerventioDiagnosticsSettingsSection(versionName = info.versionName)

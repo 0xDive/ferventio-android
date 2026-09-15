@@ -18,5 +18,13 @@
     <string name="about_legal_information">Legal information</string>
     <string name="about_privacy_policy">Privacy policy</string>
     <string name="about_open_source_licenses">Open-source licenses</string>
+    <string name="about_local_crash_reports">Local crash reports</string>
+    <string name="about_local_crash_reports_description">The FOSS build stores redacted crash reports only in the app's internal storage. Nothing is sent automatically; at most 20 reports are kept for 30 days. Before sharing an exported file, review the diagnostic context because it may contain channel names.</string>
+    <string name="about_export_crash_reports">Export reports</string>
+    <string name="about_delete_local_crash_reports">Delete local reports</string>
+    <string name="about_delete_local_crash_reports_confirm_title">Delete local reports?</string>
+    <string name="about_delete_local_crash_reports_confirm_body">All saved FOSS crash reports will be removed from the device. Settings, channels, and chat history will not change.</string>
+    <string name="about_delete">Delete</string>
+    <string name="about_cancel">Cancel</string>
     <string name="about_version">Version %1$s</string>
 </resources>
