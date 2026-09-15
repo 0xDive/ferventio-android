@@ -108,6 +108,9 @@ final class MobileAuthenticationRuntimeBridge {
         authorizationInFlight = true
         defer { authorizationInFlight = false }
 
+        guard await pauseAuthenticatedWorkspaceOperations() else { return }
+        defer { authenticatedWorkspaceOperationGate.resume() }
+
         stateHolder.beginAuthorization()
         do {
             let identity = try identityStore.loadOrCreate()
@@ -146,6 +149,9 @@ final class MobileAuthenticationRuntimeBridge {
         authorizationInFlight = true
         defer { authorizationInFlight = false }
 
+        guard await pauseAuthenticatedWorkspaceOperations() else { return false }
+        defer { authenticatedWorkspaceOperationGate.resume() }
+
         let identity = try identityStore.loadOrCreate()
         let request = try await coordinator.startAuthorization(
             serverUrl: configuration.serverURL,
@@ -178,6 +184,9 @@ final class MobileAuthenticationRuntimeBridge {
         // Prevent an in-flight foreground/rejection refresh from restoring credentials after
         // the user has explicitly started signing out.
         invalidateRefreshFlight()
+
+        guard await pauseAuthenticatedWorkspaceOperations() else { return false }
+        defer { authenticatedWorkspaceOperationGate.resume() }
 
         // Server-side revocation is best-effort. Local sign-out must still succeed offline; the
         // push bridge performs a secret-bound DELETE afterwards as an independent fallback.
@@ -216,6 +225,9 @@ final class MobileAuthenticationRuntimeBridge {
 
         invalidateRefreshFlight()
 
+        guard await pauseAuthenticatedWorkspaceOperations() else { return false }
+        defer { authenticatedWorkspaceOperationGate.resume() }
+
         guard let authentication = stateHolder.state.authentication else {
             throw MobileAuthenticationRuntimeBridgeError.noActiveAuthentication
         }
@@ -250,6 +262,9 @@ final class MobileAuthenticationRuntimeBridge {
         defer { signOutInFlight = false }
 
         invalidateRefreshFlight()
+
+        guard await pauseAuthenticatedWorkspaceOperations() else { return false }
+        defer { authenticatedWorkspaceOperationGate.resume() }
 
         guard let authentication = stateHolder.state.authentication else {
             throw MobileAuthenticationRuntimeBridgeError.noActiveAuthentication
@@ -341,6 +356,14 @@ final class MobileAuthenticationRuntimeBridge {
         guard sessionGeneration == expectedSessionGeneration, !Task.isCancelled else {
             return .deferred
         }
+        guard await pauseAuthenticatedWorkspaceOperations() else {
+            return .unavailable
+        }
+        defer { authenticatedWorkspaceOperationGate.resume() }
+
+        guard sessionGeneration == expectedSessionGeneration, !Task.isCancelled else {
+            return stateHolder.state.authentication == nil ? .signedOut : .deferred
+        }
         guard let authentication = stateHolder.state.authentication else {
             return .signedOut
         }
@@ -370,6 +393,15 @@ final class MobileAuthenticationRuntimeBridge {
                 return stateHolder.state.authentication == nil ? .signedOut : .deferred
             }
             return .unavailable
+        }
+    }
+
+    private func pauseAuthenticatedWorkspaceOperations() async -> Bool {
+        do {
+            try await authenticatedWorkspaceOperationGate.pauseAndAwaitIdle()
+            return true
+        } catch {
+            return false
         }
     }
 
