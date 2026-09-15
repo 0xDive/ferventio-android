@@ -1,5 +1,6 @@
 package io.ferventio.shared.ui.app
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,7 +13,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -47,8 +48,8 @@ import io.ferventio.shared.generated.resources.settings_recent_messages_privacy_
 import io.ferventio.shared.generated.resources.settings_recent_messages_service_info
 import io.ferventio.shared.generated.resources.settings_recent_messages_summary
 import io.ferventio.shared.runtime.LocalFerventioRuntimeState
+import io.ferventio.shared.settings.HistorySettingsPresets
 import io.ferventio.shared.settings.SharedAppPreferences
-import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
@@ -105,48 +106,45 @@ internal fun FerventioHistorySettingsPage(
     )
     if (preferences.localHistoryEnabled) {
         Spacer(Modifier.height(12.dp))
-        Text(
-            text = stringResource(Res.string.settings_history_limit, preferences.localHistoryLimit),
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        Slider(
-            value = preferences.localHistoryLimit.toFloat(),
-            onValueChange = { raw ->
-                val value = ((raw / 100f).roundToInt() * 100).coerceIn(100, 5_000)
-                update { it.copy(localHistoryLimit = value) }
-            },
-            valueRange = 100f..5_000f,
-        )
-        Text(
-            text = if (preferences.localHistoryRetentionDays == 0) {
-                stringResource(Res.string.settings_history_retention_unlimited)
-            } else {
-                stringResource(Res.string.settings_history_retention, preferences.localHistoryRetentionDays)
-            },
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        Slider(
-            value = preferences.localHistoryRetentionDays.toFloat(),
-            onValueChange = { raw ->
-                update { it.copy(localHistoryRetentionDays = raw.roundToInt().coerceIn(0, 365)) }
-            },
-            valueRange = 0f..365f,
-        )
-        Text(
-            text = if (preferences.localHistoryMaxSizeMb == 0) {
-                stringResource(Res.string.settings_history_max_size_unlimited)
-            } else {
-                stringResource(Res.string.settings_history_max_size, preferences.localHistoryMaxSizeMb)
-            },
-            style = MaterialTheme.typography.bodyMedium,
-        )
-        Slider(
-            value = preferences.localHistoryMaxSizeMb.toFloat(),
-            onValueChange = { raw ->
-                update { it.copy(localHistoryMaxSizeMb = raw.roundToInt().coerceIn(0, 1_024)) }
-            },
-            valueRange = 0f..1_024f,
-        )
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            HistorySettingsPresets.messageLimits.forEach { value ->
+                HistoryPresetRow(
+                    label = stringResource(Res.string.settings_history_limit, value),
+                    selected = preferences.localHistoryLimit == value,
+                    onClick = { update { it.copy(localHistoryLimit = value) } },
+                )
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            HistorySettingsPresets.retentionDays.forEach { days ->
+                HistoryPresetRow(
+                    label = if (days == 0) {
+                        stringResource(Res.string.settings_history_retention_unlimited)
+                    } else {
+                        stringResource(Res.string.settings_history_retention, days)
+                    },
+                    selected = preferences.localHistoryRetentionDays == days,
+                    onClick = { update { it.copy(localHistoryRetentionDays = days) } },
+                )
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            HistorySettingsPresets.maxSizeMb.forEach { sizeMb ->
+                HistoryPresetRow(
+                    label = if (sizeMb == 0) {
+                        stringResource(Res.string.settings_history_max_size_unlimited)
+                    } else {
+                        stringResource(Res.string.settings_history_max_size, sizeMb)
+                    },
+                    selected = preferences.localHistoryMaxSizeMb == sizeMb,
+                    onClick = { update { it.copy(localHistoryMaxSizeMb = sizeMb) } },
+                )
+            }
+        }
     }
 
     if (runtime.history != null) {
@@ -251,5 +249,31 @@ private fun HistorySwitchRow(
             modifier = Modifier.weight(1f),
         )
         Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+private fun HistoryPresetRow(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        RadioButton(
+            selected = selected,
+            onClick = onClick,
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f),
+        )
     }
 }
