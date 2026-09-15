@@ -1,0 +1,9 @@
+<resources>
+    <string name="attention_title">Упоминания</string>
+    <string name="attention_empty">Пока нет упоминаний или выделенных сообщений.</string>
+    <string name="attention_unread">Не прочитано</string>
+    <string name="attention_direct_mention">Упоминание</string>
+    <string name="attention_highlight">Выделение</string>
+    <string name="attention_open">Открыть упоминания</string>
+    <string name="attention_channel">#%1$s</string>
+</resources>

@@ -1,0 +1,17 @@
+<resources>
+    <string name="quick_moderation_settings_title">Быстрая модерация</string>
+    <string name="quick_moderation_show_ban">Показывать кнопку быстрого бана</string>
+    <string name="quick_moderation_show_delete">Показывать кнопку быстрого удаления</string>
+    <string name="quick_moderation_confirm_actions">Подтверждать быстрые действия модерации</string>
+    <string name="quick_moderation_ban">Забанить</string>
+    <string name="quick_moderation_delete">Удалить</string>
+    <string name="quick_moderation_ban_title">Забанить пользователя?</string>
+    <string name="quick_moderation_ban_body">Забанить этого пользователя на канале?</string>
+    <string name="quick_moderation_delete_title">Удалить сообщение?</string>
+    <string name="quick_moderation_delete_body">Удалить это сообщение из чата?</string>
+    <string name="quick_moderation_cancel">Отмена</string>
+    <string name="quick_moderation_error_title">Ошибка модерации</string>
+    <string name="quick_moderation_failed">Ошибка модерации: %1$s</string>
+    <string name="quick_moderation_auth_required">Авторизация Twitch недоступна.</string>
+    <string name="quick_moderation_ok">ОК</string>
+</resources>

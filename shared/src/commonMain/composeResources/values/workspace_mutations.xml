@@ -1,0 +1,4 @@
+<resources>
+    <string name="workspace_mutation_failed">Workspace update failed: %1$s</string>
+    <string name="workspace_mutation_dismiss">Dismiss</string>
+</resources>

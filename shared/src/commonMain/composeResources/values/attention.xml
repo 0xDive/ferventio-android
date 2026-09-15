@@ -1,0 +1,9 @@
+<resources>
+    <string name="attention_title">Mentions</string>
+    <string name="attention_empty">No mentions or highlighted messages yet.</string>
+    <string name="attention_unread">Unread</string>
+    <string name="attention_direct_mention">Mention</string>
+    <string name="attention_highlight">Highlight</string>
+    <string name="attention_open">Open mentions</string>
+    <string name="attention_channel">#%1$s</string>
+</resources>
