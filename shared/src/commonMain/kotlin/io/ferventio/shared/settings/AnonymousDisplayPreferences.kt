@@ -97,7 +97,7 @@ class AnonymousDisplayPreferencesCoordinator(
 ) {
     fun restore(state: SharedAppSettingsStateHolder): AnonymousDisplayPreferences {
         val restored = store.load().normalized()
-        state.updateLocally { current -> restored.applyTo(current) }
+        state.projectLocally { current -> restored.applyTo(current) }
         return restored
     }
 

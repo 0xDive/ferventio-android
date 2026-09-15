@@ -101,21 +101,38 @@ class SharedAppSettingsStateHolder(
         saveErrorMessage = null
     }
 
-    fun updateLocally(transform: (SharedAppPreferences) -> SharedAppPreferences): SharedAppPreferences {
+    fun updateLocally(transform: (SharedAppPreferences) -> SharedAppPreferences): SharedAppPreferences =
+        applyLocalTransform(transform = transform, snapAppearancePresets = true)
+
+    internal fun projectLocally(
+        transform: (SharedAppPreferences) -> SharedAppPreferences,
+    ): SharedAppPreferences = applyLocalTransform(
+        transform = transform,
+        snapAppearancePresets = false,
+    )
+
+    private fun applyLocalTransform(
+        transform: (SharedAppPreferences) -> SharedAppPreferences,
+        snapAppearancePresets: Boolean,
+    ): SharedAppPreferences {
         val previous = preferences
         val transformed = transform(previous).normalized()
-        preferences = transformed.copy(
-            fontScalePercent = if (transformed.fontScalePercent != previous.fontScalePercent) {
-                AppearanceSettingsPresets.snapFontScalePercent(transformed.fontScalePercent)
-            } else {
-                transformed.fontScalePercent
-            },
-            emoteScalePercent = if (transformed.emoteScalePercent != previous.emoteScalePercent) {
-                AppearanceSettingsPresets.snapEmoteScalePercent(transformed.emoteScalePercent)
-            } else {
-                transformed.emoteScalePercent
-            },
-        ).normalized()
+        preferences = if (snapAppearancePresets) {
+            transformed.copy(
+                fontScalePercent = if (transformed.fontScalePercent != previous.fontScalePercent) {
+                    AppearanceSettingsPresets.snapFontScalePercent(transformed.fontScalePercent)
+                } else {
+                    transformed.fontScalePercent
+                },
+                emoteScalePercent = if (transformed.emoteScalePercent != previous.emoteScalePercent) {
+                    AppearanceSettingsPresets.snapEmoteScalePercent(transformed.emoteScalePercent)
+                } else {
+                    transformed.emoteScalePercent
+                },
+            ).normalized()
+        } else {
+            transformed
+        }
         saveErrorMessage = null
         return preferences
     }
