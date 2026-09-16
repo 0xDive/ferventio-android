@@ -17,6 +17,22 @@ targets:
           cd "$SRCROOT/.."
           sh ./iosApp/Scripts/verify-privacy-configuration.sh
         basedOnDependencyAnalysis: false
+      - name: Build shared Kotlin framework
+        script: |
+          cd "$SRCROOT/.."
+          case "$SDK_NAME" in
+            iphonesimulator*) KOTLIN_FRAMEWORK_TARGET=IosSimulatorArm64 ;;
+            iphoneos*) KOTLIN_FRAMEWORK_TARGET=IosArm64 ;;
+            *)
+              echo "Unsupported Apple SDK for FerventioShared: $SDK_NAME" >&2
+              exit 1
+              ;;
+          esac
+          ./gradlew \
+            ":shared:link${CONFIGURATION}Framework${KOTLIN_FRAMEWORK_TARGET}" \
+            --no-configuration-cache \
+            --stacktrace
+        basedOnDependencyAnalysis: false
       - name: Sync Compose resources
         script: |
           cd "$SRCROOT/.."
@@ -59,9 +75,6 @@ targets:
       path: Generated/Ferventio.entitlements
       properties:
         aps-environment: $(APS_ENVIRONMENT)
-    dependencies:
-      - framework: ../shared/build/bin/iosSimulatorArm64/debugFramework/FerventioShared.framework
-        embed: false
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: io.ferventio.app
@@ -80,8 +93,13 @@ targets:
         SWIFT_VERSION: "6.0"
         TARGETED_DEVICE_FAMILY: "1,2"
         ENABLE_USER_SCRIPT_SANDBOXING: NO
+        OTHER_LDFLAGS: "$(inherited) -framework FerventioShared"
+        "FRAMEWORK_SEARCH_PATHS[sdk=iphonesimulator*]": "$(inherited) $(SRCROOT)/../shared/build/bin/iosSimulatorArm64/$(KOTLIN_FRAMEWORK_CONFIGURATION)"
+        "FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]": "$(inherited) $(SRCROOT)/../shared/build/bin/iosArm64/$(KOTLIN_FRAMEWORK_CONFIGURATION)"
       configs:
         Debug:
           APS_ENVIRONMENT: development
+          KOTLIN_FRAMEWORK_CONFIGURATION: debugFramework
         Release:
           APS_ENVIRONMENT: production
+          KOTLIN_FRAMEWORK_CONFIGURATION: releaseFramework

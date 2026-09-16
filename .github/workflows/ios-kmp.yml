@@ -16,7 +16,7 @@ concurrency:
 jobs:
   framework:
     runs-on: macos-26
-    timeout-minutes: 35
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v7
 
@@ -36,6 +36,7 @@ jobs:
         run: |
           xcodebuild -version
           xcrun --sdk iphonesimulator --show-sdk-version
+          xcrun --sdk iphoneos --show-sdk-version
 
       - name: Verify iOS privacy configuration guard
         run: |
@@ -70,6 +71,13 @@ jobs:
             --no-configuration-cache \
             --stacktrace
 
+      - name: Compile common domain for iOS device
+        run: |
+          ./gradlew \
+            :core:domain:compileKotlinIosArm64 \
+            --no-configuration-cache \
+            --stacktrace
+
       - name: Link shared iOS simulator framework
         run: |
           ./gradlew \
@@ -77,10 +85,21 @@ jobs:
             --no-configuration-cache \
             --stacktrace
 
-      - name: Verify shared framework output
+      - name: Link shared iOS device framework
         run: |
-          test -d shared/build/bin/iosSimulatorArm64/debugFramework/FerventioShared.framework
-          grep -R "MainViewController" shared/build/bin/iosSimulatorArm64/debugFramework/FerventioShared.framework/Headers
+          ./gradlew \
+            :shared:linkDebugFrameworkIosArm64 \
+            --no-configuration-cache \
+            --stacktrace
+
+      - name: Verify shared framework outputs
+        run: |
+          SIMULATOR_FRAMEWORK="shared/build/bin/iosSimulatorArm64/debugFramework/FerventioShared.framework"
+          DEVICE_FRAMEWORK="shared/build/bin/iosArm64/debugFramework/FerventioShared.framework"
+          test -d "$SIMULATOR_FRAMEWORK"
+          test -d "$DEVICE_FRAMEWORK"
+          grep -R "MainViewController" "$SIMULATOR_FRAMEWORK/Headers"
+          grep -R "MainViewController" "$DEVICE_FRAMEWORK/Headers"
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -103,9 +122,31 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             build
 
-      - name: Verify Compose resources in iOS app bundle
+      - name: Verify Compose resources in simulator app bundle
         run: |
           APP_BUNDLE="build/ios-derived/Build/Products/Debug-iphonesimulator/Ferventio.app"
+          test -d "$APP_BUNDLE/compose-resources"
+          test -f "$APP_BUNDLE/compose-resources/composeResources/io.ferventio.shared.generated.resources/values/strings.commonMain.cvr"
+          test -f "$APP_BUNDLE/compose-resources/composeResources/io.ferventio.shared.generated.resources/values-ru/strings.commonMain.cvr"
+
+      - name: Build iOS application for device without signing
+        run: |
+          xcodebuild \
+            -project iosApp/Ferventio.xcodeproj \
+            -scheme Ferventio \
+            -configuration Debug \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/ios-device-derived \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=YES \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build
+
+      - name: Verify Compose resources in device app bundle
+        run: |
+          APP_BUNDLE="build/ios-device-derived/Build/Products/Debug-iphoneos/Ferventio.app"
           test -d "$APP_BUNDLE/compose-resources"
           test -f "$APP_BUNDLE/compose-resources/composeResources/io.ferventio.shared.generated.resources/values/strings.commonMain.cvr"
           test -f "$APP_BUNDLE/compose-resources/composeResources/io.ferventio.shared.generated.resources/values-ru/strings.commonMain.cvr"

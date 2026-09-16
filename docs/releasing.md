@@ -1,8 +1,8 @@
-# Releasing Android
+# Releasing
 
 ## Versioning
 
-Public releases use semantic versions and annotated tags:
+Public Android releases use semantic versions and annotated tags:
 
 ```text
 android-v0.0.1
@@ -10,6 +10,8 @@ android-v0.0.2
 ```
 
 `0.0.x` is early beta and may contain breaking changes. Android `versionCode` is a separate distribution counter and must increase for every published APK or AAB. Room schema versions, backup format versions and backend API versions are independent compatibility contracts and must not be reset.
+
+For a multiplatform RC, record the exact commit SHA tested on Android and iPhone. Do not treat a green simulator build as physical-device validation.
 
 ## Release signing
 
@@ -43,6 +45,8 @@ FOSS and Play builds must use the same final app-signing identity if users need 
 
 Back up the keystore, alias, passwords and certificate SHA-256 in at least two encrypted locations.
 
+Apple signing certificates, provisioning profiles and App Store Connect credentials must likewise remain outside the repository. Physical iPhone smoke testing must use a normally signed development/ad-hoc build so APNs and device entitlements are exercised.
+
 ## Release configuration
 
 Before building, set and validate:
@@ -50,12 +54,14 @@ Before building, set and validate:
 - production backend URL
 - privacy operator, contact and HTTPS policy URL
 - Play Firebase public configuration
-- release signing properties
-- monotonic `versionCode` and the intended `versionName`
+- Android release signing properties
+- Apple signing/provisioning configuration for physical-device validation
+- monotonic Android `versionCode` and the intended `versionName`
+- intended iOS marketing/build versions
 
-Use [`gradle.properties.example`](../gradle.properties.example) as the property reference. Never commit production signing credentials.
+Use [`gradle.properties.example`](../gradle.properties.example) as the Android property reference. Never commit production signing credentials.
 
-## Validation
+## Automated validation
 
 ```bash
 ./gradlew \
@@ -75,9 +81,11 @@ python3 scripts/architecture/check-module-boundaries.py --root .
 ./scripts/security/run-security-checks.sh
 ```
 
-Run device tests and the relevant benchmark/profile workflow on a clean emulator or device before publication.
+The iOS KMP workflow must pass both simulator and `iosArm64` device framework compilation plus an unsigned `generic/platform=iOS` application build. The unsigned device build proves architecture/link compatibility only; it does not validate signing, APNs or physical-device lifecycle behavior.
 
-## Build and verify
+Run the full [`Multiplatform RC device smoke test`](rc-device-smoke.md) on physical Android and iPhone hardware before RC promotion.
+
+## Android build and verification
 
 ```bash
 ./gradlew :app:assembleFossRelease --no-configuration-cache --stacktrace
@@ -101,6 +109,37 @@ jarsigner -verify -verbose -certs \
   app/build/outputs/bundle/playRelease/app-play-release.aab
 ```
 
-Publish checksums with the release. Keep mapping files and native symbols private but retained for crash analysis.
+## iOS compile guard
 
-Create the signed tag only after the final artifacts have passed validation.
+Generate the Xcode project and verify both simulator and device architectures locally when needed:
+
+```bash
+cd iosApp
+xcodegen generate
+cd ..
+
+xcodebuild \
+  -project iosApp/Ferventio.xcodeproj \
+  -scheme Ferventio \
+  -configuration Debug \
+  -sdk iphonesimulator \
+  -destination 'generic/platform=iOS Simulator' \
+  -derivedDataPath build/ios-derived \
+  ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO build
+
+xcodebuild \
+  -project iosApp/Ferventio.xcodeproj \
+  -scheme Ferventio \
+  -configuration Debug \
+  -sdk iphoneos \
+  -destination 'generic/platform=iOS' \
+  -derivedDataPath build/ios-device-derived \
+  ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
+  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
+```
+
+The Xcode pre-build phase selects and links the matching Kotlin framework (`iosSimulatorArm64` or `iosArm64`) from `SDK_NAME`.
+
+Publish checksums with public Android artifacts. Keep mapping files and native symbols private but retained for crash analysis.
+
+Create the signed release tag only after the final artifacts and physical-device checklist have passed validation.
