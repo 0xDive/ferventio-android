@@ -3,15 +3,18 @@ import Foundation
 @MainActor
 enum ActiveSceneRecoveryGeneration {
     private(set) static var current: UInt64 = 0
+    private(set) static var active = false
 
     @discardableResult
     static func beginActive() -> UInt64 {
         current &+= 1
+        active = true
         return current
     }
 
     static func invalidate() {
         current &+= 1
+        active = false
     }
 
     static func isCurrent(_ generation: UInt64?) -> Bool {
