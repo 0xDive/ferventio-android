@@ -94,11 +94,17 @@ final class MobileAuthenticationRuntimeBridge {
         guard stateHolder.state.authentication != nil else {
             return .deferred
         }
-        return await refreshAuthentication(reason: .foreground)
+        return await withActiveSceneAuthenticationRecovery(
+            { await self.refreshAuthentication(reason: .foreground) },
+            deferred: .deferred
+        )
     }
 
     func refreshAfterAuthenticationRejection() async -> ForegroundAuthenticationRefreshDisposition {
-        await refreshAuthentication(reason: .rejection)
+        await withActiveSceneAuthenticationRecovery(
+            { await self.refreshAuthentication(reason: .rejection) },
+            deferred: .deferred
+        )
     }
 
     func signIn() async {
