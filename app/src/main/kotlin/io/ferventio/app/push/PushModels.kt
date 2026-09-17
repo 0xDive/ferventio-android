@@ -1,9 +1,10 @@
 package io.ferventio.app.push
 
-import kotlinx.serialization.Serializable
-
 typealias PushRegistrationContext = io.ferventio.shared.push.PushRegistrationContext
 typealias PushRegistrationRequest = io.ferventio.shared.push.PushRegistrationRequest
+typealias PushNotificationPayload = io.ferventio.shared.push.PushNotificationPayload
+typealias PushSocketClientMessage = io.ferventio.shared.push.PushSocketClientMessage
+typealias PushSocketServerMessage = io.ferventio.shared.push.PushSocketServerMessage
 
 enum class PushTransport(val wireName: String, val displayName: String) {
     FCM("fcm", "Firebase Cloud Messaging"),
@@ -48,41 +49,3 @@ sealed interface PlatformPushRegistration {
         override val transport: PushTransport = PushTransport.EMBEDDED_SOCKET
     }
 }
-
-@Serializable
-data class PushNotificationPayload(
-    val eventId: String? = null,
-    val type: String = "generic",
-    val title: String = "Ferventio",
-    val body: String,
-    val channelId: String? = null,
-    val channelLogin: String? = null,
-    val messageId: String? = null,
-    val actorId: String? = null,
-    val actorLogin: String? = null,
-    val actorDisplayName: String? = null,
-    val destination: String? = null,
-    val silent: Boolean = false,
-    val createdAtEpochMillis: Long? = null,
-)
-
-@Serializable
-data class PushSocketClientMessage(
-    val type: String,
-    val protocolVersion: Int = 1,
-    val installationId: String? = null,
-    val deviceSecret: String? = null,
-    val lastEventId: String? = null,
-    val eventId: String? = null,
-)
-
-@Serializable
-data class PushSocketServerMessage(
-    val type: String,
-    val connectionId: String? = null,
-    val heartbeatSeconds: Int? = null,
-    val eventId: String? = null,
-    val payload: PushNotificationPayload? = null,
-    val message: String? = null,
-    val serverTimeEpochMillis: Long? = null,
-)
