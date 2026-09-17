@@ -123,9 +123,9 @@ jobs:
             -PFERVENTIO_PRIVACY_POLICY_URL="https://example.com/privacy" \
             -PFERVENTIO_FIREBASE_APPLICATION_ID="1:1234567890:android:0123456789abcdef" \
             -PFERVENTIO_FIREBASE_PROJECT_ID="ferventio-ci" \
-            -PFERVENTIO_FIREBASE_API_KEY="ferventio-ci-validation-key" \
+            -PFERVENTIO_FIREBASE_API_KEY="ferventio-test-only-api-value" \
             -PFERVENTIO_FIREBASE_SENDER_ID="1234567890" \
-            -PFERVENTIO_CRASHLYTICS_MAPPING_ID="ferventio-ci-validation-mapping" \
+            -PFERVENTIO_CRASHLYTICS_MAPPING_ID="ferventio-test-only-mapping-value" \
             --no-configuration-cache \
             --stacktrace
 
