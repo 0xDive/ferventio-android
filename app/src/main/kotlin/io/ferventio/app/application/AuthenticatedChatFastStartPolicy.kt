@@ -2,15 +2,11 @@ package io.ferventio.app.application
 
 import io.ferventio.app.domain.ChatChannel
 import io.ferventio.app.domain.ConnectionStatus
+import io.ferventio.shared.chat.AuthenticatedChatFastStartAttemptTracker as SharedAuthenticatedChatFastStartAttemptTracker
+import io.ferventio.shared.chat.AuthenticatedChatFastStartPolicy as SharedAuthenticatedChatFastStartPolicy
 
-/**
- * Detects the short bootstrap window where authenticated state and persisted Twitch
- * channel IDs are already available while Helix is still refreshing channel metadata.
- * EventSub can safely start from this snapshot instead of waiting for that refresh.
- */
+/** Compatibility adapter while the legacy Android controller still lives in the app module. */
 object AuthenticatedChatFastStartPolicy {
-    private const val ANONYMOUS_CHANNEL_ID_PREFIX = "irc:"
-
     fun candidateKey(
         isAuthenticated: Boolean,
         isBootstrapping: Boolean,
@@ -18,45 +14,27 @@ object AuthenticatedChatFastStartPolicy {
         connectionStatus: ConnectionStatus,
         userId: String?,
         channels: List<ChatChannel>,
-    ): String? {
-        if (!isAuthenticated || isBootstrapping || !isChannelsLoading) return null
-        if (connectionStatus != ConnectionStatus.DISCONNECTED) return null
-        val normalizedUserId = userId?.trim().orEmpty()
-        if (normalizedUserId.isBlank() || channels.isEmpty()) return null
-        if (channels.any { channel ->
-                channel.id.isBlank() || channel.id.startsWith(ANONYMOUS_CHANNEL_ID_PREFIX)
-            }
-        ) {
-            return null
-        }
-        val channelIds = channels.map(ChatChannel::id).distinct().sorted()
-        return buildString {
-            append(normalizedUserId)
-            append(':')
-            append(channelIds.joinToString(","))
-        }
-    }
+    ): String? = SharedAuthenticatedChatFastStartPolicy.candidateKey(
+        isAuthenticated = isAuthenticated,
+        isBootstrapping = isBootstrapping,
+        isChannelsLoading = isChannelsLoading,
+        connectionStatus = connectionStatus,
+        userId = userId,
+        channels = channels,
+    )
 }
 
-/**
- * Keeps cached-channel fast start one-shot within a single authenticated channel-loading window.
- * Connection-status changes may temporarily make [AuthenticatedChatFastStartPolicy.candidateKey]
- * null; they must not make the same snapshot eligible for another forced reconnect.
- */
+/** Compatibility adapter for the Android controller's existing one-shot state holder. */
 internal class AuthenticatedChatFastStartAttemptTracker {
-    private var attemptedKey: String? = null
+    private val delegate = SharedAuthenticatedChatFastStartAttemptTracker()
 
     fun consumeCandidate(
         isAuthenticated: Boolean,
         isChannelsLoading: Boolean,
         candidateKey: String?,
-    ): String? {
-        if (!isAuthenticated || !isChannelsLoading) {
-            attemptedKey = null
-            return null
-        }
-        if (candidateKey == null || candidateKey == attemptedKey) return null
-        attemptedKey = candidateKey
-        return candidateKey
-    }
+    ): String? = delegate.consumeCandidate(
+        isAuthenticated = isAuthenticated,
+        isChannelsLoading = isChannelsLoading,
+        candidateKey = candidateKey,
+    )
 }
