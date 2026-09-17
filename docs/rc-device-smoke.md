@@ -55,6 +55,11 @@ Record the tested commit SHA, app version/build number, device model, OS version
 
 - Request notification permission and verify APNs registration succeeds on a signed physical-device build.
 - Receive a background notification and open it; navigation is correct and foreground presentation does not create duplicate chat recovery.
+- Open a channel-target notification and verify the shared workspace selects the intended channel, including a payload that resolves the target by channel login when practical.
+- Open a message-target notification for a message that is not currently in the live buffer; verify history context loads, the correct channel opens and message navigation targets the requested message.
+- Open Settings and Mentions/attention notification targets and verify the corresponding shared surfaces open instead of only switching channels.
+- If the backend fixture supports a moderation target, open it and verify the intended channel is selected for contextual moderation.
+- While a message-target context load is still in flight, open a newer notification when practical; the newer target must win and the older suspended navigation must not overwrite it afterward.
 - Deny notification permission, relaunch, and verify the app remains usable and Settings can open system notification settings.
 
 ## Moderation and account-sensitive actions
@@ -74,7 +79,7 @@ Do not promote the commit to RC if any of these occur:
 - duplicate EventSub/chat connections or duplicate message delivery after reconnect/foreground/network recovery;
 - stale channel/workspace state after rapid add/remove, restore or cross-device sync;
 - missing Compose resources/localization on the physical iPhone build;
-- broken notification registration/navigation on the signed device build;
+- broken notification registration/navigation on the signed device build, including stale notification navigation overwriting a newer target;
 - settings/history data loss or a newer synced revision being replaced by an older one.
 
 Attach the completed checklist and tested commit SHA to a pull-request or issue comment and keep that exact comment permalink (`#issuecomment-…`) as the smoke-report evidence. The report comment must explicitly contain the full tested SHA.
