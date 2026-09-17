@@ -16,7 +16,7 @@ concurrency:
 jobs:
   framework:
     runs-on: macos-26
-    timeout-minutes: 50
+    timeout-minutes: 70
     steps:
       - uses: actions/checkout@v7
 
@@ -92,14 +92,26 @@ jobs:
             --no-configuration-cache \
             --stacktrace
 
+      - name: Link shared iOS Release device framework
+        run: |
+          ./gradlew \
+            :shared:linkReleaseFrameworkIosArm64 \
+            --no-configuration-cache \
+            --stacktrace
+
       - name: Verify shared framework outputs
         run: |
           SIMULATOR_FRAMEWORK="shared/build/bin/iosSimulatorArm64/debugFramework/FerventioShared.framework"
           DEVICE_FRAMEWORK="shared/build/bin/iosArm64/debugFramework/FerventioShared.framework"
+          RELEASE_DEVICE_FRAMEWORK="shared/build/bin/iosArm64/releaseFramework/FerventioShared.framework"
           test -d "$SIMULATOR_FRAMEWORK"
           test -d "$DEVICE_FRAMEWORK"
+          test -d "$RELEASE_DEVICE_FRAMEWORK"
           grep -R "MainViewController" "$SIMULATOR_FRAMEWORK/Headers"
           grep -R "MainViewController" "$DEVICE_FRAMEWORK/Headers"
+          grep -R "MainViewController" "$RELEASE_DEVICE_FRAMEWORK/Headers"
+          xcrun lipo -info "$DEVICE_FRAMEWORK/FerventioShared" | grep -q arm64
+          xcrun lipo -info "$RELEASE_DEVICE_FRAMEWORK/FerventioShared" | grep -q arm64
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -150,3 +162,35 @@ jobs:
           test -d "$APP_BUNDLE/compose-resources"
           test -f "$APP_BUNDLE/compose-resources/composeResources/io.ferventio.shared.generated.resources/values/strings.commonMain.cvr"
           test -f "$APP_BUNDLE/compose-resources/composeResources/io.ferventio.shared.generated.resources/values-ru/strings.commonMain.cvr"
+          xcrun lipo -info "$APP_BUNDLE/Ferventio" | grep -q arm64
+
+      - name: Build iOS Release application for device without signing
+        run: |
+          xcodebuild \
+            -project iosApp/Ferventio.xcodeproj \
+            -scheme Ferventio \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build/ios-release-device-derived \
+            ARCHS=arm64 \
+            ONLY_ACTIVE_ARCH=YES \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            "FERVENTIO_PRIVACY_OPERATOR_NAME=Ferventio CI" \
+            "FERVENTIO_PRIVACY_CONTACT=privacy@example.com" \
+            "FERVENTIO_PRIVACY_POLICY_URL=https://example.com/privacy" \
+            FERVENTIO_SHOW_PRIVACY_POLICY_IN_APP=YES \
+            build
+
+      - name: Verify iOS Release device app bundle
+        run: |
+          APP_BUNDLE="build/ios-release-device-derived/Build/Products/Release-iphoneos/Ferventio.app"
+          INFO_PLIST="$APP_BUNDLE/Info.plist"
+          test -d "$APP_BUNDLE/compose-resources"
+          test -f "$APP_BUNDLE/compose-resources/composeResources/io.ferventio.shared.generated.resources/values/strings.commonMain.cvr"
+          test -f "$APP_BUNDLE/compose-resources/composeResources/io.ferventio.shared.generated.resources/values-ru/strings.commonMain.cvr"
+          xcrun lipo -info "$APP_BUNDLE/Ferventio" | grep -q arm64
+          test "$(/usr/libexec/PlistBuddy -c 'Print :FerventioPrivacyOperatorName' "$INFO_PLIST")" = "Ferventio CI"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :FerventioPrivacyContact' "$INFO_PLIST")" = "privacy@example.com"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :FerventioPrivacyPolicyURL' "$INFO_PLIST")" = "https://example.com/privacy"
