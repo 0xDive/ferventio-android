@@ -16,7 +16,7 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
         with:
@@ -108,3 +108,39 @@ jobs:
             :app:assemblePlayDebug \
             --no-configuration-cache \
             --stacktrace
+
+      - name: Android unsigned Release package guard
+        run: |
+          ./gradlew \
+            :app:lintFossRelease \
+            :app:lintPlayRelease \
+            :app:verifyFossNoGooglePushDependencies \
+            :app:verifyPlayCrashReportingDependency \
+            :app:assembleFossRelease \
+            :app:bundlePlayRelease \
+            -PFERVENTIO_PRIVACY_OPERATOR_NAME="Ferventio CI" \
+            -PFERVENTIO_PRIVACY_CONTACT="privacy@example.com" \
+            -PFERVENTIO_PRIVACY_POLICY_URL="https://example.com/privacy" \
+            -PFERVENTIO_FIREBASE_APPLICATION_ID="1:1234567890:android:0123456789abcdef" \
+            -PFERVENTIO_FIREBASE_PROJECT_ID="ferventio-ci" \
+            -PFERVENTIO_FIREBASE_API_KEY="ci-placeholder" \
+            -PFERVENTIO_FIREBASE_SENDER_ID="1234567890" \
+            -PFERVENTIO_CRASHLYTICS_MAPPING_ID="ci-placeholder" \
+            --no-configuration-cache \
+            --stacktrace
+
+          FOSS_APK="$(find app/build/outputs/apk/foss/release -maxdepth 1 -type f -name '*.apk' -print -quit)"
+          PLAY_AAB="app/build/outputs/bundle/playRelease/app-play-release.aab"
+
+          test -n "$FOSS_APK"
+          test -s "$FOSS_APK"
+          test -s "$PLAY_AAB"
+          unzip -tqq "$FOSS_APK"
+          unzip -tqq "$PLAY_AAB"
+          unzip -l "$PLAY_AAB" | grep -q 'BundleConfig.pb'
+          unzip -l "$PLAY_AAB" | grep -q 'base/manifest/AndroidManifest.xml'
+
+          if "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify "$FOSS_APK" >/dev/null 2>&1; then
+            echo "PR Release APK unexpectedly contains a production-capable signature." >&2
+            exit 1
+          fi
