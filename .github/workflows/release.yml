@@ -10,7 +10,7 @@ on:
         required: true
         type: string
       rc_smoke_report_url:
-        description: Same-repository GitHub URL to the completed physical-device smoke report
+        description: Same-repository GitHub permalink to the completed physical-device smoke report comment
         required: true
         type: string
       prerelease:
@@ -77,6 +77,7 @@ jobs:
 
       - name: Verify physical-device RC gate
         env:
+          GH_TOKEN: ${{ github.token }}
           RC_SMOKE_COMMIT: ${{ inputs.rc_smoke_commit }}
           RC_SMOKE_REPORT_URL: ${{ inputs.rc_smoke_report_url }}
         run: |
@@ -95,17 +96,35 @@ jobs:
             exit 1
           fi
 
-          REPORT_PREFIX="https://github.com/${GITHUB_REPOSITORY}/"
-          case "$RC_SMOKE_REPORT_URL" in
-            "${REPORT_PREFIX}pull/"*|"${REPORT_PREFIX}issues/"*)
-              ;;
-            *)
-              echo \
-                "rc_smoke_report_url must point to a pull request or issue in ${GITHUB_REPOSITORY}." \
-                >&2
-              exit 1
-              ;;
-          esac
+          REPORT_RE="^https://github.com/${GITHUB_REPOSITORY}/(pull|issues)/([0-9]+)#issuecomment-([0-9]+)$"
+          if [[ ! "$RC_SMOKE_REPORT_URL" =~ $REPORT_RE ]]; then
+            echo \
+              "rc_smoke_report_url must be a permalink to a pull-request or issue comment in ${GITHUB_REPOSITORY}." \
+              >&2
+            exit 1
+          fi
+
+          REPORT_THREAD_NUMBER="${BASH_REMATCH[2]}"
+          REPORT_COMMENT_ID="${BASH_REMATCH[3]}"
+          REPORT_API="/repos/${GITHUB_REPOSITORY}/issues/comments/${REPORT_COMMENT_ID}"
+          REPORT_HTML_URL="$(gh api "$REPORT_API" --jq '.html_url')"
+          REPORT_ISSUE_URL="$(gh api "$REPORT_API" --jq '.issue_url')"
+          REPORT_BODY="$(gh api "$REPORT_API" --jq '.body // ""')"
+
+          if [[ "$REPORT_HTML_URL" != "$RC_SMOKE_REPORT_URL" ]]; then
+            echo "Smoke report permalink does not match GitHub comment ${REPORT_COMMENT_ID}." >&2
+            exit 1
+          fi
+
+          if [[ "$REPORT_ISSUE_URL" != "https://api.github.com/repos/${GITHUB_REPOSITORY}/issues/${REPORT_THREAD_NUMBER}" ]]; then
+            echo "Smoke report comment is not attached to the expected pull request or issue." >&2
+            exit 1
+          fi
+
+          if [[ "$REPORT_BODY" != *"$RC_SMOKE_COMMIT"* ]]; then
+            echo "Smoke report comment must explicitly contain the tested commit SHA." >&2
+            exit 1
+          fi
 
           {
             echo "## Physical-device RC gate"

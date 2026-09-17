@@ -87,12 +87,14 @@ The iOS KMP workflow must pass simulator Debug, `iosArm64` Debug and Release fra
 
 These unsigned builds prove compile/link/package/configuration compatibility only. They are not publication artifacts and do not validate Android production signing, Apple signing, APNs or physical-device lifecycle behavior.
 
-Run the full [`Multiplatform RC device smoke test`](rc-device-smoke.md) on physical Android and iPhone hardware before RC promotion. Attach the completed checklist to a pull-request or issue comment and keep the comment permalink.
+Run the full [`Multiplatform RC device smoke test`](rc-device-smoke.md) on physical Android and iPhone hardware before RC promotion. Attach the completed checklist to a pull-request or issue comment and keep that comment's `#issuecomment-…` permalink.
 
 The manually dispatched Android Release workflow requires two physical-smoke inputs before it will build or publish:
 
 - `rc_smoke_commit` — the full 40-character SHA that passed the Android + iPhone matrix; it must exactly equal the `main` commit being released;
-- `rc_smoke_report_url` — a permalink to the completed checklist in this repository's pull-request or issue discussion.
+- `rc_smoke_report_url` — the exact permalink to the completed checklist comment in this repository's pull-request or issue discussion.
+
+The workflow resolves the supplied comment through the GitHub API, verifies that the permalink and parent pull-request/issue match, and requires the comment body to contain the exact tested SHA. Bare PR/issue URLs, unrelated comments and reports that omit the tested SHA are rejected.
 
 The workflow records both values in the job summary and published release notes. If merging the validated PR or making any follow-up change produces a different `main` SHA, rerun the physical-device matrix on that exact release commit and provide the new evidence; a report for an earlier PR head is intentionally rejected.
 

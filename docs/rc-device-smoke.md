@@ -77,6 +77,8 @@ Do not promote the commit to RC if any of these occur:
 - broken notification registration/navigation on the signed device build;
 - settings/history data loss or a newer synced revision being replaced by an older one.
 
-Attach the completed checklist and tested commit SHA to a pull-request or issue comment and keep its permalink as the smoke-report evidence. The Android Release workflow requires that permalink plus the full tested SHA before it will publish.
+Attach the completed checklist and tested commit SHA to a pull-request or issue comment and keep that exact comment permalink (`#issuecomment-…`) as the smoke-report evidence. The report comment must explicitly contain the full tested SHA.
+
+The Android Release workflow resolves the permalink through the GitHub API, verifies that the comment exists in this repository, verifies that its permalink/thread match the supplied URL, and verifies that the comment body contains the same tested SHA. A bare PR/issue URL is not accepted.
 
 The release workflow only accepts smoke evidence for the exact `main` commit being released. If merging or any follow-up change produces a different SHA, run the Android + iPhone matrix again on that exact commit; do not reuse evidence from an earlier PR head.
