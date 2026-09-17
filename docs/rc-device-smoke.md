@@ -77,4 +77,6 @@ Do not promote the commit to RC if any of these occur:
 - broken notification registration/navigation on the signed device build;
 - settings/history data loss or a newer synced revision being replaced by an older one.
 
-Attach the completed checklist and tested commit SHA to the RC/release notes or PR before removing draft status.
+Attach the completed checklist and tested commit SHA to a pull-request or issue comment and keep its permalink as the smoke-report evidence. The Android Release workflow requires that permalink plus the full tested SHA before it will publish.
+
+The release workflow only accepts smoke evidence for the exact `main` commit being released. If merging or any follow-up change produces a different SHA, run the Android + iPhone matrix again on that exact commit; do not reuse evidence from an earlier PR head.

@@ -5,6 +5,14 @@ run-name: Android release from ${{ github.ref_name }} by @${{ github.actor }}
 on:
   workflow_dispatch:
     inputs:
+      rc_smoke_commit:
+        description: Full commit SHA that passed the Android + iPhone physical smoke matrix
+        required: true
+        type: string
+      rc_smoke_report_url:
+        description: Same-repository GitHub URL to the completed physical-device smoke report
+        required: true
+        type: string
       prerelease:
         description: Mark the GitHub Release as a prerelease
         required: true
@@ -66,6 +74,45 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+
+      - name: Verify physical-device RC gate
+        env:
+          RC_SMOKE_COMMIT: ${{ inputs.rc_smoke_commit }}
+          RC_SMOKE_REPORT_URL: ${{ inputs.rc_smoke_report_url }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$RC_SMOKE_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "rc_smoke_commit must be a full lowercase 40-character Git commit SHA." >&2
+            exit 1
+          fi
+
+          if [[ "$RC_SMOKE_COMMIT" != "$GITHUB_SHA" ]]; then
+            echo \
+              "Physical-device smoke was recorded for ${RC_SMOKE_COMMIT}, but this release is building ${GITHUB_SHA}." \
+              >&2
+            echo "Re-run the Android + iPhone smoke matrix on the exact release commit." >&2
+            exit 1
+          fi
+
+          REPORT_PREFIX="https://github.com/${GITHUB_REPOSITORY}/"
+          case "$RC_SMOKE_REPORT_URL" in
+            "${REPORT_PREFIX}pull/"*|"${REPORT_PREFIX}issues/"*)
+              ;;
+            *)
+              echo \
+                "rc_smoke_report_url must point to a pull request or issue in ${GITHUB_REPOSITORY}." \
+                >&2
+              exit 1
+              ;;
+          esac
+
+          {
+            echo "## Physical-device RC gate"
+            echo
+            echo "- Tested commit: \`${RC_SMOKE_COMMIT}\`"
+            echo "- Smoke report: ${RC_SMOKE_REPORT_URL}"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Set up Java
         uses: actions/setup-java@v5
@@ -379,6 +426,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.metadata.outputs.version }}
           TAG: ${{ steps.metadata.outputs.tag }}
+          RC_SMOKE_COMMIT: ${{ inputs.rc_smoke_commit }}
+          RC_SMOKE_REPORT_URL: ${{ inputs.rc_smoke_report_url }}
         run: |
           set -euo pipefail
 
@@ -420,6 +469,11 @@ jobs:
           - \`SHA256SUMS\` — SHA-256 checksums
 
           Both APKs use the same application ID and signing certificate.
+
+          ## Physical-device validation
+
+          - Tested commit: \`${RC_SMOKE_COMMIT}\`
+          - Smoke report: ${RC_SMOKE_REPORT_URL}
 
           ## Changes
 
