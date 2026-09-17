@@ -159,7 +159,7 @@ jobs:
           ./gradlew --version
 
           echo \
-            "497c8c2a7e5031f6aa847f88104aa80a93532ec32ee17bdb8d1d2f67a194a9c7  gradle/wrapper/gradle-wrapper.jar" \
+            "7a9ce74cff467ca1bf60a4fcd9f05185acceda4d0f382434d393e17864262c5d  gradle/wrapper/gradle-wrapper.jar" \
             | sha256sum --check --strict
 
       - name: Determine release metadata
@@ -310,6 +310,13 @@ jobs:
             scripts/architecture/check-module-boundaries.py \
             --root .
 
+          python3 \
+            scripts/architecture/check-kmp-boundaries.py \
+            --root .
+
+          python3 \
+            scripts/localization/check_ui_localization.py
+
           ./gradlew \
             -p build-logic \
             clean \
@@ -322,7 +329,10 @@ jobs:
           set -euo pipefail
 
           ./gradlew \
-            :core:domain:testDebugUnitTest \
+            :core:domain:compileCommonMainKotlinMetadata \
+            :shared:compileCommonMainKotlinMetadata \
+            :core:domain:testAndroidHostTest \
+            :shared:testAndroidHostTest \
             :core:database:testDebugUnitTest \
             :app:testFossDebugUnitTest \
             :app:testPlayDebugUnitTest \
