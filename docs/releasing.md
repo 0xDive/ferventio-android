@@ -81,9 +81,11 @@ python3 scripts/architecture/check-module-boundaries.py --root .
 ./scripts/security/run-security-checks.sh
 ```
 
-The iOS KMP workflow must pass simulator Debug, `iosArm64` Debug and Release framework linking, unsigned Debug and Release `generic/platform=iOS` application builds, arm64 binary checks, Compose-resource checks and Release privacy metadata assertions. See [`iOS Release Device CI Guard`](rc-release-build.md) for the exact contract.
+The Android workflow must additionally assemble the minified/resource-shrunk FOSS Release APK and Play Release AAB with synthetic CI-only privacy/Firebase values, verify both packages are valid archives, and verify the PR FOSS APK remains unsigned when no production keystore is configured.
 
-These unsigned device builds prove architecture/link/configuration compatibility only; they do not validate signing, APNs or physical-device lifecycle behavior.
+The iOS KMP workflow must pass simulator Debug, `iosArm64` Debug and Release framework linking, unsigned Debug and Release `generic/platform=iOS` application builds, arm64 binary checks, Compose-resource checks and Release privacy metadata assertions. See [`Multiplatform Release CI Guard`](rc-release-build.md) for the exact Android and iOS contracts.
+
+These unsigned builds prove compile/link/package/configuration compatibility only. They are not publication artifacts and do not validate Android production signing, Apple signing, APNs or physical-device lifecycle behavior.
 
 Run the full [`Multiplatform RC device smoke test`](rc-device-smoke.md) on physical Android and iPhone hardware before RC promotion.
 
