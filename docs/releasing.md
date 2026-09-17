@@ -81,7 +81,9 @@ python3 scripts/architecture/check-module-boundaries.py --root .
 ./scripts/security/run-security-checks.sh
 ```
 
-The iOS KMP workflow must pass both simulator and `iosArm64` device framework compilation plus an unsigned `generic/platform=iOS` application build. The unsigned device build proves architecture/link compatibility only; it does not validate signing, APNs or physical-device lifecycle behavior.
+The iOS KMP workflow must pass simulator Debug, `iosArm64` Debug and Release framework linking, unsigned Debug and Release `generic/platform=iOS` application builds, arm64 binary checks, Compose-resource checks and Release privacy metadata assertions. See [`iOS Release Device CI Guard`](rc-release-build.md) for the exact contract.
+
+These unsigned device builds prove architecture/link/configuration compatibility only; they do not validate signing, APNs or physical-device lifecycle behavior.
 
 Run the full [`Multiplatform RC device smoke test`](rc-device-smoke.md) on physical Android and iPhone hardware before RC promotion.
 
@@ -111,7 +113,7 @@ jarsigner -verify -verbose -certs \
 
 ## iOS compile guard
 
-Generate the Xcode project and verify both simulator and device architectures locally when needed:
+Generate the Xcode project and verify simulator plus Debug/Release device architectures locally when needed:
 
 ```bash
 cd iosApp
@@ -136,9 +138,24 @@ xcodebuild \
   -derivedDataPath build/ios-device-derived \
   ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
   CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build
+
+xcodebuild \
+  -project iosApp/Ferventio.xcodeproj \
+  -scheme Ferventio \
+  -configuration Release \
+  -sdk iphoneos \
+  -destination 'generic/platform=iOS' \
+  -derivedDataPath build/ios-release-device-derived \
+  ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
+  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+  "FERVENTIO_PRIVACY_OPERATOR_NAME=Ferventio RC" \
+  "FERVENTIO_PRIVACY_CONTACT=privacy@example.com" \
+  "FERVENTIO_PRIVACY_POLICY_URL=https://example.com/privacy" \
+  FERVENTIO_SHOW_PRIVACY_POLICY_IN_APP=YES \
+  build
 ```
 
-The Xcode pre-build phase selects and links the matching Kotlin framework (`iosSimulatorArm64` or `iosArm64`) from `SDK_NAME`.
+The Xcode pre-build phase selects and links the matching Kotlin framework (`iosSimulatorArm64` or `iosArm64`) and Debug/Release binary from `SDK_NAME` plus `CONFIGURATION`.
 
 Publish checksums with public Android artifacts. Keep mapping files and native symbols private but retained for crash analysis.
 
