@@ -1,8 +1,26 @@
-# iOS Release Device CI Guard
+# Multiplatform Release CI Guard
 
-The iOS KMP workflow validates both Debug and Release device builds before a multiplatform RC can be promoted.
+The Android and iOS workflows validate Release packaging before a multiplatform RC can be promoted.
 
-The Release guard must:
+## Android
+
+The Android Release guard must:
+
+- run release lint for both FOSS and Play variants;
+- keep the FOSS release runtime free of Firebase and Google Play Services dependencies;
+- keep the Play release runtime wired to Firebase Crashlytics;
+- assemble the minified/resource-shrunk FOSS Release APK;
+- build the Play Release AAB;
+- use synthetic CI-only privacy/Firebase values that still pass the production configuration validators;
+- verify the APK and AAB are non-empty valid ZIP archives;
+- verify the AAB contains `BundleConfig.pb` and its base manifest;
+- verify the PR FOSS Release APK is unsigned when no production keystore is configured.
+
+The CI artifacts are compile/package guards only. They must never be published because their privacy/Firebase values are synthetic and they intentionally do not use production signing material.
+
+## iOS
+
+The iOS Release guard must:
 
 - compile and link `FerventioShared` for `iosArm64` with the Release binary;
 - build the Xcode application for `generic/platform=iOS` with code signing disabled;
@@ -11,4 +29,4 @@ The Release guard must:
 - verify Compose resources are present in the Release device app bundle;
 - verify the generated `Info.plist` contains the CI privacy metadata.
 
-This is a compile/link/configuration guard only. It does not replace the signed physical-device smoke test in [`rc-device-smoke.md`](rc-device-smoke.md), because APNs, provisioning, entitlements and real lifecycle/network behavior require an installed signed build.
+These guards do not replace the signed physical-device smoke test in [`rc-device-smoke.md`](rc-device-smoke.md). Android signing/distribution, Apple provisioning/APNs/entitlements and real lifecycle/network behavior still require normally signed builds installed on physical devices.
