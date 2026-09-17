@@ -63,9 +63,31 @@ Use [`gradle.properties.example`](../gradle.properties.example) as the Android p
 
 ## Automated validation
 
+Run the same platform-neutral repository and KMP guards used by CI:
+
+```bash
+python3 scripts/security/check-repository-secrets.py --root .
+python3 scripts/security/test-check-repository-secrets.py
+python3 scripts/architecture/check-module-boundaries.py --root .
+python3 scripts/architecture/check-kmp-boundaries.py --root .
+python3 scripts/localization/check_ui_localization.py
+
+./gradlew \
+  -p build-logic \
+  clean \
+  check \
+  --no-configuration-cache \
+  --stacktrace
+```
+
+Then run the common/shared compilation, KMP host tests and Android release validation used by the publication workflow:
+
 ```bash
 ./gradlew \
-  :core:domain:testDebugUnitTest \
+  :core:domain:compileCommonMainKotlinMetadata \
+  :shared:compileCommonMainKotlinMetadata \
+  :core:domain:testAndroidHostTest \
+  :shared:testAndroidHostTest \
   :core:database:testDebugUnitTest \
   :app:testFossDebugUnitTest \
   :app:testPlayDebugUnitTest \
@@ -73,15 +95,15 @@ Use [`gradle.properties.example`](../gradle.properties.example) as the Android p
   :app:lintPlayRelease \
   :app:verifyFossNoGooglePushDependencies \
   :app:verifyPlayCrashReportingDependency \
+  :app:verifyPlayCrashReportingConfiguration \
   :app:verifyPrivacyPolicyConfiguration \
   --no-configuration-cache \
   --stacktrace
-
-python3 scripts/architecture/check-module-boundaries.py --root .
-./scripts/security/run-security-checks.sh
 ```
 
-The Android workflow must additionally assemble the minified/resource-shrunk FOSS Release APK and Play Release AAB with synthetic CI-only privacy/Firebase values, verify both packages are valid archives, and verify the PR FOSS APK remains unsigned when no production keystore is configured.
+The manually dispatched Android Release workflow runs these checks again before signed package creation and publication. Its Gradle Wrapper checksum is intentionally kept in sync with pull-request CI so the publication path cannot silently use a different wrapper artifact.
+
+The Android PR workflow additionally assembles the minified/resource-shrunk FOSS Release APK and Play Release AAB with synthetic CI-only privacy/Firebase values, verifies both packages are valid archives, and verifies the PR FOSS APK remains unsigned when no production keystore is configured.
 
 The iOS KMP workflow must pass simulator Debug, `iosArm64` Debug and Release framework linking, unsigned Debug and Release `generic/platform=iOS` application builds, arm64 binary checks, Compose-resource checks and Release privacy metadata assertions. See [`Multiplatform Release CI Guard`](rc-release-build.md) for the exact Android and iOS contracts.
 

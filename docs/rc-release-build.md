@@ -6,6 +6,8 @@ The Android and iOS workflows validate Release packaging before a multiplatform 
 
 The Android Release guard must:
 
+- enforce module and KMP source-set boundaries plus the UI localization contract;
+- compile the core-domain and shared common metadata and run their Android-host KMP tests;
 - run release lint for both FOSS and Play variants;
 - keep the FOSS release runtime free of Firebase and Google Play Services dependencies;
 - keep the Play release runtime wired to Firebase Crashlytics;
@@ -15,6 +17,8 @@ The Android Release guard must:
 - verify the APK and AAB are non-empty valid ZIP archives;
 - verify the AAB contains `BundleConfig.pb` and its base manifest;
 - verify the PR FOSS Release APK is unsigned when no production keystore is configured.
+
+The manually dispatched production Android Release workflow repeats the repository/KMP/localization checks, common/shared compilation and Android-host KMP tests before signed package creation and publication. This keeps publication validation from being weaker than pull-request CI.
 
 The CI artifacts are compile/package guards only. They must never be published because their privacy/Firebase values are synthetic and they intentionally do not use production signing material.
 
