@@ -35,6 +35,18 @@ class PushNavigationInbox {
         return target
     }
 
+    /**
+     * Consumes [expectedTarget] only if it is still current.
+     *
+     * Navigation may suspend while loading message context. A newer notification offered during
+     * that work must remain pending instead of being cleared by the older navigation attempt.
+     */
+    fun consume(expectedTarget: PushNavigationTarget): Boolean {
+        if (pendingTarget != expectedTarget) return false
+        pendingTarget = null
+        return true
+    }
+
     fun clear() {
         pendingTarget = null
     }

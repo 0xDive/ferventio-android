@@ -23,6 +23,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -57,6 +58,7 @@ import io.ferventio.shared.generated.resources.workspace_no_channels
 import io.ferventio.shared.generated.resources.workspace_no_channels_summary
 import io.ferventio.shared.generated.resources.workspace_signed_in_as
 import io.ferventio.shared.push.PushAuthorizationStatus
+import io.ferventio.shared.push.PushNavigationTarget
 import io.ferventio.shared.runtime.LocalFerventioRuntimeState
 import io.ferventio.shared.settings.SharedAppPreferences
 import io.ferventio.shared.workspace.WorkspaceLoadStatus
@@ -117,6 +119,72 @@ fun FerventioWorkspaceShell(
     val attentionDescription = stringResource(Res.string.attention_open)
     val historySearchDescription = stringResource(Res.string.history_search_open)
     val notificationAction = notificationPermissionAction(notificationAuthorizationStatus)
+    val pendingPushTarget = runtime.pushNavigation.pendingTarget
+    val pushNavigationChannels = state.channels
+    val canResolveWorkspacePush = state.loadStatus == WorkspaceLoadStatus.READY ||
+        pushNavigationChannels.isNotEmpty()
+
+    LaunchedEffect(pendingPushTarget, canResolveWorkspacePush, pushNavigationChannels) {
+        val target = pendingPushTarget ?: return@LaunchedEffect
+        if (target != PushNavigationTarget.PushSettings && !canResolveWorkspacePush) {
+            return@LaunchedEffect
+        }
+
+        val action = resolveWorkspacePushNavigationAction(target, pushNavigationChannels)
+        if (action == null) {
+            runtime.pushNavigation.consume(target)
+            return@LaunchedEffect
+        }
+
+        when (action) {
+            WorkspacePushNavigationAction.OpenSettings -> {
+                settingsVisible = true
+            }
+
+            is WorkspacePushNavigationAction.OpenMentions -> {
+                attentionVisible = true
+            }
+
+            is WorkspacePushNavigationAction.OpenModeration -> {
+                // Shared moderation controls are channel-contextual, so land on the target channel.
+                state.selectChannel(action.channelId)
+                onSelectChannel(action.channelId)
+            }
+
+            is WorkspacePushNavigationAction.OpenMessage -> {
+                var targetAvailable = runtime.chat.messages(action.channelId)
+                    .any { message -> message.id == action.messageId }
+                if (!targetAvailable) {
+                    val contextMessages = runtime.history?.let { history ->
+                        runCatching { history.loadMessageContext(action.messageId) }
+                            .getOrDefault(emptyList())
+                            .filter { message -> message.channelId == action.channelId }
+                    }.orEmpty()
+
+                    // A newer notification remains authoritative while history I/O is suspended.
+                    if (runtime.pushNavigation.pendingTarget != target) return@LaunchedEffect
+                    if (contextMessages.isNotEmpty()) {
+                        runtime.chat.prependHistory(action.channelId, contextMessages)
+                        targetAvailable = contextMessages.any { message -> message.id == action.messageId }
+                    }
+                }
+
+                if (runtime.pushNavigation.pendingTarget != target) return@LaunchedEffect
+                if (targetAvailable) {
+                    runtime.attention.requestMessageNavigation(action.channelId, action.messageId)
+                }
+                state.selectChannel(action.channelId)
+                onSelectChannel(action.channelId)
+            }
+
+            is WorkspacePushNavigationAction.SelectChannel -> {
+                state.selectChannel(action.channelId)
+                onSelectChannel(action.channelId)
+            }
+        }
+
+        runtime.pushNavigation.consume(target)
+    }
 
     ModalNavigationDrawer(
         modifier = modifier,

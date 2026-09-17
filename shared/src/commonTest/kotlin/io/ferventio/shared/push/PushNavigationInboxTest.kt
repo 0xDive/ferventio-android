@@ -56,6 +56,21 @@ class PushNavigationInboxTest {
     }
 
     @Test
+    fun staleExpectedTargetDoesNotConsumeNewerOffer() {
+        val inbox = PushNavigationInbox()
+        assertTrue(inbox.offer("1", "first", null, null))
+        val staleTarget = inbox.pendingTarget ?: error("expected first target")
+        assertTrue(inbox.offer("2", "second", null, null))
+        val latestTarget = inbox.pendingTarget
+
+        assertFalse(inbox.consume(staleTarget))
+
+        assertEquals(latestTarget, inbox.pendingTarget)
+        assertTrue(inbox.consume(latestTarget ?: error("expected latest target")))
+        assertNull(inbox.pendingTarget)
+    }
+
+    @Test
     fun clearDropsPendingTarget() {
         val inbox = PushNavigationInbox()
         assertTrue(inbox.offer("1", "channel", null, null))
