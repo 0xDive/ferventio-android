@@ -1,12 +1,12 @@
 # Multiplatform RC device smoke test
 
-Run this checklist on at least one physical Android device and one physical iPhone before promoting a Compose Multiplatform migration build to release-candidate status.
+Run this checklist on at least one physical Android device and one physical iPhone before promoting a Compose Multiplatform migration build to release-candidate status. The final release-evidence run is performed after the migration PR is merged, using the exact `main` commit that will be released.
 
 Record the tested commit SHA, app version/build number, device model, OS version, backend environment and whether the Android build is FOSS or Play. Start from a clean install once per platform, then repeat the lifecycle/recovery section with an existing authenticated session.
 
 ## Build prerequisites
 
-- Android CI and iOS KMP CI are green for the exact commit under test.
+- The migration PR has been merged and Android CI plus iOS KMP CI are green for the exact `main` commit under test.
 - iOS CI has passed both the simulator build and the unsigned `generic/platform=iOS` arm64 device build.
 - Physical iPhone testing uses a normally signed development/ad-hoc build so APNs and entitlements are exercised; the unsigned CI device build only proves compile/link compatibility.
 - Production-like backend/privacy configuration is set without committing credentials or signing material.
@@ -86,4 +86,4 @@ Attach the completed checklist and tested commit SHA to a pull-request or issue 
 
 The Android Release workflow resolves the permalink through the GitHub API, verifies that the comment exists in this repository, verifies that its permalink/thread match the supplied URL, and verifies that the comment body contains the same tested SHA. A bare PR/issue URL is not accepted.
 
-The release workflow only accepts smoke evidence for the exact `main` commit being released. If merging or any follow-up change produces a different SHA, run the Android + iPhone matrix again on that exact commit; do not reuse evidence from an earlier PR head.
+The release workflow only accepts smoke evidence for the exact `main` commit being released. Do not use a PR-head smoke report as final release evidence when the merge produces a different SHA. If any follow-up change is committed after the final smoke run, run the Android + iPhone matrix again on that new exact `main` commit; do not reuse earlier evidence.

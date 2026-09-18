@@ -18,7 +18,7 @@ The Android Release guard must:
 - verify the AAB contains `BundleConfig.pb` and its base manifest;
 - verify the PR FOSS Release APK is unsigned when no production keystore is configured.
 
-The manually dispatched production Android Release workflow repeats the repository/KMP/localization checks, common/shared compilation and Android-host KMP tests before signed package creation and publication. This keeps publication validation from being weaker than pull-request CI.
+The manually dispatched production Android Release workflow first requires successful push runs of Android CI and iOS KMP CI for the exact `main` release SHA. It then repeats the repository/KMP/localization checks, common/shared compilation and Android-host KMP tests before signed package creation and publication. This keeps publication validation from being weaker than pull-request CI and prevents a release from using CI evidence from a different commit.
 
 The CI artifacts are compile/package guards only. They must never be published because their privacy/Firebase values are synthetic and they intentionally do not use production signing material.
 
@@ -33,4 +33,4 @@ The iOS Release guard must:
 - verify Compose resources are present in the Release device app bundle;
 - verify the generated `Info.plist` contains the CI privacy metadata.
 
-These guards do not replace the signed physical-device smoke test in [`rc-device-smoke.md`](rc-device-smoke.md). Android signing/distribution, Apple provisioning/APNs/entitlements and real lifecycle/network behavior still require normally signed builds installed on physical devices.
+These guards do not replace the signed physical-device smoke test in [`rc-device-smoke.md`](rc-device-smoke.md). The final smoke run happens after merge, on the exact green `main` SHA that will be released. Android signing/distribution, Apple provisioning/APNs/entitlements and real lifecycle/network behavior still require normally signed builds installed on physical devices.

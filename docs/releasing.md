@@ -13,6 +13,8 @@ android-v0.0.2
 
 For a multiplatform RC, record the exact commit SHA tested on Android and iPhone. Do not treat a green simulator build as physical-device validation.
 
+RC promotion is intentionally two-stage. Keep the migration pull request in draft while code is still changing. Once the final PR head has green Android CI and iOS KMP CI and no further code changes are planned, mark it ready and merge it. The resulting `main` commit is the candidate release SHA. Wait for both push-triggered CI workflows to pass on that exact `main` SHA, then build normally signed Android and iPhone builds from the same SHA and run the physical-device matrix. A PR-head smoke run may be useful during development, but it is not release evidence when the merge produces a different commit SHA.
+
 ## Release signing
 
 Keep signing material outside the repository.
@@ -103,13 +105,15 @@ Then run the common/shared compilation, KMP host tests and Android release valid
 
 The manually dispatched Android Release workflow runs these checks again before signed package creation and publication. Its Gradle Wrapper checksum is intentionally kept in sync with pull-request CI so the publication path cannot silently use a different wrapper artifact.
 
+Before it accepts physical-smoke evidence, the workflow also queries GitHub Actions and requires successful push runs of both `ci.yml` (Android CI) and `ios-kmp.yml` (iOS KMP CI) for the exact release `GITHUB_SHA` on `main`. A queued, failed, cancelled, stale or different-SHA run is not sufficient; dispatch the release again only after both exact-SHA workflows are green.
+
 The Android PR workflow additionally assembles the minified/resource-shrunk FOSS Release APK and Play Release AAB with synthetic CI-only privacy/Firebase values, verifies both packages are valid archives, and verifies the PR FOSS APK remains unsigned when no production keystore is configured.
 
 The iOS KMP workflow must pass simulator Debug, `iosArm64` Debug and Release framework linking, unsigned Debug and Release `generic/platform=iOS` application builds, arm64 binary checks, Compose-resource checks and Release privacy metadata assertions. See [`Multiplatform Release CI Guard`](rc-release-build.md) for the exact Android and iOS contracts.
 
 These unsigned builds prove compile/link/package/configuration compatibility only. They are not publication artifacts and do not validate Android production signing, Apple signing, APNs or physical-device lifecycle behavior.
 
-Run the full [`Multiplatform RC device smoke test`](rc-device-smoke.md) on physical Android and iPhone hardware before RC promotion. Attach the completed checklist to a pull-request or issue comment and keep that comment's `#issuecomment-…` permalink.
+After merge and after both exact-`main`-SHA CI workflows are green, run the full [`Multiplatform RC device smoke test`](rc-device-smoke.md) on physical Android and iPhone hardware before RC promotion. Attach the completed checklist to a pull-request or issue comment and keep that comment's `#issuecomment-…` permalink.
 
 The manually dispatched Android Release workflow requires two physical-smoke inputs before it will build or publish:
 
@@ -118,7 +122,7 @@ The manually dispatched Android Release workflow requires two physical-smoke inp
 
 The workflow resolves the supplied comment through the GitHub API, verifies that the permalink and parent pull-request/issue match, and requires the comment body to contain the exact tested SHA. Bare PR/issue URLs, unrelated comments and reports that omit the tested SHA are rejected.
 
-The workflow records both values in the job summary and published release notes. If merging the validated PR or making any follow-up change produces a different `main` SHA, rerun the physical-device matrix on that exact release commit and provide the new evidence; a report for an earlier PR head is intentionally rejected.
+The workflow records both values in the job summary and published release notes. The final release-evidence smoke run is performed after merge, on the exact `main` SHA being released. Any follow-up commit after that smoke run changes the release SHA and therefore requires the Android + iPhone matrix to be rerun with new evidence; a report for an earlier SHA is intentionally rejected.
 
 ## Android build and verification
 
