@@ -1,14 +1,11 @@
 package io.ferventio.app.push
 
-import kotlin.math.min
+import io.ferventio.shared.push.EmbeddedPushReconnectPolicy as SharedEmbeddedPushReconnectPolicy
 
+/** Compatibility adapter while the Android embedded push service remains app-specific. */
 object EmbeddedPushReconnectPolicy {
-    const val MAX_BACKOFF_MILLIS = 60_000L
+    const val MAX_BACKOFF_MILLIS = SharedEmbeddedPushReconnectPolicy.MAX_BACKOFF_MILLIS
 
-    fun delayMillis(attempt: Int, jitterFraction: Double): Long {
-        val normalizedAttempt = attempt.coerceAtLeast(1)
-        val base = min(MAX_BACKOFF_MILLIS, 1_000L shl min(normalizedAttempt - 1, 6))
-        val clampedJitter = jitterFraction.coerceIn(-0.2, 0.2)
-        return (base + (base * clampedJitter).toLong()).coerceAtLeast(500L)
-    }
+    fun delayMillis(attempt: Int, jitterFraction: Double): Long =
+        SharedEmbeddedPushReconnectPolicy.delayMillis(attempt, jitterFraction)
 }

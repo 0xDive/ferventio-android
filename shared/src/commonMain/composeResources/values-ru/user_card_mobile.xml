@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="user_card_done">Готово</string>
+    <string name="user_card_more_actions">Другие действия</string>
+    <string name="user_card_copy_username">Копировать имя пользователя</string>
+</resources>

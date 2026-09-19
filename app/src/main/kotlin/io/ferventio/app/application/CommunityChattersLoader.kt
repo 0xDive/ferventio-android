@@ -6,6 +6,7 @@ import io.ferventio.app.domain.ModerationUser
 import io.ferventio.app.domain.ModerationUserGroup
 import io.ferventio.app.twitch.TwitchUnofficialChatterGroup
 import io.ferventio.app.twitch.TwitchUnofficialChattersClient
+import io.ferventio.shared.moderation.mergeCategorizedChatters as mergeSharedCategorizedChatters
 import kotlinx.coroutines.CancellationException
 
 /**
@@ -61,25 +62,7 @@ suspend fun FerventioController.loadCategorizedCommunityChatters(
 internal fun mergeCategorizedChatters(
     canonical: List<ModerationUser>,
     categorized: List<ModerationUser>,
-): List<ModerationUser> {
-    val canonicalByLogin = canonical.associateBy { it.login.lowercase() }
-    val categorizedLogins = categorized.mapTo(hashSetOf()) { it.login.lowercase() }
-    val merged = categorized.map { categorizedUser ->
-        val canonicalUser = canonicalByLogin[categorizedUser.login.lowercase()]
-        if (canonicalUser == null) {
-            categorizedUser.withViewerFallback()
-        } else {
-            canonicalUser.copy(
-                group = categorizedUser.group.takeUnless { it == ModerationUserGroup.UNKNOWN }
-                    ?: canonicalUser.group.takeUnless { it == ModerationUserGroup.UNKNOWN }
-                    ?: ModerationUserGroup.VIEWER,
-            )
-        }
-    }
-    return merged + canonical
-        .filterNot { it.login.lowercase() in categorizedLogins }
-        .map(ModerationUser::withViewerFallback)
-}
+): List<ModerationUser> = mergeSharedCategorizedChatters(canonical, categorized)
 
 internal fun inferCategorizedChatters(
     state: FerventioUiState,

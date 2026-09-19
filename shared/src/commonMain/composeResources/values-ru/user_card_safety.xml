@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="user_card_safety">Безопасность</string>
+    <string name="user_card_block">Заблокировать %1$s</string>
+    <string name="user_card_block_confirm_title">Заблокировать %1$s?</string>
+    <string name="user_card_block_confirm_body">Пользователь не сможет взаимодействовать с вашим Twitch-аккаунтом. Это действие на уровне аккаунта.</string>
+    <string name="user_card_block_done">%1$s заблокирован</string>
+    <string name="user_card_block_failed">Не удалось заблокировать: %1$s</string>
+</resources>

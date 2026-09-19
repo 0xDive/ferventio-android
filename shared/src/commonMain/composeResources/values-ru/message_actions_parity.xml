@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_action_parent">Перейти к исходному сообщению</string>
+    <string name="chat_delete_confirm_title">Удалить сообщение?</string>
+    <string name="chat_delete_confirm_body">Удалить сообщение от %1$s из Twitch-чата?</string>
+    <string name="chat_delete_confirm_yes">Удалить</string>
+</resources>

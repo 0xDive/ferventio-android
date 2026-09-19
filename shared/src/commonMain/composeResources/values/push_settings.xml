@@ -1,0 +1,13 @@
+<resources>
+    <string name="notifications_delivery_section">Push delivery</string>
+    <string name="notifications_status_waiting">Waiting for notification registration.</string>
+    <string name="notifications_status_registering">Registering with the notification provider…</string>
+    <string name="notifications_status_syncing">Syncing push registration with Ferventio…</string>
+    <string name="notifications_status_active">Push registration is active.</string>
+    <string name="notifications_status_failed">Push registration needs attention.</string>
+    <string name="notifications_reconnect">Reconnect</string>
+    <string name="notifications_send_test">Send test notification</string>
+    <string name="notifications_self_test_sending">Sending test notification…</string>
+    <string name="notifications_self_test_sent">Test notification queued.</string>
+    <string name="notifications_self_test_failed">Test notification failed: %1$s</string>
+</resources>

@@ -5,6 +5,14 @@ run-name: Android release from ${{ github.ref_name }} by @${{ github.actor }}
 on:
   workflow_dispatch:
     inputs:
+      rc_smoke_commit:
+        description: Full commit SHA that passed the Android + iPhone physical smoke matrix
+        required: true
+        type: string
+      rc_smoke_report_url:
+        description: Same-repository GitHub permalink to the completed physical-device smoke report comment
+        required: true
+        type: string
       prerelease:
         description: Mark the GitHub Release as a prerelease
         required: true
@@ -17,6 +25,7 @@ on:
         default: false
 
 permissions:
+  actions: read
   contents: write
   id-token: write
   attestations: write
@@ -67,6 +76,99 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Verify exact-SHA CI gates
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          verify_workflow_success() {
+            local workflow_file="$1"
+            local workflow_name="$2"
+            local runs_api
+            local run_url
+
+            runs_api="/repos/${GITHUB_REPOSITORY}/actions/workflows/${workflow_file}/runs?branch=main&event=push&status=success&head_sha=${GITHUB_SHA}&per_page=100"
+            run_url="$(gh api "$runs_api" --jq '.workflow_runs[0].html_url // empty')"
+
+            if [[ -z "$run_url" ]]; then
+              echo \
+                "${workflow_name} has no successful push run for release commit ${GITHUB_SHA} on main." \
+                >&2
+              echo "Wait for the exact-SHA CI run to pass, then dispatch the release again." >&2
+              exit 1
+            fi
+
+            echo "- ${workflow_name}: ${run_url}" >> "$GITHUB_STEP_SUMMARY"
+          }
+
+          {
+            echo "## Exact-SHA CI gates"
+            echo
+            echo "Release commit: \`${GITHUB_SHA}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          verify_workflow_success "ci.yml" "Android CI"
+          verify_workflow_success "ios-kmp.yml" "iOS KMP CI"
+
+      - name: Verify physical-device RC gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RC_SMOKE_COMMIT: ${{ inputs.rc_smoke_commit }}
+          RC_SMOKE_REPORT_URL: ${{ inputs.rc_smoke_report_url }}
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$RC_SMOKE_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "rc_smoke_commit must be a full lowercase 40-character Git commit SHA." >&2
+            exit 1
+          fi
+
+          if [[ "$RC_SMOKE_COMMIT" != "$GITHUB_SHA" ]]; then
+            echo \
+              "Physical-device smoke was recorded for ${RC_SMOKE_COMMIT}, but this release is building ${GITHUB_SHA}." \
+              >&2
+            echo "Re-run the Android + iPhone smoke matrix on the exact release commit." >&2
+            exit 1
+          fi
+
+          REPORT_RE="^https://github.com/${GITHUB_REPOSITORY}/(pull|issues)/([0-9]+)#issuecomment-([0-9]+)$"
+          if [[ ! "$RC_SMOKE_REPORT_URL" =~ $REPORT_RE ]]; then
+            echo \
+              "rc_smoke_report_url must be a permalink to a pull-request or issue comment in ${GITHUB_REPOSITORY}." \
+              >&2
+            exit 1
+          fi
+
+          REPORT_THREAD_NUMBER="${BASH_REMATCH[2]}"
+          REPORT_COMMENT_ID="${BASH_REMATCH[3]}"
+          REPORT_API="/repos/${GITHUB_REPOSITORY}/issues/comments/${REPORT_COMMENT_ID}"
+          REPORT_HTML_URL="$(gh api "$REPORT_API" --jq '.html_url')"
+          REPORT_ISSUE_URL="$(gh api "$REPORT_API" --jq '.issue_url')"
+          REPORT_BODY="$(gh api "$REPORT_API" --jq '.body // ""')"
+
+          if [[ "$REPORT_HTML_URL" != "$RC_SMOKE_REPORT_URL" ]]; then
+            echo "Smoke report permalink does not match GitHub comment ${REPORT_COMMENT_ID}." >&2
+            exit 1
+          fi
+
+          if [[ "$REPORT_ISSUE_URL" != "https://api.github.com/repos/${GITHUB_REPOSITORY}/issues/${REPORT_THREAD_NUMBER}" ]]; then
+            echo "Smoke report comment is not attached to the expected pull request or issue." >&2
+            exit 1
+          fi
+
+          if [[ "$REPORT_BODY" != *"$RC_SMOKE_COMMIT"* ]]; then
+            echo "Smoke report comment must explicitly contain the tested commit SHA." >&2
+            exit 1
+          fi
+
+          {
+            echo "## Physical-device RC gate"
+            echo
+            echo "- Tested commit: \`${RC_SMOKE_COMMIT}\`"
+            echo "- Smoke report: ${RC_SMOKE_REPORT_URL}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Set up Java
         uses: actions/setup-java@v5
         with:
@@ -93,7 +195,7 @@ jobs:
           ./gradlew --version
 
           echo \
-            "497c8c2a7e5031f6aa847f88104aa80a93532ec32ee17bdb8d1d2f67a194a9c7  gradle/wrapper/gradle-wrapper.jar" \
+            "7a9ce74cff467ca1bf60a4fcd9f05185acceda4d0f382434d393e17864262c5d  gradle/wrapper/gradle-wrapper.jar" \
             | sha256sum --check --strict
 
       - name: Determine release metadata
@@ -244,6 +346,13 @@ jobs:
             scripts/architecture/check-module-boundaries.py \
             --root .
 
+          python3 \
+            scripts/architecture/check-kmp-boundaries.py \
+            --root .
+
+          python3 \
+            scripts/localization/check_ui_localization.py
+
           ./gradlew \
             -p build-logic \
             clean \
@@ -256,7 +365,10 @@ jobs:
           set -euo pipefail
 
           ./gradlew \
-            :core:domain:testDebugUnitTest \
+            :core:domain:compileCommonMainKotlinMetadata \
+            :shared:compileCommonMainKotlinMetadata \
+            :core:domain:testAndroidHostTest \
+            :shared:testAndroidHostTest \
             :core:database:testDebugUnitTest \
             :app:testFossDebugUnitTest \
             :app:testPlayDebugUnitTest \
@@ -379,6 +491,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.metadata.outputs.version }}
           TAG: ${{ steps.metadata.outputs.tag }}
+          RC_SMOKE_COMMIT: ${{ inputs.rc_smoke_commit }}
+          RC_SMOKE_REPORT_URL: ${{ inputs.rc_smoke_report_url }}
         run: |
           set -euo pipefail
 
@@ -420,6 +534,11 @@ jobs:
           - \`SHA256SUMS\` — SHA-256 checksums
 
           Both APKs use the same application ID and signing certificate.
+
+          ## Physical-device validation
+
+          - Tested commit: \`${RC_SMOKE_COMMIT}\`
+          - Smoke report: ${RC_SMOKE_REPORT_URL}
 
           ## Changes
 

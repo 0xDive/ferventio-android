@@ -2,7 +2,7 @@
 """Enforce the resource-first localization contract.
 
 LegacyUiStringCatalog is frozen compatibility glue for pre-resource UI literals.
-New UI copy must use descriptive Android string resources instead of extending
+New UI copy must use descriptive platform/shared string resources instead of extending
 that catalog or reintroducing generated localization artifacts.
 """
 from __future__ import annotations
@@ -29,6 +29,10 @@ SOURCE_ROOTS = (
     ROOT / "core/domain/src/main/kotlin",
     ROOT / "core/database/src/main/kotlin",
 )
+ANDROID_DEFAULT_STRINGS = ROOT / "app/src/main/res/values/strings.xml"
+ANDROID_RUSSIAN_STRINGS = ROOT / "app/src/main/res/values-ru/strings.xml"
+SHARED_DEFAULT_STRINGS = ROOT / "shared/src/commonMain/composeResources/values/strings.xml"
+SHARED_RUSSIAN_STRINGS = ROOT / "shared/src/commonMain/composeResources/values-ru/strings.xml"
 
 
 def resource_names(path: Path) -> set[str]:
@@ -38,6 +42,43 @@ def resource_names(path: Path) -> set[str]:
         for node in root
         if node.tag in {"string", "plurals", "string-array"} and "name" in node.attrib
     }
+
+
+def check_locale_pair(
+    errors: list[str],
+    label: str,
+    default_path: Path,
+    russian_path: Path,
+    *,
+    required: bool,
+) -> None:
+    if not default_path.exists() or not russian_path.exists():
+        if required or default_path.exists() or russian_path.exists():
+            missing = [
+                path.relative_to(ROOT)
+                for path in (default_path, russian_path)
+                if not path.exists()
+            ]
+            errors.append(
+                f"{label} localization is missing resource files:\n  "
+                + "\n  ".join(map(str, missing))
+            )
+        return
+
+    default = resource_names(default_path)
+    russian = resource_names(russian_path)
+    missing_ru = sorted(default - russian)
+    missing_default = sorted(russian - default)
+    if missing_ru:
+        errors.append(
+            f"{label} Russian strings are missing resource keys:\n  "
+            + "\n  ".join(missing_ru)
+        )
+    if missing_default:
+        errors.append(
+            f"{label} default strings are missing resource keys:\n  "
+            + "\n  ".join(missing_default)
+        )
 
 
 def main() -> int:
@@ -60,14 +101,20 @@ def main() -> int:
                 "migrate copy to descriptive R.string resources instead of extending it"
             )
 
-    en = resource_names(ROOT / "app/src/main/res/values/strings.xml")
-    ru = resource_names(ROOT / "app/src/main/res/values-ru/strings.xml")
-    missing_ru = sorted(en - ru)
-    missing_en = sorted(ru - en)
-    if missing_ru:
-        errors.append("Russian strings.xml is missing resource keys:\n  " + "\n  ".join(missing_ru))
-    if missing_en:
-        errors.append("Default strings.xml is missing resource keys:\n  " + "\n  ".join(missing_en))
+    check_locale_pair(
+        errors,
+        "Android",
+        ANDROID_DEFAULT_STRINGS,
+        ANDROID_RUSSIAN_STRINGS,
+        required=True,
+    )
+    check_locale_pair(
+        errors,
+        "Shared Compose",
+        SHARED_DEFAULT_STRINGS,
+        SHARED_RUSSIAN_STRINGS,
+        required=False,
+    )
 
     direct_legacy_refs: list[str] = []
     for source_root in SOURCE_ROOTS:

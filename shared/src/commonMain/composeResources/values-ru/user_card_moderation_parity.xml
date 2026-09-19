@@ -1,0 +1,8 @@
+<resources>
+    <string name="user_card_warn_title">Предупредить %1$s?</string>
+    <string name="user_card_warn_reason">Причина</string>
+    <string name="user_card_warn_reason_hint">Укажите причину предупреждения, которую увидит пользователь.</string>
+    <string name="user_card_confirm_unban">Снять бан или таймаут с %1$s?</string>
+    <string name="user_card_warn_done">%1$s предупреждён</string>
+    <string name="user_card_unban_done">Бан/таймаут снят с %1$s</string>
+</resources>

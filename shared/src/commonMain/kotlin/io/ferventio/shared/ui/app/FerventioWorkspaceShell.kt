@@ -1,0 +1,482 @@
+package io.ferventio.shared.ui.app
+
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import io.ferventio.app.domain.ChatChannel
+import io.ferventio.app.domain.HighlightRule
+import io.ferventio.app.domain.IgnoreRule
+import io.ferventio.app.domain.MAX_SPLITS_PER_TAB
+import io.ferventio.app.domain.SavedMessageFilter
+import io.ferventio.shared.generated.resources.Res
+import io.ferventio.shared.generated.resources.app_name
+import io.ferventio.shared.generated.resources.attention_open
+import io.ferventio.shared.generated.resources.auth_sign_out
+import io.ferventio.shared.generated.resources.history_search_open
+import io.ferventio.shared.generated.resources.notifications_enable
+import io.ferventio.shared.generated.resources.notifications_enabled
+import io.ferventio.shared.generated.resources.notifications_open_settings
+import io.ferventio.shared.generated.resources.notifications_title
+import io.ferventio.shared.generated.resources.settings_open
+import io.ferventio.shared.generated.resources.workspace_chats
+import io.ferventio.shared.generated.resources.workspace_load_failed
+import io.ferventio.shared.generated.resources.workspace_loading
+import io.ferventio.shared.generated.resources.workspace_menu
+import io.ferventio.shared.generated.resources.workspace_no_channels
+import io.ferventio.shared.generated.resources.workspace_no_channels_summary
+import io.ferventio.shared.generated.resources.workspace_signed_in_as
+import io.ferventio.shared.push.PushAuthorizationStatus
+import io.ferventio.shared.push.PushNavigationTarget
+import io.ferventio.shared.runtime.LocalFerventioRuntimeState
+import io.ferventio.shared.settings.SharedAppPreferences
+import io.ferventio.shared.ui.chat.SharedChatModesSheet
+import io.ferventio.shared.ui.chat.SharedChatUsersSheet
+import io.ferventio.shared.workspace.WorkspaceLoadStatus
+import io.ferventio.shared.workspace.WorkspaceRuntimeStateHolder
+import io.ferventio.shared.workspace.activeWorkspaceSplitIdForChannelSelection
+import io.ferventio.shared.workspace.resolveWorkspaceActiveChannelId
+import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.stringResource
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FerventioWorkspaceShell(
+    state: WorkspaceRuntimeStateHolder,
+    login: String?,
+    onSignOut: () -> Unit = {},
+    notificationAuthorizationStatus: PushAuthorizationStatus = PushAuthorizationStatus.UNKNOWN,
+    onRequestNotificationPermission: () -> Unit = {},
+    onOpenNotificationSettings: () -> Unit = {},
+    onSaveSettings: (SharedAppPreferences) -> Unit = {},
+    onUpsertHighlightRule: (HighlightRule) -> Unit = {},
+    onDeleteHighlightRule: (String) -> Unit = {},
+    onUpsertIgnoreRule: (IgnoreRule) -> Unit = {},
+    onDeleteIgnoreRule: (String) -> Unit = {},
+    onUpsertSavedFilter: (SavedMessageFilter) -> Unit = {},
+    onDeleteSavedFilter: (String) -> Unit = {},
+    onImportSavedFilters: (String) -> Unit = {},
+    onAddSavedFilterSplit: (String) -> Unit = {},
+    onSelectChannel: (String) -> Unit = {},
+    onAddChannel: (String) -> Unit = {},
+    onSetChannelPinned: (String, Boolean) -> Unit = { _, _ -> },
+    onRenameChannel: (String, String?) -> Unit = { _, _ -> },
+    onRemoveChannel: (String) -> Unit = {},
+    onMoveChannel: (String, Int) -> Unit = { _, _ -> },
+    onSetSplitFilterQuery: (String, String) -> Unit = { _, _ -> },
+    onSetSplitChannel: (String, String) -> Unit = { _, _ -> },
+    onFocusSplit: (String) -> Unit = {},
+    onAddSplit: () -> Unit = {},
+    onRemoveSplit: (String) -> Unit = {},
+    onSetPrimaryFraction: (Float) -> Unit = {},
+    modifier: Modifier = Modifier,
+    content: @Composable (ChatChannel, String, Modifier) -> Unit,
+) {
+    val runtime = LocalFerventioRuntimeState.current
+    val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+    var settingsVisible by remember { mutableStateOf(false) }
+    var attentionVisible by remember { mutableStateOf(false) }
+    var historySearchVisible by remember { mutableStateOf(false) }
+    var chatUsersVisible by remember { mutableStateOf(false) }
+    var chatModesVisible by remember { mutableStateOf(false) }
+    var actionSearchVisible by remember { mutableStateOf(false) }
+    var addChannelVisible by remember { mutableStateOf(false) }
+    val selectedChannelId = resolveWorkspaceActiveChannelId(
+        layout = state.workspaceLayout,
+        selectedChannelId = state.selectedChannelId,
+        channelIds = state.channelIds,
+    )
+    val selectedChannel = state.channels.firstOrNull { it.id == selectedChannelId }
+    val diagnosticsActions = currentFerventioDiagnosticsActions()
+    val menuDescription = stringResource(Res.string.workspace_menu)
+    val attentionDescription = stringResource(Res.string.attention_open)
+    val historySearchDescription = stringResource(Res.string.history_search_open)
+    val pendingPushTarget = runtime.pushNavigation.pendingTarget
+    val pushNavigationChannels = state.channels
+    val canResolveWorkspacePush = state.loadStatus == WorkspaceLoadStatus.READY ||
+        pushNavigationChannels.isNotEmpty()
+
+    fun selectWorkspaceChannel(channelId: String) {
+        if (channelId !in state.channelIds) return
+        state.selectChannel(channelId)
+        val splitId = activeWorkspaceSplitIdForChannelSelection(state.workspaceLayout)
+        if (splitId != null) {
+            onSetSplitChannel(splitId, channelId)
+        } else {
+            onSelectChannel(channelId)
+        }
+    }
+
+    LaunchedEffect(pendingPushTarget, canResolveWorkspacePush, pushNavigationChannels) {
+        val target = pendingPushTarget ?: return@LaunchedEffect
+        if (target != PushNavigationTarget.PushSettings && !canResolveWorkspacePush) {
+            return@LaunchedEffect
+        }
+
+        val action = resolveWorkspacePushNavigationAction(target, pushNavigationChannels)
+        if (action == null) {
+            runtime.pushNavigation.consume(target)
+            return@LaunchedEffect
+        }
+
+        when (action) {
+            WorkspacePushNavigationAction.OpenSettings -> {
+                settingsVisible = true
+            }
+
+            is WorkspacePushNavigationAction.OpenMentions -> {
+                attentionVisible = true
+            }
+
+            is WorkspacePushNavigationAction.OpenModeration -> {
+                // Shared moderation controls are channel-contextual, so land on the target channel.
+                selectWorkspaceChannel(action.channelId)
+            }
+
+            is WorkspacePushNavigationAction.OpenMessage -> {
+                var targetAvailable = runtime.chat.messages(action.channelId)
+                    .any { message -> message.id == action.messageId }
+                if (!targetAvailable) {
+                    val contextMessages = runtime.history?.let { history ->
+                        runCatching { history.loadMessageContext(action.messageId) }
+                            .getOrDefault(emptyList())
+                            .filter { message -> message.channelId == action.channelId }
+                    }.orEmpty()
+
+                    // A newer notification remains authoritative while history I/O is suspended.
+                    if (runtime.pushNavigation.pendingTarget != target) return@LaunchedEffect
+                    if (contextMessages.isNotEmpty()) {
+                        runtime.chat.prependHistory(action.channelId, contextMessages)
+                        targetAvailable = contextMessages.any { message -> message.id == action.messageId }
+                    }
+                }
+
+                if (runtime.pushNavigation.pendingTarget != target) return@LaunchedEffect
+                if (targetAvailable) {
+                    runtime.attention.requestMessageNavigation(action.channelId, action.messageId)
+                }
+                selectWorkspaceChannel(action.channelId)
+            }
+
+            is WorkspacePushNavigationAction.SelectChannel -> {
+                selectWorkspaceChannel(action.channelId)
+            }
+        }
+
+        runtime.pushNavigation.consume(target)
+    }
+
+    ModalNavigationDrawer(
+        modifier = modifier,
+        drawerState = drawerState,
+        gesturesEnabled = drawerState.isOpen,
+        drawerContent = {
+            ModalDrawerSheet(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .widthIn(max = 340.dp),
+                drawerContainerColor = MaterialTheme.colorScheme.surface,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .statusBarsPadding()
+                        .navigationBarsPadding(),
+                ) {
+                    WorkspaceChannelManagement(
+                        state = state,
+                        selectedChannel = selectedChannel,
+                        onSelectChannel = { channelId ->
+                            selectWorkspaceChannel(channelId)
+                            scope.launch { drawerState.close() }
+                        },
+                        onAddChannel = onAddChannel,
+                        onSetChannelPinned = onSetChannelPinned,
+                        onRenameChannel = onRenameChannel,
+                        onRemoveChannel = onRemoveChannel,
+                        onMoveChannel = onMoveChannel,
+                        onDismiss = { scope.launch { drawerState.close() } },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
+        },
+    ) {
+        Scaffold(
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            topBar = {
+                FerventioWorkspaceTopBar(
+                    title = selectedChannel?.let { channel ->
+                        val label = state.channelTabTitles[channel.id]
+                            ?.takeIf(String::isNotBlank)
+                            ?: channel.displayName
+                        "#$label"
+                    } ?: stringResource(Res.string.app_name),
+                    connectionStatus = runtime.chat.connectionStatus,
+                    mentionUnreadCount = runtime.attention.mentionUnreadCount,
+                    onOpenChannels = { scope.launch { drawerState.open() } },
+                    onOpenSearch = if (runtime.history != null) {
+                        { historySearchVisible = true }
+                    } else {
+                        null
+                    },
+                    onOpenUsers = selectedChannel?.let {
+                        { chatUsersVisible = true }
+                    },
+                    onOpenModes = selectedChannel
+                        ?.takeIf { channel -> channel.id in state.moderatorChannelIds }
+                        ?.let {
+                            { chatModesVisible = true }
+                        },
+                    onOpenActions = { actionSearchVisible = true },
+                    onOpenMentions = { attentionVisible = true },
+                    onOpenSettings = { settingsVisible = true },
+                )
+            },
+        ) { padding ->
+            Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+                if (state.loadStatus == WorkspaceLoadStatus.FAILED && state.channels.isNotEmpty()) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.errorContainer,
+                    ) {
+                        Text(
+                            text = stringResource(Res.string.workspace_load_failed),
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
+
+                Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                    when {
+                        state.loadStatus == WorkspaceLoadStatus.IDLE ||
+                            state.loadStatus == WorkspaceLoadStatus.LOADING -> WorkspaceLoadingState()
+                        state.loadStatus == WorkspaceLoadStatus.FAILED && state.channels.isEmpty() -> WorkspaceFailureState()
+                        selectedChannel == null -> WorkspaceEmptyState()
+                        else -> FerventioWorkspaceResponsiveContent(
+                            state = state,
+                            savedFilters = runtime.savedFilters.filters,
+                            decorations = runtime.messageRules.decorationsByMessageId,
+                            onSetSplitFilterQuery = onSetSplitFilterQuery,
+                            onSetSplitChannel = onSetSplitChannel,
+                            onFocusSplit = onFocusSplit,
+                            onAddSplit = onAddSplit,
+                            onRemoveSplit = onRemoveSplit,
+                            onSetPrimaryFraction = onSetPrimaryFraction,
+                            onSelectChannel = ::selectWorkspaceChannel,
+                            modifier = Modifier.fillMaxSize(),
+                            content = content,
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    if (actionSearchVisible) {
+        FerventioGlobalActionSearchSheet(
+            channels = state.channels,
+            moderatorChannelIds = state.moderatorChannelIds,
+            activeChannelId = selectedChannelId,
+            canAddChannel = state.channels.size < MAX_WORKSPACE_CHANNELS,
+            reconnectAvailable = diagnosticsActions.reconnectAvailable,
+            customCommands = runtime.settings.customCommands,
+            onDismiss = { actionSearchVisible = false },
+            onAction = { action ->
+                when {
+                    action.id == SHARED_ACTION_ID_SETTINGS -> settingsVisible = true
+                    action.id == SHARED_ACTION_ID_ADD_CHANNEL -> addChannelVisible = true
+                    action.id == SHARED_ACTION_ID_RECONNECT -> diagnosticsActions.onReconnect?.invoke()
+                    action.id.startsWith(SHARED_ACTION_CHANNEL_PREFIX) -> {
+                        selectWorkspaceChannel(action.id.removePrefix(SHARED_ACTION_CHANNEL_PREFIX))
+                    }
+                    action.id.startsWith(SHARED_ACTION_COMMAND_PREFIX) -> {
+                        selectedChannelId?.let { channelId ->
+                            val commandName = action.id.removePrefix(SHARED_ACTION_COMMAND_PREFIX)
+                            runtime.localUiPreferences.setDraft(channelId, "/$commandName ")
+                        }
+                    }
+                }
+            },
+        )
+    }
+
+    if (addChannelVisible) {
+        WorkspaceAddChannelDialog(
+            busy = state.mutationInFlight,
+            canAddChannel = state.channels.size < MAX_WORKSPACE_CHANNELS,
+            onDismiss = { addChannelVisible = false },
+            onAdd = onAddChannel,
+        )
+    }
+
+    if (chatUsersVisible && selectedChannel != null) {
+        SharedChatUsersSheet(
+            channel = selectedChannel,
+            canQueryHelix = selectedChannel.id in state.moderatorChannelIds,
+            onDismiss = { chatUsersVisible = false },
+        )
+    }
+
+    if (
+        chatModesVisible &&
+        selectedChannel != null &&
+        selectedChannel.id in state.moderatorChannelIds
+    ) {
+        SharedChatModesSheet(
+            channel = selectedChannel,
+            onDismiss = { chatModesVisible = false },
+        )
+    }
+
+    if (settingsVisible) {
+        FerventioSettingsSheet(
+            state = runtime.settings,
+            notificationAuthorizationStatus = notificationAuthorizationStatus,
+            onRequestNotificationPermission = onRequestNotificationPermission,
+            onOpenNotificationSettings = onOpenNotificationSettings,
+            onSave = onSaveSettings,
+            onUpsertHighlightRule = onUpsertHighlightRule,
+            onDeleteHighlightRule = onDeleteHighlightRule,
+            onUpsertIgnoreRule = onUpsertIgnoreRule,
+            onDeleteIgnoreRule = onDeleteIgnoreRule,
+            onUpsertSavedFilter = onUpsertSavedFilter,
+            onDeleteSavedFilter = onDeleteSavedFilter,
+            onImportSavedFilters = onImportSavedFilters,
+            canAddSavedFilterToSplit =
+                (state.workspaceLayout.activeTab?.splits?.size ?: MAX_SPLITS_PER_TAB) < MAX_SPLITS_PER_TAB,
+            onAddSavedFilterSplit = { filterId ->
+                onAddSavedFilterSplit(filterId)
+                settingsVisible = false
+            },
+            onDismiss = { settingsVisible = false },
+        )
+    }
+
+    if (attentionVisible) {
+        FerventioAttentionSheet(
+            attention = runtime.attention,
+            onOpenEntry = { entry ->
+                runtime.attention.requestMessageNavigation(entry.channelId, entry.messageId)
+                state.selectChannel(entry.channelId)
+                onSelectChannel(entry.channelId)
+                attentionVisible = false
+            },
+            onDismiss = { attentionVisible = false },
+        )
+    }
+
+    val history = runtime.history
+    if (historySearchVisible && history != null) {
+        FerventioHistorySearchSheet(
+            history = history,
+            currentChannelId = selectedChannel?.id,
+            navigableChannelIds = state.channelIds.toSet(),
+            onOpenMessage = { message ->
+                scope.launch {
+                    if (message.channelId !in state.channelIds) return@launch
+                    val contextMessages = runCatching {
+                        history.loadMessageContext(message.id)
+                    }.getOrDefault(emptyList()).ifEmpty { listOf(message) }
+                    runtime.chat.prependHistory(message.channelId, contextMessages)
+                    runtime.attention.requestMessageNavigation(message.channelId, message.id)
+                    selectWorkspaceChannel(message.channelId)
+                    historySearchVisible = false
+                }
+            },
+            onDismiss = { historySearchVisible = false },
+        )
+    }
+}
+
+@Composable
+private fun WorkspaceLoadingState() {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+        ) {
+            CircularProgressIndicator()
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = stringResource(Res.string.workspace_loading),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun WorkspaceFailureState() {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text(
+            text = stringResource(Res.string.workspace_load_failed),
+            modifier = Modifier.padding(24.dp),
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.error,
+        )
+    }
+}
+
+@Composable
+private fun WorkspaceEmptyState() {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            modifier = Modifier.padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(
+                text = stringResource(Res.string.workspace_no_channels),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = stringResource(Res.string.workspace_no_channels_summary),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}

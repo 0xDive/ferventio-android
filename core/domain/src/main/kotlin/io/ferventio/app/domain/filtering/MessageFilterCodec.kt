@@ -1,5 +1,7 @@
 package io.ferventio.app.domain
 
+import kotlin.time.Clock
+import kotlin.uuid.Uuid
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -44,7 +46,7 @@ object MessageFilterCodec {
             val expression = item["expression"]?.jsonPrimitive?.contentOrNull?.trim().orEmpty()
             if (name.isBlank() || expression.isBlank()) return@mapNotNull null
             SavedMessageFilter(
-                id = id.ifBlank { java.util.UUID.randomUUID().toString() },
+                id = id.ifBlank { Uuid.random().toString() },
                 name = name.take(80),
                 expression = expression.take(MAX_FILTER_EXPRESSION_LENGTH),
             )
@@ -60,7 +62,7 @@ object MessageFilterCodec {
         val merged = LinkedHashMap<String, SavedMessageFilter>()
         existing.forEach { filter -> merged[filter.id] = filter }
         imported.forEach { filter ->
-            val uniqueId = if (filter.id !in merged) filter.id else java.util.UUID.randomUUID().toString()
+            val uniqueId = if (filter.id !in merged) filter.id else Uuid.random().toString()
             val existingNames = merged.values.map { it.name.lowercase() }.toSet()
             val name = uniqueName(filter.name, existingNames)
             merged[uniqueId] = filter.copy(id = uniqueId, name = name)
@@ -75,6 +77,6 @@ object MessageFilterCodec {
             val candidate = "$normalized ($suffix)".take(80)
             if (candidate.lowercase() !in existing) return candidate
         }
-        return "$normalized ${System.currentTimeMillis()}".take(80)
+        return "$normalized ${Clock.System.now().toEpochMilliseconds()}".take(80)
     }
 }

@@ -1,7 +1,7 @@
 package io.ferventio.app.domain
 
-import java.time.Instant
-import java.util.UUID
+import kotlin.time.Clock
+import kotlin.uuid.Uuid
 
 object SystemChatMessages {
     fun moderation(action: RemoteModerationAction): ChatMessage = create(
@@ -76,7 +76,7 @@ object SystemChatMessages {
         ?: createdAt?.takeIf(String::isNotBlank)?.let { timestamp ->
             (identityParts.asList() + timestamp).joinToString(":")
         }
-        ?: UUID.randomUUID().toString()
+        ?: Uuid.random().toString()
 
     private fun create(
         id: String,
@@ -85,9 +85,9 @@ object SystemChatMessages {
         text: String,
         timestamp: String?,
     ): ChatMessage {
-        val safeTimestamp = timestamp?.takeIf(String::isNotBlank) ?: Instant.now().toString()
+        val safeTimestamp = timestamp?.takeIf(String::isNotBlank) ?: Clock.System.now().toString()
         return ChatMessage(
-            id = id.ifBlank { "system:${UUID.randomUUID()}" },
+            id = id.ifBlank { "system:${Uuid.random()}" },
             channelId = channelId,
             channelLogin = channelLogin,
             author = ChatAuthor(id = "system", login = "system", displayName = "Twitch"),

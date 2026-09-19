@@ -1,9 +1,7 @@
 package io.ferventio.app.domain
 
 import androidx.compose.runtime.Immutable
-import java.util.Locale
-import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
+import kotlin.uuid.Uuid
 
 const val MAX_FILTER_EXPRESSION_LENGTH = 2_000
 const val MAX_SAVED_FILTERS = 100
@@ -27,7 +25,7 @@ fun resolveSplitFilterExpression(
 
 @Immutable
 data class SavedMessageFilter(
-    val id: String = UUID.randomUUID().toString(),
+    val id: String = Uuid.random().toString(),
     val name: String,
     val expression: String,
 )
@@ -190,8 +188,6 @@ class CompiledMessageFilter internal constructor(
     val isLegacyTextFilter: Boolean = false,
     private val legacyQuery: String? = null,
 ) {
-    private val dynamicRegexCache = ConcurrentHashMap<String, Regex?>()
-
     val isValid: Boolean
         get() = diagnostics.none { it.severity == FilterDiagnosticSeverity.ERROR } &&
             (expression != null || isLegacyTextFilter)
@@ -251,34 +247,32 @@ class CompiledMessageFilter internal constructor(
         right: RuntimeFilterValue,
     ): Boolean {
         return when (operator) {
-        FilterBinaryOperator.EQUALS -> valuesEqual(left, right)
-        FilterBinaryOperator.NOT_EQUALS -> !valuesEqual(left, right)
-        FilterBinaryOperator.LESS -> orderedCompare(left, right)?.let { it < 0 } == true
-        FilterBinaryOperator.GREATER -> orderedCompare(left, right)?.let { it > 0 } == true
-        FilterBinaryOperator.LESS_OR_EQUAL -> orderedCompare(left, right)?.let { it <= 0 } == true
-        FilterBinaryOperator.GREATER_OR_EQUAL -> orderedCompare(left, right)?.let { it >= 0 } == true
-        FilterBinaryOperator.CONTAINS -> contains(left, right)
-        FilterBinaryOperator.STARTS_WITH -> {
-            val lhs = left.asString() ?: return false
-            val rhs = right.asString() ?: return false
-            lhs.startsWith(rhs, ignoreCase = true)
-        }
-        FilterBinaryOperator.ENDS_WITH -> {
-            val lhs = left.asString() ?: return false
-            val rhs = right.asString() ?: return false
-            lhs.endsWith(rhs, ignoreCase = true)
-        }
-        FilterBinaryOperator.MATCHES -> {
-            val lhs = left.asString() ?: return false
-            val regex = when (right) {
-                is RuntimeFilterValue.RegexValue -> right.value
-                is RuntimeFilterValue.StringValue -> dynamicRegexCache.computeIfAbsent(right.value) { pattern ->
-                    runCatching { Regex(pattern) }.getOrNull()
-                }
-                else -> null
-            } ?: return false
-            regex.containsMatchIn(lhs)
-        }
+            FilterBinaryOperator.EQUALS -> valuesEqual(left, right)
+            FilterBinaryOperator.NOT_EQUALS -> !valuesEqual(left, right)
+            FilterBinaryOperator.LESS -> orderedCompare(left, right)?.let { it < 0 } == true
+            FilterBinaryOperator.GREATER -> orderedCompare(left, right)?.let { it > 0 } == true
+            FilterBinaryOperator.LESS_OR_EQUAL -> orderedCompare(left, right)?.let { it <= 0 } == true
+            FilterBinaryOperator.GREATER_OR_EQUAL -> orderedCompare(left, right)?.let { it >= 0 } == true
+            FilterBinaryOperator.CONTAINS -> contains(left, right)
+            FilterBinaryOperator.STARTS_WITH -> {
+                val lhs = left.asString() ?: return false
+                val rhs = right.asString() ?: return false
+                lhs.startsWith(rhs, ignoreCase = true)
+            }
+            FilterBinaryOperator.ENDS_WITH -> {
+                val lhs = left.asString() ?: return false
+                val rhs = right.asString() ?: return false
+                lhs.endsWith(rhs, ignoreCase = true)
+            }
+            FilterBinaryOperator.MATCHES -> {
+                val lhs = left.asString() ?: return false
+                val regex = when (right) {
+                    is RuntimeFilterValue.RegexValue -> right.value
+                    is RuntimeFilterValue.StringValue -> runCatching { Regex(right.value) }.getOrNull()
+                    else -> null
+                } ?: return false
+                regex.containsMatchIn(lhs)
+            }
             FilterBinaryOperator.AND,
             FilterBinaryOperator.OR,
             -> false
@@ -326,7 +320,7 @@ class CompiledMessageFilter internal constructor(
         left is RuntimeFilterValue.NumberValue && right is RuntimeFilterValue.NumberValue ->
             left.value.compareTo(right.value)
         left is RuntimeFilterValue.StringValue && right is RuntimeFilterValue.StringValue ->
-            left.value.lowercase(Locale.ROOT).compareTo(right.value.lowercase(Locale.ROOT))
+            left.value.lowercase().compareTo(right.value.lowercase())
         else -> null
     }
 }
@@ -454,7 +448,7 @@ object MessageFilterLanguage {
     private fun looksLikeLegacyText(source: String): Boolean {
         if (source.startsWith("@")) return false
         if (source.any { it in "()[]<>=!&|/\"'" }) return false
-        if (source.lowercase(Locale.ROOT).let { value ->
+        if (source.lowercase().let { value ->
                 knownFields.keys.any(value::contains) ||
                     listOf(" contains ", " startswith ", " endswith ", " matches ").any(value::contains)
             }
@@ -483,7 +477,7 @@ private fun fieldValue(path: String, message: ChatMessage): RuntimeFilterValue =
     "author.name" -> RuntimeFilterValue.StringValue(message.userDisplayName)
     "author.id" -> RuntimeFilterValue.StringValue(message.userId)
     "author.badges" -> RuntimeFilterValue.ListValue(
-        message.badges.map { RuntimeFilterValue.StringValue(it.setId.lowercase(Locale.ROOT)) },
+        message.badges.map { RuntimeFilterValue.StringValue(it.setId.lowercase()) },
     )
     "author.subbed" -> RuntimeFilterValue.BooleanValue(
         message.badges.any { badge ->
@@ -686,7 +680,7 @@ private class FilterTokenizer(private val source: String) {
             if (char.isLetterOrDigit() || char == '_' || char == '.') index++ else break
         }
         val raw = source.substring(start, index)
-        when (raw.lowercase(Locale.ROOT)) {
+        when (raw.lowercase()) {
             "true" -> add(FilterTokenKind.BOOLEAN, start, index, true)
             "false" -> add(FilterTokenKind.BOOLEAN, start, index, false)
             "contains", "startswith", "endswith", "matches" ->
@@ -841,7 +835,7 @@ private class FilterParser(private val tokens: List<FilterToken>) {
 
     private fun parseComparisonOperator(): FilterBinaryOperator? {
         val token = peek()
-        val operator = when (token.lexeme.lowercase(Locale.ROOT)) {
+        val operator = when (token.lexeme.lowercase()) {
             "==" -> FilterBinaryOperator.EQUALS
             "!=" -> FilterBinaryOperator.NOT_EQUALS
             "<" -> FilterBinaryOperator.LESS
@@ -898,7 +892,7 @@ private class FilterTypeChecker(
     val diagnostics = mutableListOf<FilterDiagnostic>()
 
     fun check(expression: FilterExpression): FilterValueType = when (expression) {
-        is FilterExpression.Field -> fields[expression.path.lowercase(Locale.ROOT)] ?: run {
+        is FilterExpression.Field -> fields[expression.path.lowercase()] ?: run {
             diagnostics += FilterDiagnostic(
                 FilterDiagnosticSeverity.ERROR,
                 "Неизвестное поле '${expression.path}'",

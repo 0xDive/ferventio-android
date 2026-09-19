@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_custom_command_confirm_title">Подтвердите пользовательскую команду</string>
+    <string name="chat_custom_command_confirm_body">Команда раскроется в: %1$s</string>
+    <string name="chat_custom_command_confirm_action">Продолжить</string>
+    <string name="chat_custom_command_cancel">Отмена</string>
+    <string name="chat_custom_command_expanded_too_long">Результат пользовательской команды слишком длинный.</string>
+</resources>

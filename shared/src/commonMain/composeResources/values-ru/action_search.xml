@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="workspace_actions">Действия</string>
+    <string name="action_search_title">Действия</string>
+    <string name="action_search_placeholder">Поиск действий, каналов или /команд</string>
+    <string name="action_search_settings_title">Настройки</string>
+    <string name="action_search_settings_subtitle">Открыть настройки Ferventio</string>
+    <string name="action_search_add_channel_title">Добавить канал</string>
+    <string name="action_search_add_channel_subtitle">Добавить Twitch-канал в рабочее пространство</string>
+    <string name="action_search_reconnect_title">Переподключить чат</string>
+    <string name="action_search_reconnect_subtitle">Переподключить авторизованную сессию EventSub</string>
+    <string name="action_search_requires_preview">Нужен предпросмотр</string>
+    <string name="action_search_requires_confirmation">Нужно подтверждение</string>
+</resources>

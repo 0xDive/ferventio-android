@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_users_tab_chatters">Chatters</string>
+    <string name="chat_users_tab_moderators">Moderators</string>
+    <string name="chat_users_tab_vips">VIPs</string>
+    <string name="chat_users_tab_banned">Banned</string>
+    <string name="chat_users_remote_count">%1$d users</string>
+    <string name="chat_users_load_failed">Couldn’t load this Twitch list.</string>
+</resources>

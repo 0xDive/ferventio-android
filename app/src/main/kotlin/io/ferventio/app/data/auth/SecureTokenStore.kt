@@ -5,6 +5,7 @@ import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
 import io.ferventio.app.domain.BackendSessionCredential
+import io.ferventio.app.domain.StoredAuthentication
 import io.ferventio.app.domain.TwitchAccessLease
 import java.security.KeyStore
 import javax.crypto.Cipher
@@ -37,7 +38,7 @@ class SecureTokenStore(context: Context) {
 
     fun load(): BackendSessionCredential? = loadAuthentication()?.backendCredential
 
-    internal fun loadAuthentication(): AuthSessionPayloadCodec.StoredAuthentication? {
+    internal fun loadAuthentication(): StoredAuthentication? {
         val encryptedBase64 = preferences.getString(KEY_CIPHERTEXT, null)
         val ivBase64 = preferences.getString(KEY_IV, null)
         if (encryptedBase64 == null && ivBase64 == null) return null
