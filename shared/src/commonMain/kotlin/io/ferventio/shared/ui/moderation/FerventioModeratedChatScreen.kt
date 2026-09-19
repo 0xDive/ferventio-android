@@ -13,6 +13,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -109,8 +110,8 @@ fun FerventioModeratedChatScreen(
     suspend fun refreshPinnedMessage() {
         try {
             pinnedMessage = pinnedChatClient.getPinnedChatMessage(channel.id)
-        } catch (_: CancellationException) {
-            throw
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (_: Throwable) {
             // Public pinned-chat lookup is best-effort; keep the last confirmed banner.
         }
