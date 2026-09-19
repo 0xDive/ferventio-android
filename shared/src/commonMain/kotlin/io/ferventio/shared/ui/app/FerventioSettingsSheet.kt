@@ -4,6 +4,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -11,10 +13,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -37,11 +41,12 @@ import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.RadioButton
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -834,7 +839,7 @@ private fun AppearanceSettingsPage(
                 onSelected = { value -> update { it.copy(themeMode = value) } },
             )
             SettingsChoiceGroup(
-                title = stringResource(Res.string.settings_font_size, preferences.fontScalePercent),
+                title = stringResource(Res.string.settings_font_size),
                 options = AppearanceSettingsPresets.FONT_SCALE_PERCENT.map { value -> value to "$value%" },
                 selected = preferences.fontScalePercent,
                 onSelected = { value -> update { it.copy(fontScalePercent = value) } },
@@ -920,17 +925,6 @@ private fun AppearanceSettingsPage(
             title = stringResource(Res.string.settings_emotes_section),
         ) {
             SettingsSwitchRow(
-                label = stringResource(Res.string.settings_animate_emotes),
-                checked = preferences.animateEmotes,
-                onCheckedChange = { value -> update { it.copy(animateEmotes = value) } },
-            )
-            SettingsChoiceGroup(
-                title = stringResource(Res.string.settings_emote_size, preferences.emoteScalePercent),
-                options = AppearanceSettingsPresets.EMOTE_SCALE_PERCENT.map { value -> value to "$value%" },
-                selected = preferences.emoteScalePercent,
-                onSelected = { value -> update { it.copy(emoteScalePercent = value) } },
-            )
-            SettingsSwitchRow(
                 label = stringResource(Res.string.settings_bttv),
                 checked = preferences.betterTtvEnabled,
                 onCheckedChange = { value -> update { it.copy(betterTtvEnabled = value) } },
@@ -944,6 +938,17 @@ private fun AppearanceSettingsPage(
                 label = stringResource(Res.string.settings_7tv),
                 checked = preferences.sevenTvEnabled,
                 onCheckedChange = { value -> update { it.copy(sevenTvEnabled = value) } },
+            )
+            SettingsSwitchRow(
+                label = stringResource(Res.string.settings_animate_emotes),
+                checked = preferences.animateEmotes,
+                onCheckedChange = { value -> update { it.copy(animateEmotes = value) } },
+            )
+            SettingsChoiceGroup(
+                title = stringResource(Res.string.settings_emote_size),
+                options = AppearanceSettingsPresets.EMOTE_SCALE_PERCENT.map { value -> value to "$value%" },
+                selected = preferences.emoteScalePercent,
+                onSelected = { value -> update { it.copy(emoteScalePercent = value) } },
             )
         }
     }
@@ -1127,6 +1132,7 @@ private fun SettingsSectionTitle(text: String) {
     )
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun <T> SettingsChoiceGroup(
     title: String,
@@ -1137,13 +1143,26 @@ private fun <T> SettingsChoiceGroup(
     Text(
         text = title,
         style = MaterialTheme.typography.bodyMedium,
-        fontWeight = FontWeight.Medium,
-        modifier = Modifier.padding(top = 8.dp),
+        fontWeight = FontWeight.SemiBold,
     )
-    options.forEach { (value, label) ->
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            RadioButton(selected = value == selected, onClick = { onSelected(value) })
-            Text(label, style = MaterialTheme.typography.bodyMedium)
+    FlowRow(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        options.forEach { (value, label) ->
+            val buttonModifier = Modifier
+                .widthIn(min = 84.dp)
+                .heightIn(min = 48.dp)
+            if (value == selected) {
+                FilledTonalButton(onClick = { onSelected(value) }, modifier = buttonModifier) {
+                    Text(label, maxLines = 1)
+                }
+            } else {
+                OutlinedButton(onClick = { onSelected(value) }, modifier = buttonModifier) {
+                    Text(label, maxLines = 1)
+                }
+            }
         }
     }
 }

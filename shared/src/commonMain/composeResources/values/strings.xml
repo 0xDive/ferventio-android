@@ -26,16 +26,16 @@
     <string name="settings_theme_light">Light</string>
     <string name="settings_theme_dark">Dark</string>
     <string name="settings_theme_amoled">AMOLED</string>
-    <string name="settings_font_size">Font size: %1$d%%</string>
+    <string name="settings_font_size">Font size</string>
     <string name="settings_chat">Chat</string>
     <string name="settings_density">Message density</string>
     <string name="settings_density_compact">Compact</string>
     <string name="settings_density_normal">Normal</string>
     <string name="settings_density_relaxed">Relaxed</string>
-    <string name="settings_name_style">Username style</string>
-    <string name="settings_name_display">Display name</string>
+    <string name="settings_name_style">Name style</string>
+    <string name="settings_name_display">Name</string>
     <string name="settings_name_login">Login</string>
-    <string name="settings_name_both">Display name + login</string>
+    <string name="settings_name_both">Both</string>
     <string name="settings_show_avatars">Show avatars</string>
     <string name="settings_show_badges">Show badges</string>
     <string name="settings_show_timestamps">Show timestamps</string>
@@ -46,7 +46,7 @@
     <string name="settings_repeat_collapse">Collapse repeated messages</string>
     <string name="settings_media">Emotes and media</string>
     <string name="settings_animate_emotes">Animate emotes</string>
-    <string name="settings_emote_size">Emote size: %1$d%%</string>
+    <string name="settings_emote_size">Emote size</string>
     <string name="settings_bttv">BetterTTV emotes</string>
     <string name="settings_ffz">FrankerFaceZ emotes</string>
     <string name="settings_7tv">7TV emotes</string>
@@ -101,6 +101,7 @@
     <string name="chat_status_creating_subscriptions">Subscribing to chat…</string>
     <string name="chat_status_reconnecting">Reconnecting to chat…</string>
     <string name="chat_status_failed">Chat connection failed</string>
+    <string name="chat_eventsub_transport_limit">Twitch is still using all EventSub connection slots for this account. Close another active Ferventio instance and return to the app.</string>
     <string name="nuke_preview_action">Nuke preview</string>
     <string name="nuke_preview_title">Nuke preview</string>
     <string name="nuke_preview_read_only">Preview the exact targets before running mass moderation.</string>

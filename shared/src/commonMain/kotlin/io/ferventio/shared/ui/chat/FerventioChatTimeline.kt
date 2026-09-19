@@ -77,6 +77,7 @@ import io.ferventio.shared.generated.resources.chat_status_connecting
 import io.ferventio.shared.generated.resources.chat_status_creating_subscriptions
 import io.ferventio.shared.generated.resources.chat_status_disconnected
 import io.ferventio.shared.generated.resources.chat_status_failed
+import io.ferventio.shared.generated.resources.chat_eventsub_transport_limit
 import io.ferventio.shared.generated.resources.chat_status_reconnecting
 import io.ferventio.shared.generated.resources.chat_status_waiting_welcome
 import io.ferventio.shared.generated.resources.chat_waiting_for_messages
@@ -318,10 +319,20 @@ private fun ChatConnectionBanner(chat: ChatRuntimeStateHolder) {
         ConnectionStatus.FAILED -> stringResource(Res.string.chat_status_failed)
         ConnectionStatus.CONNECTED -> return
     }
-    val detail = chat.connectionErrorMessage
-        ?.takeIf(String::isNotBlank)
-        ?.let { "$label: $it" }
-        ?: label
+    val rawError = chat.connectionErrorMessage?.takeIf(String::isNotBlank)
+    val transportLimit = rawError
+        ?.lowercase()
+        ?.let { error ->
+            "websocket" in error &&
+                "transport" in error &&
+                ("limit" in error || "exceeded" in error)
+        } == true
+    val detail = when {
+        chat.connectionStatus != ConnectionStatus.FAILED -> label
+        transportLimit -> stringResource(Res.string.chat_eventsub_transport_limit)
+        rawError != null -> "$label: $rawError"
+        else -> label
+    }
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
