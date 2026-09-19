@@ -548,6 +548,19 @@ fun FerventioModeratedChatScreen(
                 messageActionsTarget = null
                 threadTarget = target
             },
+            onNavigateToParent = target.reply
+                ?.parentMessageId
+                ?.trim()
+                ?.takeIf(String::isNotEmpty)
+                ?.let { parentMessageId ->
+                    {
+                        messageActionsTarget = null
+                        runtime.attention.requestMessageNavigation(
+                            channelId = channel.id,
+                            messageId = parentMessageId,
+                        )
+                    }
+                },
             onCopy = {
                 clipboard.setText(AnnotatedString(target.text))
                 messageActionsTarget = null

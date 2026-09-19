@@ -9,12 +9,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -24,23 +26,33 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.ferventio.app.domain.ChatMessage
+import io.ferventio.app.domain.ReplyThreadResolver
 import io.ferventio.shared.generated.resources.Res
 import io.ferventio.shared.generated.resources.chat_action_copy
 import io.ferventio.shared.generated.resources.chat_action_delete
+import io.ferventio.shared.generated.resources.chat_action_parent
 import io.ferventio.shared.generated.resources.chat_action_pin
 import io.ferventio.shared.generated.resources.chat_action_reply
 import io.ferventio.shared.generated.resources.chat_action_thread
 import io.ferventio.shared.generated.resources.chat_action_unpin
 import io.ferventio.shared.generated.resources.chat_action_user
 import io.ferventio.shared.generated.resources.chat_actions_title
+import io.ferventio.shared.generated.resources.chat_delete_confirm_body
+import io.ferventio.shared.generated.resources.chat_delete_confirm_title
+import io.ferventio.shared.generated.resources.chat_delete_confirm_yes
 import io.ferventio.shared.generated.resources.chat_thread_empty
 import io.ferventio.shared.generated.resources.chat_thread_title
+import io.ferventio.shared.generated.resources.chat_reply_cancel
 import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -56,12 +68,17 @@ internal fun SharedMessageActionsSheet(
     onDismiss: () -> Unit,
     onReply: () -> Unit,
     onOpenThread: () -> Unit,
+    onNavigateToParent: (() -> Unit)? = null,
     onCopy: () -> Unit,
     onOpenUser: () -> Unit,
     onDelete: () -> Unit,
     onPin: () -> Unit,
     onUnpin: () -> Unit,
 ) {
+    var confirmDelete by remember(message.id, message.serverMessageId) {
+        mutableStateOf(false)
+    }
+
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier.fillMaxWidth().padding(bottom = 18.dp),
@@ -84,6 +101,16 @@ internal fun SharedMessageActionsSheet(
                 enabled = canOpenThread,
                 onClick = onOpenThread,
             )
+            if (onNavigateToParent != null) {
+                MessageActionItem(
+                    icon = {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    },
+                    label = stringResource(Res.string.chat_action_parent),
+                    enabled = true,
+                    onClick = onNavigateToParent,
+                )
+            }
             MessageActionItem(
                 icon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
                 label = stringResource(Res.string.chat_action_copy),
@@ -117,11 +144,46 @@ internal fun SharedMessageActionsSheet(
                     },
                     label = stringResource(Res.string.chat_action_delete),
                     enabled = true,
-                    onClick = onDelete,
+                    onClick = { confirmDelete = true },
                     labelColor = MaterialTheme.colorScheme.error,
                 )
             }
         }
+    }
+
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = {
+                Text(stringResource(Res.string.chat_delete_confirm_title))
+            },
+            text = {
+                Text(
+                    stringResource(
+                        Res.string.chat_delete_confirm_body,
+                        message.userDisplayName.ifBlank { message.userLogin },
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        confirmDelete = false
+                        onDelete()
+                    },
+                ) {
+                    Text(
+                        text = stringResource(Res.string.chat_delete_confirm_yes),
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmDelete = false }) {
+                    Text(stringResource(Res.string.chat_reply_cancel))
+                }
+            },
+        )
     }
 }
 
@@ -229,30 +291,4 @@ private fun SharedThreadMessageRow(
 internal fun resolveSharedReplyThreadMessages(
     target: ChatMessage,
     messages: List<ChatMessage>,
-): List<ChatMessage> {
-    val targetCanonicalId = target.serverMessageId
-        ?.trim()
-        ?.takeIf(String::isNotEmpty)
-        ?: target.id
-    val rootId = target.reply?.threadMessageId
-        ?.trim()
-        ?.takeIf(String::isNotEmpty)
-        ?: target.reply?.parentMessageId
-            ?.trim()
-            ?.takeIf(String::isNotEmpty)
-        ?: targetCanonicalId
-
-    return messages.asSequence()
-        .filter { message ->
-            val canonicalId = message.serverMessageId
-                ?.trim()
-                ?.takeIf(String::isNotEmpty)
-                ?: message.id
-            canonicalId == rootId ||
-                message.reply?.threadMessageId == rootId ||
-                message.reply?.parentMessageId == rootId
-        }
-        .distinctBy { message -> message.serverMessageId ?: message.id }
-        .sortedWith(compareBy(ChatMessage::timestampMillis, ChatMessage::id))
-        .toList()
-}
+): List<ChatMessage> = ReplyThreadResolver.resolve(target, messages)

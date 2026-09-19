@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_action_parent">Go to parent message</string>
+    <string name="chat_delete_confirm_title">Delete message?</string>
+    <string name="chat_delete_confirm_body">Delete the message from %1$s from Twitch chat?</string>
+    <string name="chat_delete_confirm_yes">Delete</string>
+</resources>

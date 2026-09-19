@@ -18,14 +18,14 @@ class SharedMessageActionsTest {
         val secondReply = message(
             id = "reply-2",
             timestampMillis = 3_000L,
-            reply = ReplyContext(parentMessageId = "reply-1", threadMessageId = "root"),
+            reply = ReplyContext(parentMessageId = "reply-1"),
         )
         val unrelated = message("other", 4_000L)
 
         assertEquals(
             listOf("root", "reply-1", "reply-2"),
             resolveSharedReplyThreadMessages(
-                target = secondReply,
+                target = firstReply,
                 messages = listOf(unrelated, secondReply, root, firstReply),
             ).map(ChatMessage::id),
         )
