@@ -30,6 +30,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -56,6 +57,7 @@ import io.ferventio.app.domain.ChatBadgeAsset
 import io.ferventio.app.domain.ChatChannel
 import io.ferventio.app.domain.ChatMessage
 import io.ferventio.app.domain.ChatNameStyle
+import io.ferventio.app.domain.ChatScrollPosition
 import io.ferventio.app.domain.ChatRepeatCollapseConfig
 import io.ferventio.app.domain.ChatRepeatCollapser
 import io.ferventio.app.domain.ChatRepeatSummary
@@ -155,19 +157,47 @@ fun FerventioChatTimeline(
     }
     val thirdPartyEmotes = providedThirdPartyEmotes ?: loadedThirdPartyEmotes
     val cheermoteAssets = chat.cheermoteAssets(channel.id)
+    val savedScrollPosition = chat.scrollPosition(channel.id)
     val listState = rememberLazyListState()
     val navigationTarget = attention.navigationTarget(channel.id)
+    var restoredScrollPosition by remember(channel.id) { mutableStateOf(false) }
     var followTail by remember(channel.id) {
-        mutableStateOf(preferences.autoScrollEnabled && navigationTarget == null)
+        mutableStateOf(
+            navigationTarget == null &&
+                preferences.autoScrollEnabled &&
+                (savedScrollPosition?.isAtBottom != false),
+        )
+    }
+    val latestMessages by rememberUpdatedState(messages)
+    val latestFollowTail by rememberUpdatedState(followTail)
+
+    fun saveCurrentScrollPosition() {
+        val currentMessages = latestMessages
+        if (currentMessages.isEmpty()) {
+            chat.clearScrollPosition(channel.id)
+            return
+        }
+        val index = listState.firstVisibleItemIndex.coerceIn(0, currentMessages.lastIndex)
+        val atBottom = latestFollowTail || listState.isTimelineAtLiveTail(empty = false)
+        chat.updateScrollPosition(
+            ChatScrollPosition(
+                channelId = channel.id,
+                anchorMessageId = currentMessages.getOrNull(index)?.id,
+                firstVisibleItemIndex = index,
+                firstVisibleItemScrollOffset = listState.firstVisibleItemScrollOffset.coerceAtLeast(0),
+                isAtBottom = atBottom,
+            ),
+        )
     }
 
-    DisposableEffect(channel.id, attention) {
+    DisposableEffect(channel.id, attention, chat, listState) {
         attention.updateViewport(
             channelId = channel.id,
             visible = true,
             isAtLiveTail = false,
         )
         onDispose {
+            saveCurrentScrollPosition()
             attention.updateViewport(
                 channelId = channel.id,
                 visible = false,
@@ -175,6 +205,51 @@ fun FerventioChatTimeline(
             )
         }
     }
+
+    LaunchedEffect(
+        channel.id,
+        savedScrollPosition,
+        messages,
+        navigationTarget,
+        preferences.autoScrollEnabled,
+    ) {
+        if (restoredScrollPosition || messages.isEmpty()) return@LaunchedEffect
+        if (navigationTarget != null) {
+            restoredScrollPosition = true
+            return@LaunchedEffect
+        }
+
+        val saved = savedScrollPosition
+        when {
+            saved == null && preferences.autoScrollEnabled -> {
+                listState.scrollToItem(messages.lastIndex)
+                followTail = true
+            }
+            saved != null && saved.isAtBottom -> {
+                listState.scrollToItem(messages.lastIndex)
+                followTail = preferences.autoScrollEnabled
+            }
+            saved != null -> {
+                val anchorIndex = saved.anchorMessageId
+                    ?.let { anchor ->
+                        messages.indexOfFirst { message ->
+                            message.id == anchor || message.serverMessageId == anchor
+                        }
+                    }
+                    ?.takeIf { it >= 0 }
+                val targetIndex = (
+                    anchorIndex ?: saved.firstVisibleItemIndex
+                    ).coerceIn(0, messages.lastIndex)
+                listState.scrollToItem(
+                    targetIndex,
+                    saved.firstVisibleItemScrollOffset.coerceAtLeast(0),
+                )
+                followTail = false
+            }
+        }
+        restoredScrollPosition = true
+    }
+
     LaunchedEffect(channel.id, listState, attention, messages.size) {
         snapshotFlow {
             attention.navigationTarget(channel.id) == null &&
@@ -203,9 +278,16 @@ fun FerventioChatTimeline(
             targetMessageId = target,
         ) ?: return@LaunchedEffect
         listState.scrollToItem(index)
+        restoredScrollPosition = true
+        saveCurrentScrollPosition()
         attention.consumeMessageNavigation(channel.id, target)
     }
-    LaunchedEffect(preferences.autoScrollEnabled, navigationTarget) {
+    LaunchedEffect(
+        preferences.autoScrollEnabled,
+        navigationTarget,
+        restoredScrollPosition,
+    ) {
+        if (!restoredScrollPosition) return@LaunchedEffect
         followTail = navigationTarget == null &&
             preferences.autoScrollEnabled &&
             listState.isTimelineAtLiveTail(messages.isEmpty())
@@ -218,6 +300,7 @@ fun FerventioChatTimeline(
                 followTail = attention.navigationTarget(channel.id) == null &&
                     preferences.autoScrollEnabled &&
                     listState.isTimelineAtLiveTail(messages.isEmpty())
+                saveCurrentScrollPosition()
             }
     }
     LaunchedEffect(messages.size, followTail) {

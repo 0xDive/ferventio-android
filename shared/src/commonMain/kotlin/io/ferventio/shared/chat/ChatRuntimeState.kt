@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import io.ferventio.app.domain.ChatBadge
 import io.ferventio.app.domain.ChatBadgeAsset
 import io.ferventio.app.domain.ChatMessage
+import io.ferventio.app.domain.ChatScrollPosition
 import io.ferventio.app.domain.CheermoteAsset
 import io.ferventio.app.domain.ConnectionStatus
 import io.ferventio.app.domain.InteractiveChatOverlayEvent
@@ -19,6 +20,7 @@ import kotlin.time.Clock
 
 data class ChatRuntimeSnapshot(
     val messagesByChannel: Map<String, List<ChatMessage>> = emptyMap(),
+    val scrollPositionsByChannel: Map<String, ChatScrollPosition> = emptyMap(),
     val globalBadgeAssets: Map<String, ChatBadgeAsset> = emptyMap(),
     val badgeAssetsByChannel: Map<String, Map<String, ChatBadgeAsset>> = emptyMap(),
     val cheermoteAssetsByChannel: Map<String, Map<String, List<CheermoteAsset>>> = emptyMap(),
@@ -35,6 +37,8 @@ class ChatRuntimeStateHolder(
     initialSnapshot: ChatRuntimeSnapshot = ChatRuntimeSnapshot(),
 ) {
     var messagesByChannel by mutableStateOf(emptyMap<String, List<ChatMessage>>())
+        private set
+    var scrollPositionsByChannel by mutableStateOf(emptyMap<String, ChatScrollPosition>())
         private set
     private var historyMessagesByChannel by mutableStateOf(emptyMap<String, List<ChatMessage>>())
     var globalBadgeAssets by mutableStateOf(emptyMap<String, ChatBadgeAsset>())
@@ -62,6 +66,7 @@ class ChatRuntimeStateHolder(
     val snapshot: ChatRuntimeSnapshot
         get() = ChatRuntimeSnapshot(
             messagesByChannel = messagesByChannel,
+            scrollPositionsByChannel = scrollPositionsByChannel,
             globalBadgeAssets = globalBadgeAssets,
             badgeAssetsByChannel = badgeAssetsByChannel,
             cheermoteAssetsByChannel = cheermoteAssetsByChannel,
@@ -75,6 +80,7 @@ class ChatRuntimeStateHolder(
 
     init {
         replaceAll(initialSnapshot.messagesByChannel)
+        restoreScrollPositions(initialSnapshot.scrollPositionsByChannel)
         replaceGlobalBadgeAssets(initialSnapshot.globalBadgeAssets)
         initialSnapshot.badgeAssetsByChannel.forEach { (channelId, assets) ->
             replaceChannelBadgeAssets(channelId, assets)
@@ -99,6 +105,32 @@ class ChatRuntimeStateHolder(
             history = historyMessagesByChannel[normalizedChannelId].orEmpty(),
             live = messagesByChannel[normalizedChannelId].orEmpty(),
         )
+    }
+
+    fun scrollPosition(channelId: String): ChatScrollPosition? =
+        scrollPositionsByChannel[channelId.trim()]
+
+    fun updateScrollPosition(position: ChatScrollPosition) {
+        val channelId = requireChannelId(position.channelId)
+        require(position.firstVisibleItemIndex >= 0) {
+            "Chat scroll index must not be negative"
+        }
+        require(position.firstVisibleItemScrollOffset >= 0) {
+            "Chat scroll offset must not be negative"
+        }
+        val normalized = position.copy(
+            channelId = channelId,
+            anchorMessageId = position.anchorMessageId
+                ?.trim()
+                ?.takeIf(String::isNotEmpty),
+        )
+        scrollPositionsByChannel = scrollPositionsByChannel + (channelId to normalized)
+    }
+
+    fun clearScrollPosition(channelId: String) {
+        val normalized = channelId.trim()
+        if (normalized.isEmpty()) return
+        scrollPositionsByChannel = scrollPositionsByChannel - normalized
     }
 
     fun cheermoteAssets(channelId: String): Map<String, List<CheermoteAsset>> =
@@ -376,6 +408,7 @@ class ChatRuntimeStateHolder(
         if (!existed) return false
         messagesByChannel = messagesByChannel - normalizedChannelId
         historyMessagesByChannel = historyMessagesByChannel - normalizedChannelId
+        scrollPositionsByChannel = scrollPositionsByChannel - normalizedChannelId
         return true
     }
 
@@ -384,6 +417,7 @@ class ChatRuntimeStateHolder(
         if (normalized.isEmpty()) return
         messagesByChannel = messagesByChannel - normalized
         historyMessagesByChannel = historyMessagesByChannel - normalized
+        scrollPositionsByChannel = scrollPositionsByChannel - normalized
         badgeAssetsByChannel = badgeAssetsByChannel - normalized
         cheermoteAssetsByChannel = cheermoteAssetsByChannel - normalized
         applyInteractive(InteractiveChatOverlayEvent.ClearChannel(normalized))
@@ -393,6 +427,7 @@ class ChatRuntimeStateHolder(
         val allowed = channelIds.map { it.trim() }.filter { it.isNotEmpty() }.toSet()
         messagesByChannel = messagesByChannel.filterKeys(allowed::contains)
         historyMessagesByChannel = historyMessagesByChannel.filterKeys(allowed::contains)
+        scrollPositionsByChannel = scrollPositionsByChannel.filterKeys(allowed::contains)
         badgeAssetsByChannel = badgeAssetsByChannel.filterKeys(allowed::contains)
         cheermoteAssetsByChannel = cheermoteAssetsByChannel.filterKeys(allowed::contains)
         val interactiveChannels = interactiveState.pollsByChannel.keys +
@@ -432,12 +467,38 @@ class ChatRuntimeStateHolder(
     fun clear() {
         messagesByChannel = emptyMap()
         historyMessagesByChannel = emptyMap()
+        scrollPositionsByChannel = emptyMap()
         globalBadgeAssets = emptyMap()
         badgeAssetsByChannel = emptyMap()
         cheermoteAssetsByChannel = emptyMap()
         interactiveState = InteractiveChatOverlayState()
         authenticationRequired = false
         updateConnection(ConnectionStatus.DISCONNECTED)
+    }
+
+    private fun restoreScrollPositions(
+        value: Map<String, ChatScrollPosition>,
+    ) {
+        scrollPositionsByChannel = buildMap {
+            value.values.forEach { position ->
+                val channelId = position.channelId.trim()
+                if (
+                    channelId.isNotEmpty() &&
+                    position.firstVisibleItemIndex >= 0 &&
+                    position.firstVisibleItemScrollOffset >= 0
+                ) {
+                    put(
+                        channelId,
+                        position.copy(
+                            channelId = channelId,
+                            anchorMessageId = position.anchorMessageId
+                                ?.trim()
+                                ?.takeIf(String::isNotEmpty),
+                        ),
+                    )
+                }
+            }
+        }
     }
 
     private fun replaceAll(value: Map<String, List<ChatMessage>>) {

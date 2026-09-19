@@ -2,6 +2,7 @@ package io.ferventio.shared.chat
 
 import io.ferventio.app.domain.ChatAuthor
 import io.ferventio.app.domain.ChatMessage
+import io.ferventio.app.domain.ChatScrollPosition
 import io.ferventio.app.domain.ConnectionStatus
 import io.ferventio.app.domain.ModerationAction
 import kotlin.test.Test
@@ -167,6 +168,61 @@ class ChatRuntimeStateHolderTest {
 
         assertEquals(emptyList(), holder.messages("1"))
         assertEquals(listOf("b"), holder.messages("2").map { it.id })
+    }
+
+    @Test
+    fun scrollPositionsSurviveSnapshotAndFollowChannelLifecycle() {
+        val holder = ChatRuntimeStateHolder()
+        val position = ChatScrollPosition(
+            channelId = " channel-id ",
+            anchorMessageId = " anchor ",
+            firstVisibleItemIndex = 12,
+            firstVisibleItemScrollOffset = 34,
+            isAtBottom = false,
+        )
+
+        holder.updateScrollPosition(position)
+
+        assertEquals(
+            ChatScrollPosition(
+                channelId = CHANNEL_ID,
+                anchorMessageId = "anchor",
+                firstVisibleItemIndex = 12,
+                firstVisibleItemScrollOffset = 34,
+                isAtBottom = false,
+            ),
+            holder.scrollPosition(CHANNEL_ID),
+        )
+        val restored = ChatRuntimeStateHolder(holder.snapshot)
+        assertEquals(holder.scrollPosition(CHANNEL_ID), restored.scrollPosition(CHANNEL_ID))
+
+        holder.retainChannels(listOf(CHANNEL_ID))
+        assertTrue(holder.scrollPosition(CHANNEL_ID) != null)
+        holder.removeChannel(CHANNEL_ID)
+        assertNull(holder.scrollPosition(CHANNEL_ID))
+    }
+
+    @Test
+    fun invalidScrollPositionsAreRejectedAndClearResetsThem() {
+        val holder = ChatRuntimeStateHolder()
+        assertFailsWith<IllegalArgumentException> {
+            holder.updateScrollPosition(
+                ChatScrollPosition(
+                    channelId = CHANNEL_ID,
+                    firstVisibleItemIndex = -1,
+                    firstVisibleItemScrollOffset = 0,
+                ),
+            )
+        }
+        holder.updateScrollPosition(
+            ChatScrollPosition(
+                channelId = CHANNEL_ID,
+                firstVisibleItemIndex = 1,
+                firstVisibleItemScrollOffset = 2,
+            ),
+        )
+        holder.clear()
+        assertNull(holder.scrollPosition(CHANNEL_ID))
     }
 
     @Test
