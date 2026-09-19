@@ -106,6 +106,7 @@ fun FerventioChatTimeline(
     onRetryMessage: ((ChatMessage) -> Unit)? = null,
     onQuickBan: ((ChatMessage) -> Unit)? = null,
     onQuickDelete: ((ChatMessage) -> Unit)? = null,
+    providedThirdPartyEmotes: Map<String, ThirdPartyEmoteAsset>? = null,
 ) {
     val runtime = LocalFerventioRuntimeState.current
     val chat = runtime.chat
@@ -140,12 +141,17 @@ fun FerventioChatTimeline(
     val messages = remember(sourceMessages, collapsePlan.visibleMessageIds) {
         sourceMessages.filter { message -> message.id in collapsePlan.visibleMessageIds }
     }
-    val thirdPartyEmotes = rememberThirdPartyEmoteCatalog(
-        channelId = channel.id,
-        betterTtvEnabled = preferences.betterTtvEnabled,
-        frankerFaceZEnabled = preferences.frankerFaceZEnabled,
-        sevenTvEnabled = preferences.sevenTvEnabled,
-    )
+    val loadedThirdPartyEmotes = if (providedThirdPartyEmotes == null) {
+        rememberThirdPartyEmoteCatalog(
+            channelId = channel.id,
+            betterTtvEnabled = preferences.betterTtvEnabled,
+            frankerFaceZEnabled = preferences.frankerFaceZEnabled,
+            sevenTvEnabled = preferences.sevenTvEnabled,
+        )
+    } else {
+        emptyMap()
+    }
+    val thirdPartyEmotes = providedThirdPartyEmotes ?: loadedThirdPartyEmotes
     val cheermoteAssets = chat.cheermoteAssets(channel.id)
     val listState = rememberLazyListState()
     val navigationTarget = attention.navigationTarget(channel.id)

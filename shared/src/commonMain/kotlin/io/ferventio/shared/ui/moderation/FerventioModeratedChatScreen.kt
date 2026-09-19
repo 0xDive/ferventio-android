@@ -32,6 +32,7 @@ import io.ferventio.shared.runtime.LocalFerventioRuntimeState
 import io.ferventio.shared.ui.chat.FerventioChatTimeline
 import io.ferventio.shared.ui.chat.InteractiveChatOverlayCards
 import io.ferventio.shared.ui.chat.SharedChatComposer
+import io.ferventio.shared.ui.chat.rememberThirdPartyEmoteCatalog
 import io.ferventio.shared.ui.user.SharedUserCardSheet
 import io.ferventio.shared.ui.user.projectLocalUserCard
 import kotlinx.coroutines.CancellationException
@@ -50,6 +51,13 @@ fun FerventioModeratedChatScreen(
     val canModerateChannel = canPreviewNuke(channel.id, moderatorChannelIds)
     val canWriteChat = runtime.authentication.state.authentication != null
     val authenticationRequiredText = stringResource(Res.string.quick_moderation_auth_required)
+    val preferences = runtime.settings.preferences
+    val thirdPartyEmotes = rememberThirdPartyEmoteCatalog(
+        channelId = channel.id,
+        betterTtvEnabled = preferences.betterTtvEnabled,
+        frankerFaceZEnabled = preferences.frankerFaceZEnabled,
+        sevenTvEnabled = preferences.sevenTvEnabled,
+    )
     var showNukePreview by remember(channel.id) { mutableStateOf(false) }
     var selectedUserMessage by remember(channel.id) { mutableStateOf<ChatMessage?>(null) }
     var replyTarget by remember(channel.id) { mutableStateOf<ChatMessage?>(null) }
@@ -163,6 +171,7 @@ fun FerventioModeratedChatScreen(
                     }
                 }
             },
+            providedThirdPartyEmotes = thirdPartyEmotes,
         )
 
         SharedChatComposer(
@@ -170,6 +179,7 @@ fun FerventioModeratedChatScreen(
             replyTarget = replyTarget,
             onCancelReply = { replyTarget = null },
             onSent = { replyTarget = null },
+            thirdPartyEmotes = thirdPartyEmotes,
         )
     }
 
