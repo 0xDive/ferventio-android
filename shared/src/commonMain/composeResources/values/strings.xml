@@ -85,6 +85,9 @@
     <string name="chat_replying_to">Replying to %1$s</string>
     <string name="chat_composer_placeholder">Message #%1$s</string>
     <string name="chat_send">Send</string>
+    <string name="chat_command_unavailable">This Ferventio command is not available in the current chat context.</string>
+    <string name="chat_command_error_title">Command failed</string>
+    <string name="chat_command_moderator_required">You need moderator permissions in this channel.</string>
     <string name="chat_emotes">Emotes</string>
     <string name="chat_users_open">Chat users</string>
     <string name="chat_modes_open">Chat modes</string>

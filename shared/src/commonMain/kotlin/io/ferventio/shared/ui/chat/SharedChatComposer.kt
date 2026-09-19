@@ -59,11 +59,13 @@ import androidx.compose.ui.unit.em
 import coil3.compose.AsyncImage
 import io.ferventio.app.domain.ChatChannel
 import io.ferventio.app.domain.ChatMessage
+import io.ferventio.app.domain.ConfirmedModerationCommand
 import io.ferventio.app.domain.ComposerAutocomplete
 import io.ferventio.app.domain.ComposerEmoteVisuals
 import io.ferventio.app.domain.ThirdPartyEmoteAsset
 import io.ferventio.shared.chat.TwitchChatMessageScopeException
 import io.ferventio.shared.generated.resources.Res
+import io.ferventio.shared.generated.resources.chat_command_unavailable
 import io.ferventio.shared.generated.resources.chat_composer_placeholder
 import io.ferventio.shared.generated.resources.chat_emotes
 import io.ferventio.shared.generated.resources.chat_message_too_long
@@ -87,6 +89,8 @@ fun SharedChatComposer(
     replyTarget: ChatMessage?,
     onCancelReply: () -> Unit,
     onSent: () -> Unit,
+    onUserCardCommand: (String) -> Boolean = { false },
+    onModerationCommand: (ConfirmedModerationCommand) -> Boolean = { false },
     emotes: List<ThirdPartyEmoteAsset> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
@@ -129,6 +133,7 @@ fun SharedChatComposer(
     val canSend = hasWriteScope && trimmed.isNotEmpty() && !tooLong && !sending
     val scopeRequiredText = stringResource(Res.string.chat_write_scope_required)
     val sendFailedFormat = stringResource(Res.string.chat_send_failed, "%s")
+    val commandUnavailableText = stringResource(Res.string.chat_command_unavailable)
     val currentUserId = authentication.accessLease?.session?.userId
     val channelMessages = runtime.chat.messages(channel.id)
     val suggestions = remember(draft, channelMessages, emotes, currentUserId) {
@@ -189,38 +194,62 @@ fun SharedChatComposer(
         errorMessage = null
     }
 
+    fun finishLocalSubmission(historyText: String) {
+        localUiPreferences.recordSentMessage(channel.id, historyText)
+        localUiPreferences.setDraft(channel.id, "")
+        historyIndex = -1
+        historyScratch = ""
+        autocompleteIndex = 0
+        emotePickerVisible = false
+        onSent()
+    }
+
     fun submit() {
         if (!canSend) return
         val outgoingText = trimmed
+        when (val submission = routeSharedComposerSubmission(outgoingText)) {
+            is SharedComposerSubmission.Error -> {
+                errorMessage = submission.message
+                return
+            }
+            is SharedComposerSubmission.UserCard -> {
+                errorMessage = null
+                if (onUserCardCommand(submission.login)) {
+                    finishLocalSubmission(outgoingText)
+                } else {
+                    errorMessage = commandUnavailableText
+                }
+                return
+            }
+            is SharedComposerSubmission.Moderation -> {
+                errorMessage = null
+                if (onModerationCommand(submission.command)) {
+                    finishLocalSubmission(outgoingText)
+                } else {
+                    errorMessage = commandUnavailableText
+                }
+                return
+            }
+            is SharedComposerSubmission.Send -> Unit
+        }
+
         val replyParentMessageId = replyTarget
             ?.serverMessageId
             ?.trim()
             ?.takeIf(String::isNotEmpty)
             ?: replyTarget?.id
+        val wireText = (routeSharedComposerSubmission(outgoingText) as SharedComposerSubmission.Send).text
         sending = true
         errorMessage = null
         scope.launch {
             try {
-                if (outgoingText.equals("/clear", ignoreCase = true)) {
-                    runtime.moderation.clearChatMessages(
-                        authentication = authentication,
-                        broadcasterId = channel.id,
-                    )
-                } else {
-                    runtime.chatMessages.send(
-                        authentication = authentication,
-                        channel = channel,
-                        message = outgoingText,
-                        replyParentMessageId = replyParentMessageId,
-                    )
-                    localUiPreferences.recordSentMessage(channel.id, outgoingText)
-                }
-                localUiPreferences.setDraft(channel.id, "")
-                historyIndex = -1
-                historyScratch = ""
-                autocompleteIndex = 0
-                emotePickerVisible = false
-                onSent()
+                runtime.chatMessages.send(
+                    authentication = authentication,
+                    channel = channel,
+                    message = wireText,
+                    replyParentMessageId = replyParentMessageId,
+                )
+                finishLocalSubmission(outgoingText)
             } catch (_: TwitchChatMessageScopeException) {
                 errorMessage = scopeRequiredText
             } catch (error: Throwable) {

@@ -85,6 +85,9 @@
     <string name="chat_replying_to">Ответ для %1$s</string>
     <string name="chat_composer_placeholder">Сообщение #%1$s</string>
     <string name="chat_send">Отправить</string>
+    <string name="chat_command_unavailable">Эта команда Ferventio недоступна в текущем контексте чата.</string>
+    <string name="chat_command_error_title">Не удалось выполнить команду</string>
+    <string name="chat_command_moderator_required">Для этой команды нужны права модератора в канале.</string>
     <string name="chat_emotes">Эмоуты</string>
     <string name="chat_users_open">Пользователи чата</string>
     <string name="chat_modes_open">Режимы чата</string>
