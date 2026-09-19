@@ -39,6 +39,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.Placeholder
@@ -108,8 +114,13 @@ fun SharedChatComposer(
 
     val scope = rememberCoroutineScope()
     val preferences = runtime.settings.preferences
+    val localUiPreferences = runtime.localUiPreferences
     val hasWriteScope = authentication.accessLease?.session?.scopes?.contains(WRITE_CHAT_SCOPE) == true
-    var draft by rememberSaveable(channel.id) { mutableStateOf("") }
+    val draft = localUiPreferences.draft(channel.id)
+    val sentMessageHistory = localUiPreferences.sentMessageHistory(channel.id)
+    var historyIndex by rememberSaveable(channel.id) { mutableStateOf(-1) }
+    var historyScratch by rememberSaveable(channel.id) { mutableStateOf("") }
+    var autocompleteIndex by rememberSaveable(channel.id) { mutableStateOf(0) }
     var sending by remember(channel.id) { mutableStateOf(false) }
     var errorMessage by remember(channel.id) { mutableStateOf<String?>(null) }
     var emotePickerVisible by rememberSaveable(channel.id) { mutableStateOf(false) }
@@ -144,6 +155,40 @@ fun SharedChatComposer(
         composerRichText?.let(::SharedComposerVisualTransformation) ?: VisualTransformation.None
     }
 
+    fun updateDraft(value: String, resetHistory: Boolean = true) {
+        localUiPreferences.setDraft(channel.id, value)
+        if (resetHistory) {
+            historyIndex = -1
+            historyScratch = ""
+        }
+        autocompleteIndex = 0
+    }
+
+    fun applySuggestion(suggestion: io.ferventio.app.domain.ComposerSuggestion) {
+        updateDraft(ComposerAutocomplete.applySuggestion(draft, suggestion))
+        errorMessage = null
+    }
+
+    fun moveThroughHistory(older: Boolean) {
+        if (sentMessageHistory.isEmpty()) return
+        if (older) {
+            if (historyIndex < 0) historyScratch = draft
+            val nextIndex = (historyIndex + 1).coerceAtMost(sentMessageHistory.lastIndex)
+            historyIndex = nextIndex
+            localUiPreferences.setDraft(channel.id, sentMessageHistory[nextIndex])
+        } else {
+            if (historyIndex < 0) return
+            val nextIndex = historyIndex - 1
+            historyIndex = nextIndex
+            localUiPreferences.setDraft(
+                channel.id,
+                if (nextIndex >= 0) sentMessageHistory[nextIndex] else historyScratch,
+            )
+        }
+        autocompleteIndex = 0
+        errorMessage = null
+    }
+
     fun submit() {
         if (!canSend) return
         val outgoingText = trimmed
@@ -162,7 +207,11 @@ fun SharedChatComposer(
                     message = outgoingText,
                     replyParentMessageId = replyParentMessageId,
                 )
-                draft = ""
+                localUiPreferences.recordSentMessage(channel.id, outgoingText)
+                localUiPreferences.setDraft(channel.id, "")
+                historyIndex = -1
+                historyScratch = ""
+                autocompleteIndex = 0
                 emotePickerVisible = false
                 onSent()
             } catch (_: TwitchChatMessageScopeException) {
@@ -240,10 +289,55 @@ fun SharedChatComposer(
                     BasicTextField(
                         value = draft,
                         onValueChange = { value ->
-                            draft = value.take(MAX_CHAT_MESSAGE_LENGTH + 1)
+                            updateDraft(value.take(MAX_CHAT_MESSAGE_LENGTH))
                             errorMessage = null
                         },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .onPreviewKeyEvent { event ->
+                                if (event.type != KeyEventType.KeyDown) {
+                                    return@onPreviewKeyEvent false
+                                }
+                                when (event.key) {
+                                    Key.DirectionDown -> {
+                                        if (suggestions.isNotEmpty()) {
+                                            autocompleteIndex =
+                                                (autocompleteIndex + 1).coerceAtMost(suggestions.lastIndex)
+                                        } else {
+                                            moveThroughHistory(older = false)
+                                        }
+                                        true
+                                    }
+                                    Key.DirectionUp -> {
+                                        if (suggestions.isNotEmpty()) {
+                                            autocompleteIndex =
+                                                (autocompleteIndex - 1).coerceAtLeast(0)
+                                        } else {
+                                            moveThroughHistory(older = true)
+                                        }
+                                        true
+                                    }
+                                    Key.Tab -> suggestions
+                                        .getOrNull(autocompleteIndex)
+                                        ?.let {
+                                            applySuggestion(it)
+                                            true
+                                        }
+                                        ?: false
+                                    Key.Enter -> when {
+                                        suggestions.isNotEmpty() && !event.isShiftPressed -> {
+                                            suggestions.getOrNull(autocompleteIndex)?.let(::applySuggestion)
+                                            true
+                                        }
+                                        preferences.sendOnEnter && !event.isShiftPressed -> {
+                                            submit()
+                                            true
+                                        }
+                                        else -> false
+                                    }
+                                    else -> false
+                                }
+                            },
                         enabled = !sending,
                         textStyle = MaterialTheme.typography.bodyMedium.copy(
                             color = if (composerRichText == null) {
@@ -330,10 +424,8 @@ fun SharedChatComposer(
         if (suggestions.isNotEmpty() && !emotePickerVisible) {
             SharedInlineComposerAutocomplete(
                 suggestions = suggestions,
-                onSelect = { suggestion ->
-                    draft = ComposerAutocomplete.applySuggestion(draft, suggestion)
-                    errorMessage = null
-                },
+                selectedIndex = autocompleteIndex,
+                onSelect = ::applySuggestion,
             )
         }
 
@@ -367,7 +459,7 @@ fun SharedChatComposer(
             SharedEmotePickerPanel(
                 emotes = emotes,
                 onSelect = { asset ->
-                    draft = appendEmoteCode(draft, asset.code)
+                    updateDraft(appendEmoteCode(draft, asset.code))
                     errorMessage = null
                 },
                 onDismiss = { emotePickerVisible = false },

@@ -35,6 +35,25 @@ class SharedLocalUiPreferencesStateTest {
         assertEquals(store.load(), state.preferences)
     }
 
+    @Test
+    fun composerDraftsAndHistoryPersistLocally() {
+        val store = RecordingStore()
+        val state = SharedLocalUiPreferencesStateHolder(store)
+
+        state.setDraft("channel-1", "hello ")
+        state.recordSentMessage("channel-1", "first")
+        state.recordSentMessage("channel-1", "second")
+        state.recordSentMessage("channel-1", "first")
+
+        assertEquals("hello ", state.draft("channel-1"))
+        assertEquals(listOf("first", "second"), state.sentMessageHistory("channel-1"))
+        assertEquals(state.preferences, store.load())
+
+        state.setDraft("channel-1", "")
+        assertEquals("", state.draft("channel-1"))
+        assertFalse("channel-1" in state.preferences.draftsByChannel)
+    }
+
     private class RecordingStore : SharedLocalUiPreferencesStore {
         private var value = SharedLocalUiPreferences()
 

@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AlternateEmail
 import androidx.compose.material3.Icon
@@ -32,6 +32,7 @@ import io.ferventio.app.domain.ComposerSuggestion
 @Composable
 internal fun SharedInlineComposerAutocomplete(
     suggestions: List<ComposerSuggestion>,
+    selectedIndex: Int,
     onSelect: (ComposerSuggestion) -> Unit,
 ) {
     if (suggestions.isEmpty()) return
@@ -43,17 +44,23 @@ internal fun SharedInlineComposerAutocomplete(
         horizontalArrangement = Arrangement.spacedBy(5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        items(
+        itemsIndexed(
             items = suggestions,
-            key = ComposerSuggestion::key,
-        ) { suggestion ->
+            key = { _, suggestion -> suggestion.key },
+        ) { index, suggestion ->
+            val selected = index == selectedIndex.coerceIn(0, suggestions.lastIndex)
             Surface(
                 modifier = Modifier
                     .height(50.dp)
                     .width(132.dp)
                     .clickable { onSelect(suggestion) },
                 shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.surfaceContainer,
+                color = if (selected) {
+                    MaterialTheme.colorScheme.secondaryContainer
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainer
+                },
+                tonalElevation = if (selected) 4.dp else 1.dp,
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),

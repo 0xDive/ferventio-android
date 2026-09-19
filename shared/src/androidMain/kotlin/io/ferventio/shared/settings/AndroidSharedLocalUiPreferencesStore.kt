@@ -21,6 +21,12 @@ class AndroidSharedLocalUiPreferencesStore(
         showQuickBan = preferences.getBoolean(QUICK_BAN_BUTTON_KEY, false),
         showQuickDelete = preferences.getBoolean(QUICK_DELETE_BUTTON_KEY, false),
         confirmModerationActions = preferences.getBoolean(CONFIRM_MODERATION_ACTIONS_KEY, true),
+        draftsByChannel = SharedComposerLocalStateCodec.decodeDrafts(
+            preferences.getString(COMPOSER_DRAFTS_BY_CHANNEL_KEY, null),
+        ),
+        sentMessageHistoryByChannel = SharedComposerLocalStateCodec.decodeHistory(
+            preferences.getString(SENT_MESSAGE_HISTORY_BY_CHANNEL_KEY, null),
+        ),
     )
 
     override fun save(preferences: SharedLocalUiPreferences) {
@@ -28,6 +34,14 @@ class AndroidSharedLocalUiPreferencesStore(
             .putBoolean(QUICK_BAN_BUTTON_KEY, preferences.showQuickBan)
             .putBoolean(QUICK_DELETE_BUTTON_KEY, preferences.showQuickDelete)
             .putBoolean(CONFIRM_MODERATION_ACTIONS_KEY, preferences.confirmModerationActions)
+            .putString(
+                COMPOSER_DRAFTS_BY_CHANNEL_KEY,
+                SharedComposerLocalStateCodec.encodeDrafts(preferences.draftsByChannel),
+            )
+            .putString(
+                SENT_MESSAGE_HISTORY_BY_CHANNEL_KEY,
+                SharedComposerLocalStateCodec.encodeHistory(preferences.sentMessageHistoryByChannel),
+            )
             .apply()
     }
 }

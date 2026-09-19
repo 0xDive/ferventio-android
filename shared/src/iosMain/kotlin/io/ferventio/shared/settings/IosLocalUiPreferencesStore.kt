@@ -11,6 +11,12 @@ class IosLocalUiPreferencesStore(
         confirmModerationActions = defaults.objectForKey(CONFIRM_MODERATION_ACTIONS_KEY)
             ?.let { defaults.boolForKey(CONFIRM_MODERATION_ACTIONS_KEY) }
             ?: true,
+        draftsByChannel = SharedComposerLocalStateCodec.decodeDrafts(
+            defaults.stringForKey(COMPOSER_DRAFTS_BY_CHANNEL_KEY),
+        ),
+        sentMessageHistoryByChannel = SharedComposerLocalStateCodec.decodeHistory(
+            defaults.stringForKey(SENT_MESSAGE_HISTORY_BY_CHANNEL_KEY),
+        ),
     )
 
     override fun save(preferences: SharedLocalUiPreferences) {
@@ -19,6 +25,14 @@ class IosLocalUiPreferencesStore(
         defaults.setBool(
             preferences.confirmModerationActions,
             forKey = CONFIRM_MODERATION_ACTIONS_KEY,
+        )
+        defaults.setObject(
+            SharedComposerLocalStateCodec.encodeDrafts(preferences.draftsByChannel),
+            forKey = COMPOSER_DRAFTS_BY_CHANNEL_KEY,
+        )
+        defaults.setObject(
+            SharedComposerLocalStateCodec.encodeHistory(preferences.sentMessageHistoryByChannel),
+            forKey = SENT_MESSAGE_HISTORY_BY_CHANNEL_KEY,
         )
     }
 }
