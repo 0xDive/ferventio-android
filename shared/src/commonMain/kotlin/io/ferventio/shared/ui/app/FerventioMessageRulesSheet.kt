@@ -59,6 +59,11 @@ import io.ferventio.shared.settings.SharedSettingsSaveStatus
 import io.ferventio.shared.ui.color.colorFromArgb
 import org.jetbrains.compose.resources.stringResource
 
+internal enum class FerventioMessageRulesSection {
+    HIGHLIGHTS,
+    IGNORE,
+}
+
 @Composable
 internal fun FerventioMessageRulesSheet(
     state: SharedMessageRulesStateHolder,
@@ -68,11 +73,6 @@ internal fun FerventioMessageRulesSheet(
     onDeleteIgnoreRule: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var editingHighlight by remember { mutableStateOf<HighlightRule?>(null) }
-    var creatingHighlight by remember { mutableStateOf(false) }
-    var editingIgnore by remember { mutableStateOf<IgnoreRule?>(null) }
-    var creatingIgnore by remember { mutableStateOf(false) }
-
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
@@ -86,17 +86,45 @@ internal fun FerventioMessageRulesSheet(
                 fontWeight = FontWeight.Bold,
             )
             Spacer(Modifier.height(18.dp))
-
-            Text(
-                text = stringResource(Res.string.message_rules_highlights),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
+            FerventioMessageRulesPage(
+                state = state,
+                section = null,
+                onUpsertHighlightRule = onUpsertHighlightRule,
+                onDeleteHighlightRule = onDeleteHighlightRule,
+                onUpsertIgnoreRule = onUpsertIgnoreRule,
+                onDeleteIgnoreRule = onDeleteIgnoreRule,
             )
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
+            ) {
+                Text(stringResource(Res.string.message_rules_close))
+            }
+        }
+    }
+}
+
+@Composable
+internal fun FerventioMessageRulesPage(
+    state: SharedMessageRulesStateHolder,
+    section: FerventioMessageRulesSection? = null,
+    onUpsertHighlightRule: (HighlightRule) -> Unit,
+    onDeleteHighlightRule: (String) -> Unit,
+    onUpsertIgnoreRule: (IgnoreRule) -> Unit,
+    onDeleteIgnoreRule: (String) -> Unit,
+) {
+    var editingHighlight by remember { mutableStateOf<HighlightRule?>(null) }
+    var creatingHighlight by remember { mutableStateOf(false) }
+    var editingIgnore by remember { mutableStateOf<IgnoreRule?>(null) }
+    var creatingIgnore by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxWidth()) {
+        if (section != FerventioMessageRulesSection.IGNORE) {
             Text(
                 text = stringResource(Res.string.message_rules_highlights_intro),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+                modifier = Modifier.padding(bottom = 8.dp),
             )
             if (state.highlightRules.isEmpty()) {
                 Text(
@@ -123,18 +151,18 @@ internal fun FerventioMessageRulesSheet(
             ) {
                 Text(stringResource(Res.string.message_rules_add_highlight))
             }
+        }
 
+        if (section == null) {
             HorizontalDivider(modifier = Modifier.padding(vertical = 18.dp))
-            Text(
-                text = stringResource(Res.string.message_rules_ignore),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
+        }
+
+        if (section != FerventioMessageRulesSection.HIGHLIGHTS) {
             Text(
                 text = stringResource(Res.string.message_rules_ignore_intro),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp, bottom = 8.dp),
+                modifier = Modifier.padding(bottom = 8.dp),
             )
             if (state.ignoreRules.isEmpty()) {
                 Text(
@@ -161,34 +189,27 @@ internal fun FerventioMessageRulesSheet(
             ) {
                 Text(stringResource(Res.string.message_rules_add_ignore))
             }
+        }
 
-            when (state.saveStatus) {
-                SharedSettingsSaveStatus.SAVING -> Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 18.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    CircularProgressIndicator(modifier = Modifier.size(24.dp))
-                    Text(stringResource(Res.string.settings_saving))
-                }
-                SharedSettingsSaveStatus.FAILED -> Text(
-                    text = stringResource(
-                        Res.string.settings_save_failed,
-                        state.saveErrorMessage.orEmpty(),
-                    ),
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(top = 18.dp),
-                )
-                SharedSettingsSaveStatus.IDLE -> Unit
-            }
-
-            TextButton(
-                onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
+        when (state.saveStatus) {
+            SharedSettingsSaveStatus.SAVING -> Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 18.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(stringResource(Res.string.message_rules_close))
+                CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                Text(stringResource(Res.string.settings_saving))
             }
+            SharedSettingsSaveStatus.FAILED -> Text(
+                text = stringResource(
+                    Res.string.settings_save_failed,
+                    state.saveErrorMessage.orEmpty(),
+                ),
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 18.dp),
+            )
+            SharedSettingsSaveStatus.IDLE -> Unit
         }
     }
 

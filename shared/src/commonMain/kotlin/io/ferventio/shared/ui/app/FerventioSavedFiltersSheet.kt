@@ -100,6 +100,45 @@ internal fun FerventioSavedFiltersSheet(
     onAddToSplit: (String) -> Unit = {},
     onDismiss: () -> Unit,
 ) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 20.dp),
+        ) {
+            Text(
+                text = stringResource(Res.string.saved_filters_title),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+            )
+            FerventioSavedFiltersPage(
+                state = state,
+                onUpsert = onUpsert,
+                onDelete = onDelete,
+                onImport = onImport,
+                canAddToSplit = canAddToSplit,
+                onAddToSplit = onAddToSplit,
+            )
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
+            ) {
+                Text(stringResource(Res.string.saved_filters_close))
+            }
+        }
+    }
+}
+
+@Composable
+internal fun FerventioSavedFiltersPage(
+    state: SharedSavedFiltersStateHolder,
+    onUpsert: (SavedMessageFilter) -> Unit,
+    onDelete: (String) -> Unit,
+    onImport: (String) -> Unit = {},
+    canAddToSplit: Boolean = false,
+    onAddToSplit: (String) -> Unit = {},
+) {
     val runtime = LocalFerventioRuntimeState.current
     var editing by remember { mutableStateOf<SavedMessageFilter?>(null) }
     var creating by remember { mutableStateOf(false) }
@@ -114,95 +153,76 @@ internal fun FerventioSavedFiltersSheet(
             .toList()
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp),
-        ) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = stringResource(Res.string.saved_filters_intro),
+            modifier = Modifier.padding(bottom = 14.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        if (state.filters.isEmpty()) {
             Text(
-                text = stringResource(Res.string.saved_filters_title),
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-            )
-            Text(
-                text = stringResource(Res.string.saved_filters_intro),
-                modifier = Modifier.padding(top = 6.dp, bottom = 14.dp),
-                style = MaterialTheme.typography.bodySmall,
+                text = stringResource(Res.string.saved_filters_empty),
+                modifier = Modifier.padding(vertical = 12.dp),
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-
-            if (state.filters.isEmpty()) {
-                Text(
-                    text = stringResource(Res.string.saved_filters_empty),
-                    modifier = Modifier.padding(vertical = 12.dp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+        } else {
+            state.filters.forEachIndexed { index, filter ->
+                SavedFilterRow(
+                    filter = filter,
+                    canAddToSplit = canAddToSplit,
+                    onAddToSplit = { onAddToSplit(filter.id) },
+                    onEdit = { editing = filter },
+                    onDelete = { onDelete(filter.id) },
                 )
-            } else {
-                state.filters.forEachIndexed { index, filter ->
-                    SavedFilterRow(
-                        filter = filter,
-                        canAddToSplit = canAddToSplit,
-                        onAddToSplit = { onAddToSplit(filter.id) },
-                        onEdit = { editing = filter },
-                        onDelete = { onDelete(filter.id) },
-                    )
-                    if (index != state.filters.lastIndex) HorizontalDivider()
-                }
+                if (index != state.filters.lastIndex) HorizontalDivider()
             }
+        }
 
-            Button(
-                onClick = { creating = true },
-                modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+        Button(
+            onClick = { creating = true },
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+        ) {
+            Text(stringResource(Res.string.saved_filters_add))
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            OutlinedButton(
+                onClick = { exporting = true },
+                modifier = Modifier.weight(1f),
             ) {
-                Text(stringResource(Res.string.saved_filters_add))
+                Text(stringResource(Res.string.saved_filters_export))
             }
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            OutlinedButton(
+                onClick = { importing = true },
+                modifier = Modifier.weight(1f),
             ) {
-                OutlinedButton(
-                    onClick = { exporting = true },
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(stringResource(Res.string.saved_filters_export))
-                }
-                OutlinedButton(
-                    onClick = { importing = true },
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(stringResource(Res.string.saved_filters_import))
-                }
+                Text(stringResource(Res.string.saved_filters_import))
             }
+        }
 
-            when (state.saveStatus) {
-                SharedSettingsSaveStatus.SAVING -> Row(
-                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    CircularProgressIndicator()
-                    Text(stringResource(Res.string.settings_saving))
-                }
-                SharedSettingsSaveStatus.FAILED -> Text(
-                    text = stringResource(
-                        Res.string.settings_save_failed,
-                        state.saveErrorMessage.orEmpty(),
-                    ),
-                    modifier = Modifier.padding(top = 16.dp),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-                SharedSettingsSaveStatus.IDLE -> Unit
-            }
-
-            TextButton(
-                onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 14.dp),
+        when (state.saveStatus) {
+            SharedSettingsSaveStatus.SAVING -> Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text(stringResource(Res.string.saved_filters_close))
+                CircularProgressIndicator()
+                Text(stringResource(Res.string.settings_saving))
             }
+            SharedSettingsSaveStatus.FAILED -> Text(
+                text = stringResource(
+                    Res.string.settings_save_failed,
+                    state.saveErrorMessage.orEmpty(),
+                ),
+                modifier = Modifier.padding(top = 16.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+            SharedSettingsSaveStatus.IDLE -> Unit
         }
     }
 

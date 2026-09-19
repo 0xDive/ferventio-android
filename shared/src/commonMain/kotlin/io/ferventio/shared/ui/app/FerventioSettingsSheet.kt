@@ -68,8 +68,12 @@ import io.ferventio.app.domain.AppThemeMode
 import io.ferventio.app.domain.ChatNameStyle
 import io.ferventio.app.domain.MentionColors
 import io.ferventio.app.domain.MessageDensity
+import io.ferventio.app.domain.HighlightRule
+import io.ferventio.app.domain.IgnoreRule
+import io.ferventio.app.domain.SavedMessageFilter
 import io.ferventio.shared.generated.resources.*
 import io.ferventio.shared.push.PushAuthorizationStatus
+import io.ferventio.shared.runtime.LocalFerventioRuntimeState
 import io.ferventio.shared.settings.AppearanceSettingsPresets
 import io.ferventio.shared.settings.SharedAppPreferences
 import io.ferventio.shared.settings.SharedAppSettingsStateHolder
@@ -83,6 +87,9 @@ private enum class SharedSettingsPage {
     CHAT,
     USER_CARD,
     NOTIFICATIONS,
+    HIGHLIGHTS,
+    IGNORE,
+    FILTERS,
     HISTORY,
     IMAGE_CACHE,
     BACKUP_SYNC,
@@ -101,11 +108,19 @@ internal fun FerventioSettingsSheet(
     onRequestNotificationPermission: () -> Unit,
     onOpenNotificationSettings: () -> Unit,
     onSave: (SharedAppPreferences) -> Unit,
-    onOpenMessageRules: () -> Unit = {},
-    onOpenSavedFilters: () -> Unit = {},
+    onUpsertHighlightRule: (HighlightRule) -> Unit = {},
+    onDeleteHighlightRule: (String) -> Unit = {},
+    onUpsertIgnoreRule: (IgnoreRule) -> Unit = {},
+    onDeleteIgnoreRule: (String) -> Unit = {},
+    onUpsertSavedFilter: (SavedMessageFilter) -> Unit = {},
+    onDeleteSavedFilter: (String) -> Unit = {},
+    onImportSavedFilters: (String) -> Unit = {},
+    canAddSavedFilterToSplit: Boolean = false,
+    onAddSavedFilterSplit: (String) -> Unit = {},
     onDismiss: () -> Unit,
 ) {
     var persistedPreferences by remember { mutableStateOf(state.preferences) }
+    val runtime = LocalFerventioRuntimeState.current
     val notificationAction = notificationPermissionAction(notificationAuthorizationStatus)
     val aboutInfo = LocalFerventioAboutInfo.current
     val accountActions = LocalFerventioAccountActions.current
@@ -133,16 +148,6 @@ internal fun FerventioSettingsSheet(
     fun saveAndDismiss() {
         persistIfChanged()
         onDismiss()
-    }
-
-    fun openMessageRules() {
-        persistIfChanged()
-        onOpenMessageRules()
-    }
-
-    fun openSavedFilters() {
-        persistIfChanged()
-        onOpenSavedFilters()
     }
 
     Scaffold(
@@ -230,8 +235,6 @@ internal fun FerventioSettingsSheet(
                         syncRevision = state.syncRevision,
                         aboutInfo = aboutInfo,
                         onOpen = { page = it },
-                        onOpenMessageRules = ::openMessageRules,
-                        onOpenSavedFilters = ::openSavedFilters,
                     )
                 }
                 SharedSettingsPage.APPEARANCE -> AppearanceSettingsPage(
@@ -253,6 +256,42 @@ internal fun FerventioSettingsSheet(
                     onOpenNotificationSettings = onOpenNotificationSettings,
                     update = ::update,
                 )
+                SharedSettingsPage.HIGHLIGHTS -> SettingsContentSection(
+                    title = stringResource(Res.string.message_rules_highlights),
+                ) {
+                    FerventioMessageRulesPage(
+                        state = runtime.messageRules,
+                        section = FerventioMessageRulesSection.HIGHLIGHTS,
+                        onUpsertHighlightRule = onUpsertHighlightRule,
+                        onDeleteHighlightRule = onDeleteHighlightRule,
+                        onUpsertIgnoreRule = onUpsertIgnoreRule,
+                        onDeleteIgnoreRule = onDeleteIgnoreRule,
+                    )
+                }
+                SharedSettingsPage.IGNORE -> SettingsContentSection(
+                    title = stringResource(Res.string.message_rules_ignore),
+                ) {
+                    FerventioMessageRulesPage(
+                        state = runtime.messageRules,
+                        section = FerventioMessageRulesSection.IGNORE,
+                        onUpsertHighlightRule = onUpsertHighlightRule,
+                        onDeleteHighlightRule = onDeleteHighlightRule,
+                        onUpsertIgnoreRule = onUpsertIgnoreRule,
+                        onDeleteIgnoreRule = onDeleteIgnoreRule,
+                    )
+                }
+                SharedSettingsPage.FILTERS -> SettingsContentSection(
+                    title = stringResource(Res.string.settings_filter_language),
+                ) {
+                    FerventioSavedFiltersPage(
+                        state = runtime.savedFilters,
+                        onUpsert = onUpsertSavedFilter,
+                        onDelete = onDeleteSavedFilter,
+                        onImport = onImportSavedFilters,
+                        canAddToSplit = canAddSavedFilterToSplit,
+                        onAddToSplit = onAddSavedFilterSplit,
+                    )
+                }
                 SharedSettingsPage.HISTORY -> FerventioHistorySettingsPage(
                     preferences = state.preferences,
                     update = ::update,
@@ -333,6 +372,9 @@ private fun settingsPageTitle(page: SharedSettingsPage): String = when (page) {
     SharedSettingsPage.CHAT -> stringResource(Res.string.settings_input_behavior)
     SharedSettingsPage.USER_CARD -> stringResource(Res.string.settings_user_card)
     SharedSettingsPage.NOTIFICATIONS -> stringResource(Res.string.notifications_title)
+    SharedSettingsPage.HIGHLIGHTS -> stringResource(Res.string.message_rules_highlights)
+    SharedSettingsPage.IGNORE -> stringResource(Res.string.message_rules_ignore)
+    SharedSettingsPage.FILTERS -> stringResource(Res.string.settings_filter_language)
     SharedSettingsPage.HISTORY -> stringResource(Res.string.settings_history)
     SharedSettingsPage.IMAGE_CACHE -> stringResource(Res.string.image_cache_title)
     SharedSettingsPage.BACKUP_SYNC -> stringResource(Res.string.settings_export_sync)
@@ -349,8 +391,6 @@ private fun SettingsHome(
     syncRevision: Long,
     aboutInfo: FerventioAboutInfo,
     onOpen: (SharedSettingsPage) -> Unit,
-    onOpenMessageRules: () -> Unit,
-    onOpenSavedFilters: () -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SettingsHomeGroup(stringResource(Res.string.settings_home_chat_group)) {
@@ -381,21 +421,21 @@ private fun SettingsHome(
                 icon = Icons.Default.Palette,
                 title = stringResource(Res.string.message_rules_highlights),
                 summary = stringResource(Res.string.settings_highlights_summary),
-                onClick = onOpenMessageRules,
+                onClick = { onOpen(SharedSettingsPage.HIGHLIGHTS) },
             )
             SettingsGroupDivider()
             SettingsMenuRow(
                 icon = Icons.Default.Block,
                 title = stringResource(Res.string.message_rules_ignore),
                 summary = stringResource(Res.string.settings_ignore_summary),
-                onClick = onOpenMessageRules,
+                onClick = { onOpen(SharedSettingsPage.IGNORE) },
             )
             SettingsGroupDivider()
             SettingsMenuRow(
                 icon = Icons.Default.FilterAlt,
                 title = stringResource(Res.string.settings_filter_language),
                 summary = stringResource(Res.string.settings_filter_language_summary),
-                onClick = onOpenSavedFilters,
+                onClick = { onOpen(SharedSettingsPage.FILTERS) },
             )
             SettingsGroupDivider()
             SettingsMenuRow(
@@ -450,6 +490,36 @@ private fun SettingsHome(
                 ),
                 onClick = { onOpen(SharedSettingsPage.ABOUT) },
             )
+        }
+    }
+}
+
+@Composable
+private fun SettingsContentSection(
+    title: String,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(
+            1.dp,
+            MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f),
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+            )
+            content()
         }
     }
 }

@@ -107,8 +107,6 @@ fun FerventioWorkspaceShell(
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
     var settingsVisible by remember { mutableStateOf(false) }
-    var messageRulesVisible by remember { mutableStateOf(false) }
-    var savedFiltersVisible by remember { mutableStateOf(false) }
     var attentionVisible by remember { mutableStateOf(false) }
     var historySearchVisible by remember { mutableStateOf(false) }
     val selectedChannelId = resolveWorkspaceActiveChannelId(
@@ -288,36 +286,20 @@ fun FerventioWorkspaceShell(
             onRequestNotificationPermission = onRequestNotificationPermission,
             onOpenNotificationSettings = onOpenNotificationSettings,
             onSave = onSaveSettings,
-            onOpenMessageRules = { messageRulesVisible = true },
-            onOpenSavedFilters = { savedFiltersVisible = true },
-            onDismiss = { settingsVisible = false },
-        )
-    }
-
-    if (messageRulesVisible) {
-        FerventioMessageRulesSheet(
-            state = runtime.messageRules,
             onUpsertHighlightRule = onUpsertHighlightRule,
             onDeleteHighlightRule = onDeleteHighlightRule,
             onUpsertIgnoreRule = onUpsertIgnoreRule,
             onDeleteIgnoreRule = onDeleteIgnoreRule,
-            onDismiss = { messageRulesVisible = false },
-        )
-    }
-
-    if (savedFiltersVisible) {
-        FerventioSavedFiltersSheet(
-            state = runtime.savedFilters,
-            onUpsert = onUpsertSavedFilter,
-            onDelete = onDeleteSavedFilter,
-            onImport = onImportSavedFilters,
-            canAddToSplit = (state.workspaceLayout.activeTab?.splits?.size ?: MAX_SPLITS_PER_TAB) < MAX_SPLITS_PER_TAB,
-            onAddToSplit = { filterId ->
+            onUpsertSavedFilter = onUpsertSavedFilter,
+            onDeleteSavedFilter = onDeleteSavedFilter,
+            onImportSavedFilters = onImportSavedFilters,
+            canAddSavedFilterToSplit =
+                (state.workspaceLayout.activeTab?.splits?.size ?: MAX_SPLITS_PER_TAB) < MAX_SPLITS_PER_TAB,
+            onAddSavedFilterSplit = { filterId ->
                 onAddSavedFilterSplit(filterId)
-                savedFiltersVisible = false
                 settingsVisible = false
             },
-            onDismiss = { savedFiltersVisible = false },
+            onDismiss = { settingsVisible = false },
         )
     }
 

@@ -102,8 +102,6 @@ internal fun FerventioAnonymousWorkspaceShell(
     var attentionVisible by remember { mutableStateOf(false) }
     var historySearchVisible by remember { mutableStateOf(false) }
     var settingsVisible by remember { mutableStateOf(false) }
-    var messageRulesVisible by remember { mutableStateOf(false) }
-    var savedFiltersVisible by remember { mutableStateOf(false) }
     val selectedChannelId = resolveWorkspaceActiveChannelId(
         layout = state.workspaceLayout,
         selectedChannelId = state.selectedChannelId,
@@ -254,27 +252,6 @@ internal fun FerventioAnonymousWorkspaceShell(
         )
     }
 
-    if (messageRulesVisible) {
-        FerventioMessageRulesSheet(
-            state = runtime.messageRules,
-            onUpsertHighlightRule = onUpsertHighlightRule,
-            onDeleteHighlightRule = onDeleteHighlightRule,
-            onUpsertIgnoreRule = onUpsertIgnoreRule,
-            onDeleteIgnoreRule = onDeleteIgnoreRule,
-            onDismiss = { messageRulesVisible = false },
-        )
-    }
-
-    if (savedFiltersVisible) {
-        FerventioSavedFiltersSheet(
-            state = runtime.savedFilters,
-            onUpsert = onUpsertSavedFilter,
-            onDelete = onDeleteSavedFilter,
-            onImport = onImportSavedFilters,
-            onDismiss = { savedFiltersVisible = false },
-        )
-    }
-
     if (settingsVisible) {
         FerventioSettingsSheet(
             state = runtime.settings,
@@ -282,8 +259,13 @@ internal fun FerventioAnonymousWorkspaceShell(
             onRequestNotificationPermission = onRequestNotificationPermission,
             onOpenNotificationSettings = onOpenNotificationSettings,
             onSave = onSaveHistoryPreferences,
-            onOpenMessageRules = { messageRulesVisible = true },
-            onOpenSavedFilters = { savedFiltersVisible = true },
+            onUpsertHighlightRule = onUpsertHighlightRule,
+            onDeleteHighlightRule = onDeleteHighlightRule,
+            onUpsertIgnoreRule = onUpsertIgnoreRule,
+            onDeleteIgnoreRule = onDeleteIgnoreRule,
+            onUpsertSavedFilter = onUpsertSavedFilter,
+            onDeleteSavedFilter = onDeleteSavedFilter,
+            onImportSavedFilters = onImportSavedFilters,
             onDismiss = { settingsVisible = false },
         )
     }
