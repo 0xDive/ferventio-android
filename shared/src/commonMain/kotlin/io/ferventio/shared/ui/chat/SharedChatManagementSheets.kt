@@ -11,12 +11,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -39,9 +41,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import io.ferventio.app.domain.BannedChatUser
 import io.ferventio.app.domain.ChatChannel
 import io.ferventio.app.domain.ChatMessage
 import io.ferventio.app.domain.ModerationChatSettings
+import io.ferventio.app.domain.ModerationPeopleTab
 import io.ferventio.app.domain.ModerationUser
 import io.ferventio.app.domain.ModerationUserGroup
 import io.ferventio.shared.chat.TwitchChatManagementClient
@@ -64,7 +68,13 @@ import io.ferventio.shared.generated.resources.chat_reply_cancel
 import io.ferventio.shared.generated.resources.chat_users_empty
 import io.ferventio.shared.generated.resources.chat_users_local_fallback
 import io.ferventio.shared.generated.resources.chat_users_local_only
+import io.ferventio.shared.generated.resources.chat_users_load_failed
+import io.ferventio.shared.generated.resources.chat_users_remote_count
 import io.ferventio.shared.generated.resources.chat_users_search
+import io.ferventio.shared.generated.resources.chat_users_tab_banned
+import io.ferventio.shared.generated.resources.chat_users_tab_chatters
+import io.ferventio.shared.generated.resources.chat_users_tab_moderators
+import io.ferventio.shared.generated.resources.chat_users_tab_vips
 import io.ferventio.shared.generated.resources.chat_users_title
 import io.ferventio.shared.generated.resources.chat_users_twitch_total
 import io.ferventio.shared.generated.resources.quick_moderation_error_title
@@ -85,10 +95,18 @@ internal fun SharedChatUsersSheet(
 ) {
     val runtime = LocalFerventioRuntimeState.current
     val authentication = runtime.authentication.state.authentication
+    val authenticatedUserId = authentication?.accessLease?.session?.userId
+    val isOwner = authenticatedUserId == channel.id
+    val canUseHelix = canQueryHelix || isOwner
     val client = remember { TwitchChatManagementClient() }
     val messages = runtime.chat.messages(channel.id)
     val localUsers = remember(messages) { localChatUsers(messages) }
+    val availableTabs = remember(isOwner) { chatUsersAvailableTabs(isOwner) }
+    var selectedTab by remember(channel.id, isOwner) {
+        mutableStateOf(ModerationPeopleTab.CHATTERS)
+    }
     var remoteUsers by remember(channel.id) { mutableStateOf(emptyList<ModerationUser>()) }
+    var bannedUsers by remember(channel.id) { mutableStateOf(emptyList<BannedChatUser>()) }
     var twitchTotal by remember(channel.id) { mutableStateOf<Int?>(null) }
     var loading by remember(channel.id) { mutableStateOf(false) }
     var loadFailed by remember(channel.id) { mutableStateOf(false) }
@@ -100,31 +118,87 @@ internal fun SharedChatUsersSheet(
     DisposableEffect(client) {
         onDispose { client.close() }
     }
-    LaunchedEffect(channel.id, authentication, canQueryHelix) {
+    LaunchedEffect(
+        channel.id,
+        authentication,
+        canUseHelix,
+        isOwner,
+        selectedTab,
+    ) {
         remoteUsers = emptyList()
+        bannedUsers = emptyList()
         twitchTotal = null
         loadFailed = false
         loading = false
-        if (!canQueryHelix || authentication == null) return@LaunchedEffect
-        loading = true
-        try {
-            val snapshot = client.getChatters(
-                authentication = authentication,
-                broadcasterId = channel.id,
-            )
-            remoteUsers = snapshot.users
-            twitchTotal = snapshot.total
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Throwable) {
-            loadFailed = true
-        } finally {
-            loading = false
+
+        val auth = authentication
+        when (selectedTab) {
+            ModerationPeopleTab.CHATTERS -> {
+                if (!canUseHelix || auth == null) return@LaunchedEffect
+                loading = true
+                try {
+                    val snapshot = client.getChatters(
+                        authentication = auth,
+                        broadcasterId = channel.id,
+                    )
+                    remoteUsers = snapshot.users
+                    twitchTotal = snapshot.total
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Throwable) {
+                    loadFailed = true
+                } finally {
+                    loading = false
+                }
+            }
+
+            ModerationPeopleTab.MODERATORS,
+            ModerationPeopleTab.VIPS,
+            ModerationPeopleTab.BANNED -> {
+                if (!isOwner || auth == null) {
+                    loadFailed = true
+                    return@LaunchedEffect
+                }
+                loading = true
+                try {
+                    when (selectedTab) {
+                        ModerationPeopleTab.MODERATORS -> {
+                            remoteUsers = client.getModerators(auth, channel.id)
+                        }
+                        ModerationPeopleTab.VIPS -> {
+                            remoteUsers = client.getVips(auth, channel.id)
+                        }
+                        ModerationPeopleTab.BANNED -> {
+                            bannedUsers = client.getBannedUsers(auth, channel.id)
+                        }
+                        ModerationPeopleTab.CHATTERS -> Unit
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Throwable) {
+                    loadFailed = true
+                } finally {
+                    loading = false
+                }
+            }
         }
     }
 
-    val users = remember(remoteUsers, localUsers) {
-        mergeChatUsers(remoteUsers, localUsers)
+    val bannedById = remember(bannedUsers) { bannedUsers.associateBy(BannedChatUser::id) }
+    val users = remember(selectedTab, remoteUsers, bannedUsers, localUsers) {
+        when (selectedTab) {
+            ModerationPeopleTab.CHATTERS -> mergeChatUsers(remoteUsers, localUsers)
+            ModerationPeopleTab.MODERATORS,
+            ModerationPeopleTab.VIPS -> remoteUsers
+            ModerationPeopleTab.BANNED -> bannedUsers.map { user ->
+                ModerationUser(
+                    id = user.id,
+                    login = user.login,
+                    displayName = user.displayName,
+                    group = ModerationUserGroup.VIEWER,
+                )
+            }
+        }
     }
     val visibleUsers = remember(users, query) {
         val normalized = query.trim().lowercase()
@@ -136,97 +210,139 @@ internal fun SharedChatUsersSheet(
 
     if (userCardData == null) {
         ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight(0.88f)
-                .padding(horizontal = 14.dp),
-        ) {
-            Text(
-                text = stringResource(Res.string.chat_users_title),
-                style = MaterialTheme.typography.titleLarge,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(bottom = 8.dp),
-            )
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it.take(80) },
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                placeholder = { Text(stringResource(Res.string.chat_users_search)) },
-            )
-            val notice = when {
-                twitchTotal != null -> stringResource(
-                    Res.string.chat_users_twitch_total,
-                    twitchTotal ?: 0,
-                )
-                loadFailed -> stringResource(Res.string.chat_users_local_fallback)
-                else -> stringResource(Res.string.chat_users_local_only)
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.88f)
+                    .padding(horizontal = 14.dp),
             ) {
-                if (loading) {
-                    CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
-                }
                 Text(
-                    text = notice,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    text = stringResource(Res.string.chat_users_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp),
                 )
-            }
-            if (visibleUsers.isEmpty() && !loading) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center,
+                if (availableTabs.size > 1) {
+                    LazyRow(
+                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        items(
+                            items = availableTabs,
+                            key = ModerationPeopleTab::name,
+                        ) { tab ->
+                            FilterChip(
+                                selected = tab == selectedTab,
+                                onClick = {
+                                    selectedTab = tab
+                                    query = ""
+                                },
+                                label = { Text(chatUsersTabLabel(tab)) },
+                            )
+                        }
+                    }
+                }
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it.take(80) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    placeholder = { Text(stringResource(Res.string.chat_users_search)) },
+                )
+                val notice = when (selectedTab) {
+                    ModerationPeopleTab.CHATTERS -> when {
+                        twitchTotal != null -> stringResource(
+                            Res.string.chat_users_twitch_total,
+                            twitchTotal ?: 0,
+                        )
+                        loadFailed -> stringResource(Res.string.chat_users_local_fallback)
+                        else -> stringResource(Res.string.chat_users_local_only)
+                    }
+                    else -> when {
+                        loadFailed -> stringResource(Res.string.chat_users_load_failed)
+                        else -> stringResource(Res.string.chat_users_remote_count, users.size)
+                    }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
+                    if (loading) {
+                        CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+                    }
                     Text(
-                        text = stringResource(Res.string.chat_users_empty),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text = notice,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (loadFailed && selectedTab != ModerationPeopleTab.CHATTERS) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                     )
                 }
-            } else {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(
-                        items = visibleUsers,
-                        key = { user -> user.id + ":" + user.login },
-                    ) { user ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    userCardData = projectModerationUserCard(
-                                        channel = channel,
-                                        user = user,
-                                        channelMessages = messages,
-                                        canModerate = canQueryHelix,
+                if (visibleUsers.isEmpty() && !loading) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = stringResource(Res.string.chat_users_empty),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                } else {
+                    LazyColumn(modifier = Modifier.fillMaxSize()) {
+                        items(
+                            items = visibleUsers,
+                            key = { user -> selectedTab.name + ":" + user.id + ":" + user.login },
+                        ) { user ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        userCardData = projectModerationUserCard(
+                                            channel = channel,
+                                            user = user,
+                                            channelMessages = messages,
+                                            canModerate = canUseHelix,
+                                        )
+                                    }
+                                    .padding(vertical = 11.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        text = user.displayName.ifBlank { user.login },
+                                        fontWeight = FontWeight.SemiBold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
                                     )
+                                    Text(
+                                        text = "@" + user.login,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    bannedById[user.id]
+                                        ?.reason
+                                        ?.takeIf(String::isNotBlank)
+                                        ?.let { reason ->
+                                            Text(
+                                                text = reason,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.error,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        }
                                 }
-                                .padding(vertical = 11.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Column(Modifier.weight(1f)) {
-                                Text(
-                                    text = user.displayName.ifBlank { user.login },
-                                    fontWeight = FontWeight.SemiBold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Text(
-                                    text = "@" + user.login,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
                             }
+                            HorizontalDivider()
                         }
-                        HorizontalDivider()
                     }
                 }
             }
         }
-    }
     }
 
     userCardData?.let { data ->
@@ -235,6 +351,17 @@ internal fun SharedChatUsersSheet(
             onDismiss = { userCardData = null },
         )
     }
+}
+
+internal fun chatUsersAvailableTabs(isOwner: Boolean): List<ModerationPeopleTab> =
+    if (isOwner) ModerationPeopleTab.entries else listOf(ModerationPeopleTab.CHATTERS)
+
+@Composable
+private fun chatUsersTabLabel(tab: ModerationPeopleTab): String = when (tab) {
+    ModerationPeopleTab.CHATTERS -> stringResource(Res.string.chat_users_tab_chatters)
+    ModerationPeopleTab.MODERATORS -> stringResource(Res.string.chat_users_tab_moderators)
+    ModerationPeopleTab.VIPS -> stringResource(Res.string.chat_users_tab_vips)
+    ModerationPeopleTab.BANNED -> stringResource(Res.string.chat_users_tab_banned)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
