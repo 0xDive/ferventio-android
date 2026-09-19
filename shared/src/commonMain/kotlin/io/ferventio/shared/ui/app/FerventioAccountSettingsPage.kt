@@ -307,20 +307,10 @@ private fun AccountSection(
     title: String,
     content: @Composable () -> Unit,
 ) {
-    Column {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
-        )
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.extraLarge,
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
-        ) {
-            content()
-        }
+    FerventioSettingsSection(
+        title = title,
+        edgeToEdgeContent = true,
+    ) {
+        content()
     }
 }
