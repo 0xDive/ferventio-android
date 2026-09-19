@@ -40,6 +40,8 @@ class TwitchChatMessageRuntime(
         require(normalizedText.length <= MAX_MESSAGE_LENGTH) {
             "Chat message must not exceed $MAX_MESSAGE_LENGTH characters"
         }
+        val isAction = normalizedText.startsWith(ACTION_PREFIX)
+        val visibleText = if (isAction) normalizedText.removePrefix(ACTION_PREFIX) else normalizedText
         val lease = requireNotNull(authentication.accessLease) {
             "Twitch access lease is required for chat sending"
         }
@@ -48,7 +50,8 @@ class TwitchChatMessageRuntime(
             channel = channel,
             authentication = authentication,
             localMessageId = localMessageId,
-            text = normalizedText,
+            text = visibleText,
+            isAction = isAction,
             replyParentMessageId = replyParentMessageId,
         )
         chatState.append(optimistic)
@@ -81,7 +84,7 @@ class TwitchChatMessageRuntime(
             authentication = authentication,
             channel = channel,
             localMessageId = failedMessage.id,
-            text = failedMessage.text,
+            text = if (failedMessage.isAction) ACTION_PREFIX + failedMessage.text else failedMessage.text,
             replyParentMessageId = failedMessage.replyParentMessageId,
             authenticatedUserId = authentication.accessLease?.session?.userId.orEmpty(),
         )
@@ -130,6 +133,7 @@ class TwitchChatMessageRuntime(
         authentication: StoredAuthentication,
         localMessageId: String,
         text: String,
+        isAction: Boolean,
         replyParentMessageId: String?,
     ): ChatMessage {
         val session = requireNotNull(authentication.accessLease).session
@@ -165,8 +169,8 @@ class TwitchChatMessageRuntime(
                     threadUserName = parent?.reply?.threadUserName ?: parent?.userDisplayName,
                 )
             },
-            type = ChatMessageType.CHAT,
-            flags = MessageFlags(),
+            type = if (isAction) ChatMessageType.ACTION else ChatMessageType.CHAT,
+            flags = MessageFlags(isAction = isAction),
             outgoingState = OutgoingMessageState.SENDING,
             clientNonce = localMessageId,
         )
@@ -179,6 +183,7 @@ class TwitchChatMessageRuntime(
 
     private companion object {
         const val LOCAL_ID_PREFIX = "local-"
+        const val ACTION_PREFIX = "/me "
         const val MAX_MESSAGE_LENGTH = 500
     }
 }

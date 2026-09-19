@@ -41,6 +41,41 @@ class TwitchChatMessageRuntimeTest {
     }
 
     @Test
+    fun actionMessageUsesVisibleTextLocallyAndSlashMeOnWire() = runTest {
+        val state = ChatRuntimeStateHolder()
+        val gateway = RecordingGateway(result = ChatSendResult("server-id"))
+        val runtime = TwitchChatMessageRuntime(state, gateway, currentEpochMillis = { 1_500L })
+
+        runtime.send(authentication(), channel(), "/me waves")
+
+        val message = state.messages("channel-id").single()
+        assertEquals("waves", message.text)
+        assertTrue(message.isAction)
+        assertEquals("/me waves", gateway.message)
+    }
+
+    @Test
+    fun actionRetryRestoresSlashMePrefix() = runTest {
+        val state = ChatRuntimeStateHolder()
+        val gateway = RecordingGateway(error = TwitchChatMessageDroppedException("slow_mode", "Slow mode"))
+        val runtime = TwitchChatMessageRuntime(state, gateway, currentEpochMillis = { 1_600L })
+
+        assertFailsWith<TwitchChatMessageDroppedException> {
+            runtime.send(authentication(), channel(), "/me waves")
+        }
+        val failed = state.messages("channel-id").single()
+        assertTrue(failed.isAction)
+        assertEquals("waves", failed.text)
+
+        gateway.error = null
+        gateway.result = ChatSendResult("server-id")
+        runtime.retry(authentication(), channel(), failed)
+
+        assertEquals("/me waves", gateway.message)
+        assertEquals(OutgoingMessageState.SENT, state.messages("channel-id").single().outgoingState)
+    }
+
+    @Test
     fun replyContextIsCopiedFromParentAndSentToTwitch() = runTest {
         val state = ChatRuntimeStateHolder()
         state.append(parentMessage())

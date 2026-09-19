@@ -201,13 +201,20 @@ fun SharedChatComposer(
         errorMessage = null
         scope.launch {
             try {
-                runtime.chatMessages.send(
-                    authentication = authentication,
-                    channel = channel,
-                    message = outgoingText,
-                    replyParentMessageId = replyParentMessageId,
-                )
-                localUiPreferences.recordSentMessage(channel.id, outgoingText)
+                if (outgoingText.equals("/clear", ignoreCase = true)) {
+                    runtime.moderation.clearChatMessages(
+                        authentication = authentication,
+                        broadcasterId = channel.id,
+                    )
+                } else {
+                    runtime.chatMessages.send(
+                        authentication = authentication,
+                        channel = channel,
+                        message = outgoingText,
+                        replyParentMessageId = replyParentMessageId,
+                    )
+                    localUiPreferences.recordSentMessage(channel.id, outgoingText)
+                }
                 localUiPreferences.setDraft(channel.id, "")
                 historyIndex = -1
                 historyScratch = ""
