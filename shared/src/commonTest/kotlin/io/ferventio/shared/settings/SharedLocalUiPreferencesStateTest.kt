@@ -1,0 +1,66 @@
+package io.ferventio.shared.settings
+
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
+
+class SharedLocalUiPreferencesStateTest {
+    @Test
+    fun defaultsMatchAndroidQuickModerationPreferences() {
+        val state = SharedLocalUiPreferencesStateHolder()
+
+        assertFalse(state.preferences.showQuickBan)
+        assertFalse(state.preferences.showQuickDelete)
+        assertTrue(state.preferences.confirmModerationActions)
+    }
+
+    @Test
+    fun updatesPersistThroughConfiguredStore() {
+        val store = RecordingStore()
+        val state = SharedLocalUiPreferencesStateHolder(store)
+
+        state.setShowQuickBan(true)
+        state.setShowQuickDelete(true)
+        state.setConfirmModerationActions(false)
+
+        assertEquals(
+            SharedLocalUiPreferences(
+                showQuickBan = true,
+                showQuickDelete = true,
+                confirmModerationActions = false,
+            ),
+            store.load(),
+        )
+        assertEquals(store.load(), state.preferences)
+    }
+
+    @Test
+    fun composerDraftsAndHistoryPersistLocally() {
+        val store = RecordingStore()
+        val state = SharedLocalUiPreferencesStateHolder(store)
+
+        state.setDraft("channel-1", "hello ")
+        state.recordSentMessage("channel-1", "first")
+        state.recordSentMessage("channel-1", "second")
+        state.recordSentMessage("channel-1", "first")
+
+        assertEquals("hello ", state.draft("channel-1"))
+        assertEquals(listOf("first", "second"), state.sentMessageHistory("channel-1"))
+        assertEquals(state.preferences, store.load())
+
+        state.setDraft("channel-1", "")
+        assertEquals("", state.draft("channel-1"))
+        assertFalse("channel-1" in state.preferences.draftsByChannel)
+    }
+
+    private class RecordingStore : SharedLocalUiPreferencesStore {
+        private var value = SharedLocalUiPreferences()
+
+        override fun load(): SharedLocalUiPreferences = value
+
+        override fun save(preferences: SharedLocalUiPreferences) {
+            value = preferences
+        }
+    }
+}

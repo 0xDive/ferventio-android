@@ -97,6 +97,7 @@ object CommandRegistry {
         CommandDefinition("emoteonly", "/emoteonly", "Включить emote-only"),
         CommandDefinition("emoteonlyoff", "/emoteonlyoff", "Отключить emote-only"),
         CommandDefinition("user", "/user login", "Открыть карточку пользователя", setOf("usercard")),
+        CommandDefinition("nuke", "/nuke запрос", "Предпросмотр массовой модерации"),
         CommandDefinition("clip", "/clip [название]", "Создать Twitch Clip"),
         CommandDefinition("marker", "/marker [описание]", "Создать маркер трансляции"),
         CommandDefinition("settitle", "/settitle название", "Изменить название трансляции"),

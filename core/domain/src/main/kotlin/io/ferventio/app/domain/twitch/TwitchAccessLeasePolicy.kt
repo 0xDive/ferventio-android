@@ -1,5 +1,7 @@
 package io.ferventio.app.domain
 
+import kotlin.time.Clock
+
 /** Rules for normal lease reuse and the narrower stale-if-error backend-outage fallback. */
 object TwitchAccessLeasePolicy {
     private const val NORMAL_SAFETY_WINDOW_MILLIS = 5_000L
@@ -9,24 +11,24 @@ object TwitchAccessLeasePolicy {
 
     fun canReuseWithoutBackendCall(
         lease: TwitchAccessLease,
-        nowEpochMillis: Long = System.currentTimeMillis(),
+        nowEpochMillis: Long = Clock.System.now().toEpochMilliseconds(),
     ): Boolean = isStructurallyUsable(lease) &&
         lease.leaseExpiresAtEpochMillis > nowEpochMillis + NORMAL_SAFETY_WINDOW_MILLIS
 
     fun canUseDuringBackendOutage(
         lease: TwitchAccessLease,
-        nowEpochMillis: Long = System.currentTimeMillis(),
+        nowEpochMillis: Long = Clock.System.now().toEpochMilliseconds(),
     ): Boolean = isStructurallyUsable(lease) &&
         lease.twitchExpiresAtEpochMillis > nowEpochMillis + OUTAGE_SAFETY_WINDOW_MILLIS
 
     fun needsDirectValidationAtStartup(
         lease: TwitchAccessLease,
-        nowEpochMillis: Long = System.currentTimeMillis(),
+        nowEpochMillis: Long = Clock.System.now().toEpochMilliseconds(),
     ): Boolean = lease.twitchValidatedAtEpochMillis <= nowEpochMillis - STARTUP_VALIDATION_TRUST_WINDOW_MILLIS
 
     fun needsDirectValidationDuringOutage(
         lease: TwitchAccessLease,
-        nowEpochMillis: Long = System.currentTimeMillis(),
+        nowEpochMillis: Long = Clock.System.now().toEpochMilliseconds(),
     ): Boolean = lease.twitchValidatedAtEpochMillis <= nowEpochMillis - DIRECT_VALIDATION_INTERVAL_MILLIS
 
     /** Ignores the rolling short-lease deadline and derived expiresIn value to avoid disk writes every renewal. */

@@ -1,0 +1,4 @@
+<resources>
+    <string name="workspace_anonymous_no_channels_summary">Добавьте Twitch-канал через меню, чтобы читать чат без входа.</string>
+    <string name="chat_read_only_sign_in_to_send">Режим только для чтения. Войдите через Twitch, чтобы отправлять сообщения.</string>
+</resources>

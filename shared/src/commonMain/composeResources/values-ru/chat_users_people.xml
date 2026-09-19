@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_users_tab_chatters">Чат</string>
+    <string name="chat_users_tab_moderators">Модераторы</string>
+    <string name="chat_users_tab_vips">VIP</string>
+    <string name="chat_users_tab_banned">Баны</string>
+    <string name="chat_users_remote_count">%1$d пользователей</string>
+    <string name="chat_users_load_failed">Не удалось загрузить список Twitch.</string>
+</resources>

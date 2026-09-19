@@ -1,0 +1,8 @@
+<resources>
+    <string name="user_card_warn_title">Warn %1$s?</string>
+    <string name="user_card_warn_reason">Reason</string>
+    <string name="user_card_warn_reason_hint">Enter the reason shown to the user.</string>
+    <string name="user_card_confirm_unban">Remove the ban or timeout for %1$s?</string>
+    <string name="user_card_warn_done">%1$s warned</string>
+    <string name="user_card_unban_done">%1$s unbanned</string>
+</resources>

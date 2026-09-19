@@ -80,7 +80,9 @@ object EmoteCatalogRanking {
         if (recentEmoteKeys.isEmpty()) return emptyMap()
         val counts = recentEmoteKeys.groupingBy { it }.eachCount()
         val newestIndex = buildMap<String, Int> {
-            recentEmoteKeys.forEachIndexed { index, key -> putIfAbsent(key, index) }
+            recentEmoteKeys.forEachIndexed { index, key ->
+                if (!containsKey(key)) put(key, index)
+            }
         }
         return counts.mapValues { (key, count) ->
             EmoteUsageStat(

@@ -1,0 +1,14 @@
+<resources>
+    <string name="settings_recent_messages_summary">При открытии канала запрашивать до 100 последних публичных сообщений у стороннего сервиса Recent Messages.</string>
+    <string name="settings_recent_messages_privacy_note">Сервис временно хранит публичные сообщения Twitch и получает ваш IP-адрес при запросе. Функция выключена по умолчанию.</string>
+    <string name="settings_recent_messages_service_info">Открыть информацию о сервисе</string>
+    <string name="settings_history_device_only">История хранится только на этом устройстве.</string>
+    <string name="settings_history_clear">Очистить локальную историю</string>
+    <string name="settings_history_clear_confirm_title">Очистить локальную историю?</string>
+    <string name="settings_history_clear_confirm_body">Сохранённая история чата будет удалена с этого устройства. Новые сообщения снова будут сохраняться, если локальная история останется включена.</string>
+    <string name="settings_history_clear_confirm">Очистить историю</string>
+    <string name="settings_history_clear_cancel">Отмена</string>
+    <string name="settings_history_clearing">Очищаем локальную историю…</string>
+    <string name="settings_history_cleared">Локальная история очищена.</string>
+    <string name="settings_history_clear_failed">Не удалось очистить локальную историю.</string>
+</resources>

@@ -1,8 +1,7 @@
 package io.ferventio.app.domain
 
 import androidx.compose.runtime.Immutable
-import java.util.Locale
-import java.util.UUID
+import kotlin.uuid.Uuid
 
 @Immutable
 enum class HighlightRuleType {
@@ -20,7 +19,7 @@ enum class HighlightRuleType {
 
 @Immutable
 data class HighlightRule(
-    val id: String = UUID.randomUUID().toString(),
+    val id: String = Uuid.random().toString(),
     val type: HighlightRuleType,
     val pattern: String = "",
     val enabled: Boolean = true,
@@ -50,7 +49,7 @@ enum class IgnoreDisplayMode {
 
 @Immutable
 data class IgnoreRule(
-    val id: String = UUID.randomUUID().toString(),
+    val id: String = Uuid.random().toString(),
     val type: IgnoreRuleType,
     val pattern: String = "",
     val enabled: Boolean = true,
@@ -248,7 +247,7 @@ private data class CompiledHighlightRule(
 
                 HighlightRuleType.MODERATOR -> { message ->
                     message.badges.any { badge ->
-                        badge.setId.lowercase(Locale.ROOT) in MODERATOR_BADGES
+                        badge.setId.lowercase() in MODERATOR_BADGES
                     }
                 }
 
@@ -339,7 +338,7 @@ private data class CompiledIgnoreRule(
                 }
 
                 IgnoreRuleType.MESSAGE_TYPE -> {
-                    val type = runCatching { ChatMessageType.valueOf(pattern.uppercase(Locale.ROOT)) }.getOrNull()
+                    val type = runCatching { ChatMessageType.valueOf(pattern.uppercase()) }.getOrNull()
                         ?: return null
                     val matcherFn: (ChatMessage) -> Boolean = { message -> message.type == type }
                     matcherFn
@@ -372,7 +371,7 @@ private fun ignoreDescription(rule: IgnoreRule, pattern: String): String = when 
     IgnoreRuleType.WORD -> "Слово: $pattern"
     IgnoreRuleType.REGEX -> "Regex: $pattern"
     IgnoreRuleType.BOT_COMMAND -> "Команда бота: ${pattern.ifBlank { "любая !команда" }}"
-    IgnoreRuleType.MESSAGE_TYPE -> "Тип: ${pattern.uppercase(Locale.ROOT)}"
+    IgnoreRuleType.MESSAGE_TYPE -> "Тип: ${pattern.uppercase()}"
 }
 
 private fun usernameRegex(value: String, caseSensitive: Boolean): Regex {

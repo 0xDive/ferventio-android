@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="chat_rate_limit_default">Twitch send rate limit</string>
+    <string name="chat_rate_limit_retry">retry in %1$d s</string>
+</resources>

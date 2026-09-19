@@ -1,0 +1,4 @@
+<resources>
+    <string name="workspace_anonymous_no_channels_summary">Add a Twitch channel from the menu to read chat without signing in.</string>
+    <string name="chat_read_only_sign_in_to_send">Read-only mode. Sign in with Twitch to send messages.</string>
+</resources>

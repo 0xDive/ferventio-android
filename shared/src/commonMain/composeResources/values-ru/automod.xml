@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="automod_approve">Разрешить</string>
+    <string name="automod_deny">Отклонить</string>
+    <string name="automod_publish_explanation">Разрешение опубликует сообщение в чате.</string>
+    <string name="automod_reason_blocked_term">удержал сообщение: совпадение с запрещённым термином.</string>
+    <string name="automod_reason_automod">удержал сообщение AutoMod.</string>
+    <string name="automod_reason_automod_details">удержал сообщение AutoMod (%1$s).</string>
+    <string name="automod_reason_generic">удержал сообщение.</string>
+    <string name="automod_reason_custom">удержал сообщение: %1$s.</string>
+    <string name="automod_detail_category">категория %1$s</string>
+    <string name="automod_detail_level">уровень %1$d</string>
+</resources>
