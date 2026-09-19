@@ -4,6 +4,7 @@
     <string name="workspace_channel_login">Логин канала</string>
     <string name="workspace_add">Добавить</string>
     <string name="workspace_cancel">Отмена</string>
+    <string name="workspace_close_channels">Закрыть список каналов</string>
     <string name="workspace_manage_channel">Управление каналом</string>
     <string name="workspace_pin_channel">Закрепить канал</string>
     <string name="workspace_unpin_channel">Открепить канал</string>

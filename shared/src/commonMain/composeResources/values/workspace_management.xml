@@ -4,6 +4,7 @@
     <string name="workspace_channel_login">Channel login</string>
     <string name="workspace_add">Add</string>
     <string name="workspace_cancel">Cancel</string>
+    <string name="workspace_close_channels">Close channels</string>
     <string name="workspace_manage_channel">Manage channel</string>
     <string name="workspace_pin_channel">Pin channel</string>
     <string name="workspace_unpin_channel">Unpin channel</string>

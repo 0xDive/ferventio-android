@@ -4,10 +4,14 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
@@ -190,8 +194,18 @@ fun FerventioWorkspaceShell(
         drawerState = drawerState,
         gesturesEnabled = drawerState.isOpen,
         drawerContent = {
-            ModalDrawerSheet {
-                Column(modifier = Modifier.fillMaxSize()) {
+            ModalDrawerSheet(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .widthIn(max = 340.dp),
+                drawerContainerColor = MaterialTheme.colorScheme.surface,
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .statusBarsPadding()
+                        .navigationBarsPadding(),
+                ) {
                     WorkspaceChannelManagement(
                         state = state,
                         selectedChannel = selectedChannel,
@@ -210,6 +224,7 @@ fun FerventioWorkspaceShell(
                         onRenameChannel = onRenameChannel,
                         onRemoveChannel = onRemoveChannel,
                         onMoveChannel = onMoveChannel,
+                        onDismiss = { scope.launch { drawerState.close() } },
                         modifier = Modifier.weight(1f),
                     )
                 }

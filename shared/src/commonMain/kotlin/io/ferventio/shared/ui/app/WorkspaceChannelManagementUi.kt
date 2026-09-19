@@ -5,11 +5,19 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.OutlinedTextField
@@ -34,6 +42,7 @@ import io.ferventio.shared.generated.resources.workspace_add_channel_title
 import io.ferventio.shared.generated.resources.workspace_cancel
 import io.ferventio.shared.generated.resources.workspace_channel_limit
 import io.ferventio.shared.generated.resources.workspace_channel_login
+import io.ferventio.shared.generated.resources.workspace_close_channels
 import io.ferventio.shared.generated.resources.workspace_channels
 import io.ferventio.shared.generated.resources.workspace_confirm_remove
 import io.ferventio.shared.generated.resources.workspace_local_title
@@ -65,6 +74,7 @@ internal fun WorkspaceChannelManagement(
     onRenameChannel: (String, String?) -> Unit,
     onRemoveChannel: (String) -> Unit,
     onMoveChannel: (String, Int) -> Unit,
+    onDismiss: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val attentionState = LocalFerventioRuntimeState.current.attention
@@ -87,12 +97,20 @@ internal fun WorkspaceChannelManagement(
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold,
             )
-            TextButton(
+            IconButton(
                 onClick = { addDialogVisible = true },
                 enabled = !busy && state.channels.size < MAX_CHANNELS,
             ) {
-                Text("+")
-                Text(stringResource(Res.string.workspace_add_channel))
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = stringResource(Res.string.workspace_add_channel),
+                )
+            }
+            IconButton(onClick = onDismiss) {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = stringResource(Res.string.workspace_close_channels),
+                )
             }
         }
 
@@ -134,7 +152,12 @@ internal fun WorkspaceChannelManagement(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onErrorContainer,
                     )
-                    TextButton(onClick = state::clearMutationError) { Text("×") }
+                    IconButton(onClick = state::clearMutationError) {
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = stringResource(Res.string.workspace_cancel),
+                        )
+                    }
                 }
             }
         }
@@ -158,10 +181,11 @@ internal fun WorkspaceChannelManagement(
                                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                             ) {
                                 if (pinned) {
-                                    Text(
-                                        text = "◆",
-                                        color = MaterialTheme.colorScheme.primary,
-                                        style = MaterialTheme.typography.labelSmall,
+                                    Icon(
+                                        Icons.Default.PushPin,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(17.dp),
+                                        tint = MaterialTheme.colorScheme.primary,
                                     )
                                 }
                                 Text(
@@ -204,11 +228,14 @@ internal fun WorkspaceChannelManagement(
                                     fontWeight = FontWeight.Bold,
                                 )
                             }
-                            TextButton(
+                            IconButton(
                                 onClick = { managedChannelId = channel.id },
                                 enabled = !busy,
                             ) {
-                                Text("⋮")
+                                Icon(
+                                    Icons.Default.MoreVert,
+                                    contentDescription = stringResource(Res.string.workspace_manage_channel),
+                                )
                             }
                         }
                     },
