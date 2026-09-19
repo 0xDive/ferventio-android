@@ -124,6 +124,11 @@
     <string name="chat_action_copy">Copy message</string>
     <string name="chat_action_user">User card</string>
     <string name="chat_action_delete">Delete message</string>
+    <string name="chat_action_pin">Pin message</string>
+    <string name="chat_action_unpin">Unpin message</string>
+    <string name="chat_pinned_message">Pinned message</string>
+    <string name="chat_pinned_by">Pinned by %1$s</string>
+    <string name="chat_pinned_unpin">Unpin</string>
     <string name="chat_thread_title">Thread</string>
     <string name="chat_thread_empty">No replies are loaded for this thread yet.</string>
     <string name="chat_write_scope_required">Signing in again is required to send messages.</string>

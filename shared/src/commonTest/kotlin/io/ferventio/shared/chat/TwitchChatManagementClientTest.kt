@@ -119,6 +119,36 @@ class TwitchChatManagementClientTest {
     }
 
     @Test
+    fun pinAndUnpinUseOfficialHelixContract() = runTest {
+        val requests = mutableListOf<HttpRequestData>()
+        val engine = MockEngine { captured ->
+            requests += captured
+            respond(ByteReadChannel(""), HttpStatusCode.NoContent)
+        }
+        val client = TwitchChatManagementClient(HttpClient(engine) { expectSuccess = false })
+
+        client.pinChatMessage(
+            authentication = authentication(),
+            broadcasterId = "channel-id",
+            messageId = "message-id",
+            durationSeconds = 300,
+        )
+        client.unpinChatMessage(
+            authentication = authentication(),
+            broadcasterId = "channel-id",
+            messageId = "message-id",
+        )
+
+        assertEquals(HttpMethod.Put, requests[0].method)
+        assertEquals("/helix/chat/pins", requests[0].url.encodedPath)
+        assertEquals("channel-id", requests[0].url.parameters["broadcaster_id"])
+        assertEquals("moderator-id", requests[0].url.parameters["moderator_id"])
+        assertEquals("message-id", requests[0].url.parameters["message_id"])
+        assertEquals("300", requests[0].url.parameters["duration_seconds"])
+        assertEquals(HttpMethod.Delete, requests[1].method)
+    }
+
+    @Test
     fun missingScopesFailBeforeNetwork() = runTest {
         var requests = 0
         val engine = MockEngine {
@@ -168,6 +198,7 @@ class TwitchChatManagementClientTest {
     private fun authentication(
         scopes: Set<String> = setOf(
             "moderator:manage:chat_settings",
+            "moderator:manage:chat_messages",
             "moderator:read:chatters",
         ),
     ) = StoredAuthentication(

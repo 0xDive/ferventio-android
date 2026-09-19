@@ -27,8 +27,10 @@ import io.ferventio.app.domain.ChatChannel
 import io.ferventio.app.domain.ChatMessage
 import io.ferventio.app.domain.ConfirmedModerationCommand
 import io.ferventio.app.domain.NukePreviewConfig
+import io.ferventio.app.domain.PinnedChatMessage
 import io.ferventio.app.domain.UserCardData
 import io.ferventio.shared.chat.TwitchChatManagementClient
+import io.ferventio.shared.chat.TwitchPinnedChatSnapshotClient
 import io.ferventio.shared.generated.resources.Res
 import io.ferventio.shared.generated.resources.chat_command_error_title
 import io.ferventio.shared.generated.resources.chat_command_moderator_required
@@ -41,6 +43,7 @@ import io.ferventio.shared.ui.chat.FerventioChatTimeline
 import io.ferventio.shared.ui.chat.InteractiveChatOverlayCards
 import io.ferventio.shared.ui.chat.SharedChatComposer
 import io.ferventio.shared.ui.chat.SharedMessageActionsSheet
+import io.ferventio.shared.ui.chat.SharedPinnedMessageBanner
 import io.ferventio.shared.ui.chat.SharedReplyThreadSheet
 import io.ferventio.shared.ui.chat.rememberThirdPartyEmoteCatalog
 import io.ferventio.shared.ui.chat.resolveSharedReplyThreadMessages
@@ -51,6 +54,7 @@ import io.ferventio.shared.ui.user.resolveLocalUserRole
 import io.ferventio.shared.user.TwitchUserCardClient
 import io.ferventio.shared.user.withRemoteEnrichment
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 
@@ -66,6 +70,7 @@ fun FerventioModeratedChatScreen(
     val clipboard = LocalClipboardManager.current
     val userCardClient = remember { TwitchUserCardClient() }
     val chatManagementClient = remember { TwitchChatManagementClient() }
+    val pinnedChatClient = remember { TwitchPinnedChatSnapshotClient() }
     val canModerateChannel = canPreviewNuke(channel.id, moderatorChannelIds)
     val canWriteChat = runtime.authentication.state.authentication != null
     val authenticationRequiredText = stringResource(Res.string.quick_moderation_auth_required)
@@ -84,13 +89,15 @@ fun FerventioModeratedChatScreen(
     val composerEmotes = remember(twitchEmotes, thirdPartyEmotes) {
         twitchEmotes + thirdPartyEmotes.values
     }
-    DisposableEffect(userCardClient, chatManagementClient) {
+    DisposableEffect(userCardClient, chatManagementClient, pinnedChatClient) {
         onDispose {
             userCardClient.close()
             chatManagementClient.close()
+            pinnedChatClient.close()
         }
     }
     var pendingNukeConfig by remember(channel.id) { mutableStateOf<NukePreviewConfig?>(null) }
+    var pinnedMessage by remember(channel.id) { mutableStateOf<PinnedChatMessage?>(null) }
     var selectedUserMessage by remember(channel.id) { mutableStateOf<ChatMessage?>(null) }
     var commandUserCardData by remember(channel.id) { mutableStateOf<UserCardData?>(null) }
     var commandError by remember(channel.id) { mutableStateOf<String?>(null) }
@@ -98,6 +105,88 @@ fun FerventioModeratedChatScreen(
     var messageActionsTarget by remember(channel.id) { mutableStateOf<ChatMessage?>(null) }
     var threadTarget by remember(channel.id) { mutableStateOf<ChatMessage?>(null) }
     var quickModerationError by remember(channel.id) { mutableStateOf<String?>(null) }
+
+    suspend fun refreshPinnedMessage() {
+        try {
+            pinnedMessage = pinnedChatClient.getPinnedChatMessage(channel.id)
+        } catch (_: CancellationException) {
+            throw
+        } catch (_: Throwable) {
+            // Public pinned-chat lookup is best-effort; keep the last confirmed banner.
+        }
+    }
+
+    fun pinMessage(message: ChatMessage) {
+        val authentication = runtime.authentication.state.authentication
+        if (authentication == null) {
+            quickModerationError = authenticationRequiredText
+            return
+        }
+        val messageId = message.serverMessageId
+            ?.trim()
+            ?.takeIf(String::isNotEmpty)
+            ?: message.id
+        if (
+            !canModerateChannel ||
+            message.isSystem ||
+            message.isDeleted ||
+            messageId.startsWith("local-")
+        ) return
+        scope.launch {
+            try {
+                chatManagementClient.pinChatMessage(
+                    authentication = authentication,
+                    broadcasterId = channel.id,
+                    messageId = messageId,
+                )
+                pinnedMessage = PinnedChatMessage(
+                    channelId = channel.id,
+                    messageId = messageId,
+                    senderUserId = message.userId,
+                    senderUserLogin = message.userLogin,
+                    senderUserName = message.userDisplayName.ifBlank { message.userLogin },
+                    text = message.text,
+                    fragments = message.fragments,
+                )
+                delay(500)
+                refreshPinnedMessage()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                quickModerationError = error.message.orEmpty().ifBlank { "Twitch error" }
+            }
+        }
+    }
+
+    fun unpinMessage(messageId: String) {
+        val authentication = runtime.authentication.state.authentication
+        if (authentication == null) {
+            quickModerationError = authenticationRequiredText
+            return
+        }
+        if (!canModerateChannel) return
+        scope.launch {
+            try {
+                chatManagementClient.unpinChatMessage(
+                    authentication = authentication,
+                    broadcasterId = channel.id,
+                    messageId = messageId,
+                )
+                if (pinnedMessage?.messageId == messageId) pinnedMessage = null
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                quickModerationError = error.message.orEmpty().ifBlank { "Twitch error" }
+            }
+        }
+    }
+
+    LaunchedEffect(channel.id, pinnedChatClient) {
+        while (true) {
+            refreshPinnedMessage()
+            delay(PINNED_CHAT_REFRESH_INTERVAL_MILLIS)
+        }
+    }
 
     fun deleteMessage(message: ChatMessage) {
         val authentication = runtime.authentication.state.authentication
@@ -300,6 +389,17 @@ fun FerventioModeratedChatScreen(
     Column(modifier = modifier.fillMaxSize()) {
         InteractiveChatOverlayCards(channelId = channel.id)
 
+        pinnedMessage?.let { pinned ->
+            SharedPinnedMessageBanner(
+                pinned = pinned,
+                canUnpin = canModerateChannel,
+                onOpen = {
+                    runtime.attention.requestMessageNavigation(channel.id, pinned.messageId)
+                },
+                onUnpin = { unpinMessage(pinned.messageId) },
+            )
+        }
+
         FerventioChatTimeline(
             channel = channel,
             filterQuery = filterQuery,
@@ -401,6 +501,12 @@ fun FerventioModeratedChatScreen(
             canOpenThread = !target.isSystem,
             canOpenUser = target.userId.isNotBlank() || target.userLogin.isNotBlank(),
             canDelete = availability.canDelete,
+            canPin = canModerateChannel &&
+                !target.isSystem &&
+                !target.isDeleted &&
+                !canonicalMessageId.startsWith("local-") &&
+                pinnedMessage?.messageId != canonicalMessageId,
+            canUnpin = canModerateChannel && pinnedMessage?.messageId == canonicalMessageId,
             onDismiss = { messageActionsTarget = null },
             onReply = {
                 messageActionsTarget = null
@@ -421,6 +527,14 @@ fun FerventioModeratedChatScreen(
             onDelete = {
                 messageActionsTarget = null
                 deleteMessage(target)
+            },
+            onPin = {
+                messageActionsTarget = null
+                pinMessage(target)
+            },
+            onUnpin = {
+                messageActionsTarget = null
+                unpinMessage(canonicalMessageId)
             },
         )
     }
@@ -508,3 +622,6 @@ fun FerventioModeratedChatScreen(
         )
     }
 }
+
+
+private const val PINNED_CHAT_REFRESH_INTERVAL_MILLIS = 60_000L

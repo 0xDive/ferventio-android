@@ -7,10 +7,12 @@ import io.ferventio.app.domain.ModerationUserGroup
 import io.ferventio.app.domain.StoredAuthentication
 import io.ferventio.shared.auth.createPlatformMobileAuthenticationHttpClient
 import io.ktor.client.HttpClient
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.request.patch
+import io.ktor.client.request.put
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
@@ -133,6 +135,49 @@ class TwitchChatManagementClient(
         requireSuccess(response, body, "update chat settings")
         return runCatching { parseChatSettings(body, normalizedBroadcasterId) }
             .getOrElse { getChatSettings(authentication, normalizedBroadcasterId) }
+    }
+
+    suspend fun pinChatMessage(
+        authentication: StoredAuthentication,
+        broadcasterId: String,
+        messageId: String,
+        durationSeconds: Int? = null,
+    ) {
+        val context = authenticationContext(authentication, MANAGE_CHAT_MESSAGES_SCOPE)
+        val channelId = broadcasterId.trim()
+        val normalizedMessageId = messageId.trim()
+        require(channelId.isNotEmpty()) { "Twitch pinned-message broadcasterId must not be blank" }
+        require(normalizedMessageId.isNotEmpty()) { "Twitch pinned-message id must not be blank" }
+        durationSeconds?.let { seconds ->
+            require(seconds in 30..1_800) { "Pinned-message duration must be between 30 and 1800 seconds" }
+        }
+        val response = client.put(PINNED_CHAT_URL) {
+            applyAuthentication(context)
+            parameter("broadcaster_id", channelId)
+            parameter("moderator_id", context.userId)
+            parameter("message_id", normalizedMessageId)
+            durationSeconds?.let { parameter("duration_seconds", it) }
+        }
+        requireSuccess(response, response.bodyAsText(), "pin chat message")
+    }
+
+    suspend fun unpinChatMessage(
+        authentication: StoredAuthentication,
+        broadcasterId: String,
+        messageId: String,
+    ) {
+        val context = authenticationContext(authentication, MANAGE_CHAT_MESSAGES_SCOPE)
+        val channelId = broadcasterId.trim()
+        val normalizedMessageId = messageId.trim()
+        require(channelId.isNotEmpty()) { "Twitch pinned-message broadcasterId must not be blank" }
+        require(normalizedMessageId.isNotEmpty()) { "Twitch pinned-message id must not be blank" }
+        val response = client.delete(PINNED_CHAT_URL) {
+            applyAuthentication(context)
+            parameter("broadcaster_id", channelId)
+            parameter("moderator_id", context.userId)
+            parameter("message_id", normalizedMessageId)
+        }
+        requireSuccess(response, response.bodyAsText(), "unpin chat message")
     }
 
     suspend fun getChatters(
@@ -284,7 +329,9 @@ class TwitchChatManagementClient(
     private companion object {
         const val CHAT_SETTINGS_URL = "https://api.twitch.tv/helix/chat/settings"
         const val CHATTERS_URL = "https://api.twitch.tv/helix/chat/chatters"
+        const val PINNED_CHAT_URL = "https://api.twitch.tv/helix/chat/pins"
         const val MANAGE_CHAT_SETTINGS_SCOPE = "moderator:manage:chat_settings"
+        const val MANAGE_CHAT_MESSAGES_SCOPE = "moderator:manage:chat_messages"
         const val READ_CHATTERS_SCOPE = "moderator:read:chatters"
         const val DEFAULT_CHATTERS_LIMIT = 1_000
         const val MAX_CHATTERS_LIMIT = 5_000

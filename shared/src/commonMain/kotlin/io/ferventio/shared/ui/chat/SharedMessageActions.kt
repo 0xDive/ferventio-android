@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -32,8 +33,10 @@ import io.ferventio.app.domain.ChatMessage
 import io.ferventio.shared.generated.resources.Res
 import io.ferventio.shared.generated.resources.chat_action_copy
 import io.ferventio.shared.generated.resources.chat_action_delete
+import io.ferventio.shared.generated.resources.chat_action_pin
 import io.ferventio.shared.generated.resources.chat_action_reply
 import io.ferventio.shared.generated.resources.chat_action_thread
+import io.ferventio.shared.generated.resources.chat_action_unpin
 import io.ferventio.shared.generated.resources.chat_action_user
 import io.ferventio.shared.generated.resources.chat_actions_title
 import io.ferventio.shared.generated.resources.chat_thread_empty
@@ -48,12 +51,16 @@ internal fun SharedMessageActionsSheet(
     canOpenThread: Boolean,
     canOpenUser: Boolean,
     canDelete: Boolean,
+    canPin: Boolean,
+    canUnpin: Boolean,
     onDismiss: () -> Unit,
     onReply: () -> Unit,
     onOpenThread: () -> Unit,
     onCopy: () -> Unit,
     onOpenUser: () -> Unit,
     onDelete: () -> Unit,
+    onPin: () -> Unit,
+    onUnpin: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -89,6 +96,16 @@ internal fun SharedMessageActionsSheet(
                 enabled = canOpenUser,
                 onClick = onOpenUser,
             )
+            if (canPin || canUnpin) {
+                MessageActionItem(
+                    icon = { Icon(Icons.Default.PushPin, contentDescription = null) },
+                    label = stringResource(
+                        if (canUnpin) Res.string.chat_action_unpin else Res.string.chat_action_pin,
+                    ),
+                    enabled = true,
+                    onClick = if (canUnpin) onUnpin else onPin,
+                )
+            }
             if (canDelete) {
                 MessageActionItem(
                     icon = {

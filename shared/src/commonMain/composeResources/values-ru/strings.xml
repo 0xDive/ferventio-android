@@ -124,6 +124,11 @@
     <string name="chat_action_copy">Копировать сообщение</string>
     <string name="chat_action_user">Карточка пользователя</string>
     <string name="chat_action_delete">Удалить сообщение</string>
+    <string name="chat_action_pin">Закрепить сообщение</string>
+    <string name="chat_action_unpin">Открепить сообщение</string>
+    <string name="chat_pinned_message">Закреплённое сообщение</string>
+    <string name="chat_pinned_by">Закрепил: %1$s</string>
+    <string name="chat_pinned_unpin">Открепить</string>
     <string name="chat_thread_title">Тред</string>
     <string name="chat_thread_empty">Ответы в этом треде пока не загружены.</string>
     <string name="chat_write_scope_required">Чтобы отправлять сообщения, нужно войти заново.</string>
