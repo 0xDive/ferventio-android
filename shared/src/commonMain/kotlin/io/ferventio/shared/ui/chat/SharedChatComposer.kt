@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.em
 import coil3.compose.AsyncImage
 import io.ferventio.app.domain.ChatChannel
 import io.ferventio.app.domain.ChatMessage
+import io.ferventio.app.domain.ComposerAutocomplete
 import io.ferventio.app.domain.ComposerEmoteVisuals
 import io.ferventio.app.domain.ThirdPartyEmoteAsset
 import io.ferventio.shared.chat.TwitchChatMessageScopeException
@@ -117,6 +118,20 @@ fun SharedChatComposer(
     val canSend = hasWriteScope && trimmed.isNotEmpty() && !tooLong && !sending
     val scopeRequiredText = stringResource(Res.string.chat_write_scope_required)
     val sendFailedFormat = stringResource(Res.string.chat_send_failed, "%s")
+    val currentUserId = authentication.accessLease?.session?.userId
+    val channelMessages = runtime.chat.messages(channel.id)
+    val suggestions = remember(draft, channelMessages, emotes, currentUserId) {
+        ComposerAutocomplete.suggestions(
+            input = draft,
+            messages = channelMessages,
+            profilesById = emptyMap(),
+            catalog = emotes,
+            recentEmoteKeys = emptyList(),
+            favoriteEmoteKeys = emptySet(),
+            currentUserId = currentUserId,
+            limit = 8,
+        )
+    }
     val emoteIndex = remember(emotes) { ComposerEmoteVisuals.buildIndex(emotes) }
     val composerRichText = remember(draft, emoteIndex, preferences.showComposerEmoteImages) {
         if (preferences.showComposerEmoteImages) {
@@ -310,6 +325,16 @@ fun SharedChatComposer(
                     )
                 }
             }
+        }
+
+        if (suggestions.isNotEmpty() && !emotePickerVisible) {
+            SharedInlineComposerAutocomplete(
+                suggestions = suggestions,
+                onSelect = { suggestion ->
+                    draft = ComposerAutocomplete.applySuggestion(draft, suggestion)
+                    errorMessage = null
+                },
+            )
         }
 
         when {
