@@ -620,9 +620,16 @@ fun FerventioModeratedChatScreen(
     }
 
     commandUserCardData?.let { data ->
+        val replyCandidate = data.recentMessages.lastOrNull()
         SharedUserCardSheet(
             data = data,
             onDismiss = { commandUserCardData = null },
+            onReply = replyCandidate?.let { message ->
+                {
+                    commandUserCardData = null
+                    replyTarget = message
+                }
+            },
         )
     }
 
@@ -638,6 +645,18 @@ fun FerventioModeratedChatScreen(
         SharedUserCardSheet(
             data = data,
             onDismiss = { selectedUserMessage = null },
+            onReply = if (
+                canWriteChat &&
+                !sourceMessage.isSystem &&
+                !sourceMessage.isDeleted
+            ) {
+                {
+                    selectedUserMessage = null
+                    replyTarget = sourceMessage
+                }
+            } else {
+                null
+            },
         )
     }
 

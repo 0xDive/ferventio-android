@@ -14,12 +14,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Reply
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -57,6 +59,8 @@ import io.ferventio.shared.generated.resources.user_card_done
 import io.ferventio.shared.generated.resources.user_card_more_actions
 import io.ferventio.shared.generated.resources.user_card_open_twitch
 import io.ferventio.shared.generated.resources.user_card_recent_messages
+import io.ferventio.shared.generated.resources.user_card_reply
+import io.ferventio.shared.generated.resources.user_card_mention
 import io.ferventio.shared.generated.resources.user_card_role_broadcaster
 import io.ferventio.shared.generated.resources.user_card_role_moderator
 import io.ferventio.shared.generated.resources.user_card_role_subscriber
@@ -72,6 +76,7 @@ import org.jetbrains.compose.resources.stringResource
 internal fun SharedUserCardSheet(
     data: UserCardData,
     onDismiss: () -> Unit,
+    onReply: (() -> Unit)? = null,
 ) {
     val effectiveData = rememberRemoteUserCardData(data)
     val runtime = LocalFerventioRuntimeState.current
@@ -104,6 +109,19 @@ internal fun SharedUserCardSheet(
         messages = displayedRecentMessages,
         selectedMessageId = effectiveData.sourceMessageId,
     )
+
+    val canMention = runtime.authentication.state.authentication != null &&
+        effectiveData.user.login.isNotBlank()
+
+    fun mentionUser() {
+        if (!canMention) return
+        val updatedDraft = appendUserMentionDraft(
+            currentDraft = runtime.localUiPreferences.draft(effectiveData.channelId),
+            userLogin = effectiveData.user.login,
+        )
+        runtime.localUiPreferences.setDraft(effectiveData.channelId, updatedDraft)
+        onDismiss()
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -241,6 +259,42 @@ internal fun SharedUserCardSheet(
                             }
                         }
                     }
+                    if (onReply != null || canMention) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 24.dp, end = 24.dp, top = 14.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            if (onReply != null) {
+                                FilledTonalButton(
+                                    onClick = onReply,
+                                    modifier = Modifier.weight(1f),
+                                ) {
+                                    Icon(
+                                        Icons.AutoMirrored.Filled.Reply,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(stringResource(Res.string.user_card_reply))
+                                }
+                            }
+                            if (canMention) {
+                                FilledTonalButton(
+                                    onClick = ::mentionUser,
+                                    modifier = Modifier.weight(1f),
+                                ) {
+                                    Text(
+                                        text = "@",
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(stringResource(Res.string.user_card_mention))
+                                }
+                            }
+                        }
+                    }
                 }
             }
 
@@ -284,6 +338,21 @@ internal fun SharedUserCardSheet(
                 }
             }
         }
+    }
+}
+
+internal fun appendUserMentionDraft(
+    currentDraft: String,
+    userLogin: String,
+): String {
+    val login = userLogin.trim().removePrefix("@")
+    if (login.isEmpty()) return currentDraft
+    return buildString {
+        append(currentDraft.trimEnd())
+        if (isNotEmpty()) append(' ')
+        append('@')
+        append(login)
+        append(' ')
     }
 }
 

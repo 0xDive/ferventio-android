@@ -136,6 +136,35 @@ class SharedUserCardProjectionTest {
     }
 
     @Test
+    fun mentionDraftAppendsNormalizedLoginWithoutDroppingExistingText() {
+        assertEquals(
+            "hello @viewer ",
+            appendUserMentionDraft(
+                currentDraft = "hello ",
+                userLogin = "@viewer",
+            ),
+        )
+        assertEquals(
+            "@viewer ",
+            appendUserMentionDraft(
+                currentDraft = "",
+                userLogin = "viewer",
+            ),
+        )
+    }
+
+    @Test
+    fun blankMentionLoginLeavesDraftUnchanged() {
+        assertEquals(
+            "hello",
+            appendUserMentionDraft(
+                currentDraft = "hello",
+                userLogin = "   ",
+            ),
+        )
+    }
+
+    @Test
     fun blankIdsMatchByLoginIgnoringCase() {
         val source = message(id = "source", userId = "", login = "Viewer")
         val sameUser = message(id = "same", userId = "", login = "viewer")
