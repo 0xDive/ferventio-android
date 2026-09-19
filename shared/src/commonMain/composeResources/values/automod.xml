@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="automod_held_title">AutoMod held this message</string>
-    <string name="automod_category">Category: %1$s %2$s</string>
     <string name="automod_approve">Allow</string>
     <string name="automod_deny">Deny</string>
+    <string name="automod_publish_explanation">Allowing publishes it to chat.</string>
+    <string name="automod_reason_blocked_term">held the message because it matched a blocked term.</string>
+    <string name="automod_reason_automod">held the message in AutoMod.</string>
+    <string name="automod_reason_automod_details">held the message in AutoMod (%1$s).</string>
+    <string name="automod_reason_generic">held the message.</string>
+    <string name="automod_reason_custom">held the message: %1$s.</string>
+    <string name="automod_detail_category">category %1$s</string>
+    <string name="automod_detail_level">level %1$d</string>
 </resources>
