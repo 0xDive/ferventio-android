@@ -158,9 +158,12 @@ private fun CompactWorkspaceChannelPager(
     val latestChannelIds by rememberUpdatedState(channelIds)
     val latestSelectedChannelId by rememberUpdatedState(selectedChannelId)
 
+    // External selection (drawer, mentions, push) must always win. Guarding this with
+    // isScrollInProgress can permanently miss a selection because the effect is not keyed by
+    // scroll state; Android intentionally synchronizes directly from selectedChannelId.
     LaunchedEffect(selectedChannelId, channelIds) {
         val target = channelIds.indexOf(selectedChannelId)
-        if (target >= 0 && target != pagerState.settledPage && !pagerState.isScrollInProgress) {
+        if (target >= 0 && target != pagerState.settledPage) {
             pagerState.scrollToPage(target)
         }
     }
