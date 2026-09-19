@@ -1,6 +1,7 @@
 package io.ferventio.shared.chat
 
 import io.ferventio.app.domain.BackendSessionCredential
+import io.ferventio.app.domain.ModerationUserGroup
 import io.ferventio.app.domain.StoredAuthentication
 import io.ferventio.app.domain.TwitchAccessLease
 import io.ferventio.app.domain.TwitchSession
@@ -119,6 +120,68 @@ class TwitchChatManagementClientTest {
     }
 
     @Test
+    fun moderationPeopleListsUseOfficialEndpointsAndRoles() = runTest {
+        val requests = mutableListOf<HttpRequestData>()
+        val engine = MockEngine { captured ->
+            requests += captured
+            val body = when (captured.url.encodedPath) {
+                "/helix/moderation/moderators" ->
+                    """{"data":[{"user_id":"mod-id","user_login":"mod","user_name":"Mod"}],"pagination":{}}"""
+                "/helix/channels/vips" ->
+                    """{"data":[{"user_id":"vip-id","user_login":"vip","user_name":"VIP"}],"pagination":{}}"""
+                else -> error("Unexpected path ${captured.url.encodedPath}")
+            }
+            respond(ByteReadChannel(body), HttpStatusCode.OK)
+        }
+        val client = TwitchChatManagementClient(HttpClient(engine) { expectSuccess = false })
+        val auth = authentication(
+            scopes = setOf(
+                "moderation:read",
+                "channel:read:vips",
+            ),
+        )
+
+        val moderators = client.getModerators(auth, "channel-id")
+        val vips = client.getVips(auth, "channel-id")
+
+        assertEquals(listOf("mod-id"), moderators.map { it.id })
+        assertEquals(ModerationUserGroup.MODERATOR, moderators.single().group)
+        assertEquals(listOf("vip-id"), vips.map { it.id })
+        assertEquals(ModerationUserGroup.VIP, vips.single().group)
+        assertEquals("/helix/moderation/moderators", requests[0].url.encodedPath)
+        assertEquals("/helix/channels/vips", requests[1].url.encodedPath)
+        assertEquals("channel-id", requests[0].url.parameters["broadcaster_id"])
+        assertEquals("100", requests[0].url.parameters["first"])
+    }
+
+    @Test
+    fun bannedUsersPreserveModerationMetadata() = runTest {
+        var request: HttpRequestData? = null
+        val engine = MockEngine { captured ->
+            request = captured
+            respond(
+                ByteReadChannel(
+                    """{"data":[{"user_id":"bad-id","user_login":"bad","user_name":"Bad","expires_at":null,"created_at":"2026-09-19T12:00:00Z","reason":"spam","moderator_id":"mod-id","moderator_login":"mod","moderator_name":"Mod"}],"pagination":{}}""",
+                ),
+                HttpStatusCode.OK,
+            )
+        }
+        val client = TwitchChatManagementClient(HttpClient(engine) { expectSuccess = false })
+
+        val users = client.getBannedUsers(
+            authentication(scopes = setOf("moderator:read:banned_users")),
+            "channel-id",
+        )
+
+        val banned = users.single()
+        assertEquals("bad-id", banned.id)
+        assertTrue(banned.isPermanent)
+        assertEquals("spam", banned.reason)
+        assertEquals("mod-id", banned.moderatorId)
+        assertEquals("/helix/moderation/banned", requireNotNull(request).url.encodedPath)
+    }
+
+    @Test
     fun pinAndUnpinUseOfficialHelixContract() = runTest {
         val requests = mutableListOf<HttpRequestData>()
         val engine = MockEngine { captured ->
@@ -167,6 +230,21 @@ class TwitchChatManagementClientTest {
             client.getChatters(auth, "channel-id")
         }
         assertEquals("moderator:read:chatters", chatters.requiredScope)
+
+        val moderators = assertFailsWith<TwitchChatManagementScopeException> {
+            client.getModerators(auth, "channel-id")
+        }
+        assertTrue(moderators.requiredScope.contains("moderation:read"))
+
+        val vips = assertFailsWith<TwitchChatManagementScopeException> {
+            client.getVips(auth, "channel-id")
+        }
+        assertTrue(vips.requiredScope.contains("channel:read:vips"))
+
+        val banned = assertFailsWith<TwitchChatManagementScopeException> {
+            client.getBannedUsers(auth, "channel-id")
+        }
+        assertTrue(banned.requiredScope.contains("moderator:read:banned_users"))
         assertEquals(0, requests)
     }
 

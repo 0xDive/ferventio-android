@@ -1,6 +1,7 @@
 package io.ferventio.shared.chat
 
 import io.ferventio.app.domain.AuthenticationPersistenceValidation
+import io.ferventio.app.domain.BannedChatUser
 import io.ferventio.app.domain.ModerationChatSettings
 import io.ferventio.app.domain.ModerationUser
 import io.ferventio.app.domain.ModerationUserGroup
@@ -231,6 +232,121 @@ class TwitchChatManagementClient(
         )
     }
 
+    suspend fun getModerators(
+        authentication: StoredAuthentication,
+        broadcasterId: String,
+    ): List<ModerationUser> = getModerationUsers(
+        authentication = authentication,
+        broadcasterId = broadcasterId,
+        url = MODERATORS_URL,
+        group = ModerationUserGroup.MODERATOR,
+        operation = "get moderators",
+        acceptedScopes = MODERATOR_LIST_SCOPES,
+    )
+
+    suspend fun getVips(
+        authentication: StoredAuthentication,
+        broadcasterId: String,
+    ): List<ModerationUser> = getModerationUsers(
+        authentication = authentication,
+        broadcasterId = broadcasterId,
+        url = VIPS_URL,
+        group = ModerationUserGroup.VIP,
+        operation = "get VIPs",
+        acceptedScopes = VIP_LIST_SCOPES,
+    )
+
+    suspend fun getBannedUsers(
+        authentication: StoredAuthentication,
+        broadcasterId: String,
+    ): List<BannedChatUser> {
+        val context = authenticationContext(authentication)
+        context.requireAnyScope(BANNED_LIST_SCOPES)
+        val channelId = broadcasterId.trim()
+        require(channelId.isNotEmpty()) { "Twitch banned-users broadcasterId must not be blank" }
+
+        val users = mutableListOf<BannedChatUser>()
+        var cursor: String? = null
+        do {
+            val response = client.get(BANNED_USERS_URL) {
+                applyAuthentication(context)
+                parameter("broadcaster_id", channelId)
+                parameter("first", PAGE_SIZE)
+                cursor?.let { parameter("after", it) }
+            }
+            val body = response.bodyAsText()
+            requireSuccess(response, body, "get banned users")
+            val root = parseRoot(body)
+            users += (root["data"] as? JsonArray).orEmpty().mapNotNull { element ->
+                val item = element as? JsonObject ?: return@mapNotNull null
+                val id = item.string("user_id").orEmpty()
+                val login = item.string("user_login").orEmpty()
+                if (id.isBlank() || login.isBlank()) return@mapNotNull null
+                BannedChatUser(
+                    id = id,
+                    login = login,
+                    displayName = item.string("user_name").orEmpty().ifBlank { login },
+                    expiresAt = item.string("expires_at"),
+                    createdAt = item.string("created_at"),
+                    reason = item.string("reason"),
+                    moderatorId = item.string("moderator_id"),
+                    moderatorLogin = item.string("moderator_login"),
+                    moderatorName = item.string("moderator_name"),
+                )
+            }
+            cursor = (root["pagination"] as? JsonObject)
+                ?.string("cursor")
+                ?.takeIf(String::isNotBlank)
+        } while (cursor != null && users.size < MAX_MODERATION_LIST_ITEMS)
+
+        return users.distinctBy(BannedChatUser::id).take(MAX_MODERATION_LIST_ITEMS)
+    }
+
+    private suspend fun getModerationUsers(
+        authentication: StoredAuthentication,
+        broadcasterId: String,
+        url: String,
+        group: ModerationUserGroup,
+        operation: String,
+        acceptedScopes: Set<String>,
+    ): List<ModerationUser> {
+        val context = authenticationContext(authentication)
+        context.requireAnyScope(acceptedScopes)
+        val channelId = broadcasterId.trim()
+        require(channelId.isNotEmpty()) { "Twitch moderation-list broadcasterId must not be blank" }
+
+        val users = mutableListOf<ModerationUser>()
+        var cursor: String? = null
+        do {
+            val response = client.get(url) {
+                applyAuthentication(context)
+                parameter("broadcaster_id", channelId)
+                parameter("first", PAGE_SIZE)
+                cursor?.let { parameter("after", it) }
+            }
+            val body = response.bodyAsText()
+            requireSuccess(response, body, operation)
+            val root = parseRoot(body)
+            users += (root["data"] as? JsonArray).orEmpty().mapNotNull { element ->
+                val item = element as? JsonObject ?: return@mapNotNull null
+                val id = item.string("user_id").orEmpty()
+                val login = item.string("user_login").orEmpty()
+                if (id.isBlank() || login.isBlank()) return@mapNotNull null
+                ModerationUser(
+                    id = id,
+                    login = login,
+                    displayName = item.string("user_name").orEmpty().ifBlank { login },
+                    group = group,
+                )
+            }
+            cursor = (root["pagination"] as? JsonObject)
+                ?.string("cursor")
+                ?.takeIf(String::isNotBlank)
+        } while (cursor != null && users.size < MAX_MODERATION_LIST_ITEMS)
+
+        return users.distinctBy(ModerationUser::id).take(MAX_MODERATION_LIST_ITEMS)
+    }
+
     fun close() {
         client.close()
     }
@@ -259,6 +375,7 @@ class TwitchChatManagementClient(
             accessToken = lease.accessToken.trim().also {
                 require(it.isNotEmpty()) { "Twitch access token must not be blank" }
             },
+            scopes = lease.session.scopes,
         )
     }
 
@@ -320,20 +437,46 @@ class TwitchChatManagementClient(
     private fun JsonObject.int(name: String): Int? =
         this[name]?.jsonPrimitive?.intOrNull
 
+    private fun AuthenticationContext.requireAnyScope(acceptedScopes: Set<String>) {
+        if (scopes.none(acceptedScopes::contains)) {
+            throw TwitchChatManagementScopeException(
+                acceptedScopes.sorted().joinToString(" or "),
+            )
+        }
+    }
+
     private data class AuthenticationContext(
         val clientId: String,
         val userId: String,
         val accessToken: String,
+        val scopes: Set<String>,
     )
 
     private companion object {
         const val CHAT_SETTINGS_URL = "https://api.twitch.tv/helix/chat/settings"
         const val CHATTERS_URL = "https://api.twitch.tv/helix/chat/chatters"
+        const val MODERATORS_URL = "https://api.twitch.tv/helix/moderation/moderators"
+        const val VIPS_URL = "https://api.twitch.tv/helix/channels/vips"
+        const val BANNED_USERS_URL = "https://api.twitch.tv/helix/moderation/banned"
         const val PINNED_CHAT_URL = "https://api.twitch.tv/helix/chat/pins"
         const val MANAGE_CHAT_SETTINGS_SCOPE = "moderator:manage:chat_settings"
         const val MANAGE_CHAT_MESSAGES_SCOPE = "moderator:manage:chat_messages"
         const val READ_CHATTERS_SCOPE = "moderator:read:chatters"
         const val DEFAULT_CHATTERS_LIMIT = 1_000
         const val MAX_CHATTERS_LIMIT = 5_000
+        const val PAGE_SIZE = 100
+        const val MAX_MODERATION_LIST_ITEMS = 1_000
+        val MODERATOR_LIST_SCOPES = setOf(
+            "moderation:read",
+            "moderator:read:moderators",
+        )
+        val VIP_LIST_SCOPES = setOf(
+            "channel:read:vips",
+            "moderator:read:vips",
+        )
+        val BANNED_LIST_SCOPES = setOf(
+            "moderator:read:banned_users",
+            "moderator:manage:banned_users",
+        )
     }
 }
