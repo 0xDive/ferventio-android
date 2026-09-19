@@ -81,6 +81,7 @@
     <string name="settings_save_failed">Couldn’t save settings: %1$s</string>
     <string name="settings_close">Close</string>
     <string name="chat_waiting_for_messages">Waiting for messages…</string>
+    <string name="chat_jump_to_live">Jump to live chat</string>
     <string name="chat_message_deleted">[message deleted]</string>
     <string name="chat_replying_to">Replying to %1$s</string>
     <string name="chat_composer_placeholder">Message #%1$s</string>

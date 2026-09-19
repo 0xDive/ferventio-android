@@ -81,6 +81,7 @@
     <string name="settings_save_failed">Не удалось сохранить настройки: %1$s</string>
     <string name="settings_close">Закрыть</string>
     <string name="chat_waiting_for_messages">Ждём сообщения…</string>
+    <string name="chat_jump_to_live">К live-чату</string>
     <string name="chat_message_deleted">[сообщение удалено]</string>
     <string name="chat_replying_to">Ответ для %1$s</string>
     <string name="chat_composer_placeholder">Сообщение #%1$s</string>

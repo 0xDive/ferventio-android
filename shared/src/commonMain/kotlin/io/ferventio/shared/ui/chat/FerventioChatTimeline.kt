@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
@@ -19,6 +20,10 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -30,6 +35,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -70,6 +76,7 @@ import io.ferventio.app.domain.OutgoingMessageState
 import io.ferventio.app.domain.ThirdPartyEmoteAsset
 import io.ferventio.shared.chat.ChatRuntimeStateHolder
 import io.ferventio.shared.generated.resources.Res
+import io.ferventio.shared.generated.resources.chat_jump_to_live
 import io.ferventio.shared.generated.resources.chat_message_deleted
 import io.ferventio.shared.generated.resources.chat_replying_to
 import io.ferventio.shared.generated.resources.chat_retry
@@ -93,6 +100,7 @@ import io.ferventio.shared.ui.moderation.quickModerationAvailability
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 
 private const val URL_ANNOTATION_TAG = "url"
@@ -113,6 +121,7 @@ fun FerventioChatTimeline(
     providedThirdPartyEmotes: Map<String, ThirdPartyEmoteAsset>? = null,
 ) {
     val runtime = LocalFerventioRuntimeState.current
+    val coroutineScope = rememberCoroutineScope()
     val chat = runtime.chat
     val attention = runtime.attention
     val preferences = runtime.settings.preferences
@@ -329,31 +338,62 @@ fun FerventioChatTimeline(
                 )
             }
         } else {
-            LazyColumn(
-                state = listState,
-                modifier = Modifier.fillMaxSize(),
-            ) {
-                items(
-                    items = messages,
-                    key = ChatMessage::id,
-                ) { message ->
-                    ChatMessageRow(
-                        message = message,
-                        preferences = preferences,
-                        localUiPreferences = localUiPreferences,
-                        ownUserId = ownUserId,
-                        canModerate = canModerate,
-                        repeatSummary = collapsePlan.summaryFor(message.id),
-                        decoration = decorations[message.id] ?: MessageDecoration(),
-                        thirdPartyEmotes = thirdPartyEmotes,
-                        cheermoteAssets = cheermoteAssets,
-                        onAuthorClick = onAuthorClick,
-                        onReplyRequest = onReplyRequest,
-                        onMessageLongPress = onMessageLongPress,
-                        onRetryMessage = onRetryMessage,
-                        onQuickBan = onQuickBan,
-                        onQuickDelete = onQuickDelete,
-                    )
+            Box(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                ) {
+                    items(
+                        items = messages,
+                        key = ChatMessage::id,
+                    ) { message ->
+                        ChatMessageRow(
+                            message = message,
+                            preferences = preferences,
+                            localUiPreferences = localUiPreferences,
+                            ownUserId = ownUserId,
+                            canModerate = canModerate,
+                            repeatSummary = collapsePlan.summaryFor(message.id),
+                            decoration = decorations[message.id] ?: MessageDecoration(),
+                            thirdPartyEmotes = thirdPartyEmotes,
+                            cheermoteAssets = cheermoteAssets,
+                            onAuthorClick = onAuthorClick,
+                            onReplyRequest = onReplyRequest,
+                            onMessageLongPress = onMessageLongPress,
+                            onRetryMessage = onRetryMessage,
+                            onQuickBan = onQuickBan,
+                            onQuickDelete = onQuickDelete,
+                        )
+                    }
+                }
+
+                if (
+                    restoredScrollPosition &&
+                    navigationTarget == null &&
+                    !followTail &&
+                    listState.canScrollForward
+                ) {
+                    FilledTonalButton(
+                        onClick = {
+                            coroutineScope.launch {
+                                listState.animateScrollToItem(messages.lastIndex)
+                                followTail = preferences.autoScrollEnabled
+                                saveCurrentScrollPosition()
+                                attention.updateViewport(
+                                    channelId = channel.id,
+                                    visible = true,
+                                    isAtLiveTail = true,
+                                )
+                            }
+                        },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(12.dp),
+                    ) {
+                        Icon(Icons.Default.KeyboardArrowDown, contentDescription = null)
+                        Spacer(Modifier.size(6.dp))
+                        Text(stringResource(Res.string.chat_jump_to_live))
+                    }
                 }
             }
         }
