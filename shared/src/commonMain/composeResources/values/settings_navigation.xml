@@ -9,6 +9,10 @@
     <string name="settings_input_behavior_summary">Auto-scroll, quick moderation and message composer</string>
     <string name="settings_user_card_summary">Moderation actions and timeout presets</string>
     <string name="settings_message_rules_summary">Highlights, Ignore and notification actions</string>
+    <string name="settings_highlights_summary">Name, words, regex, roles, reply, rewards and bits</string>
+    <string name="settings_ignore_summary">Users, words, bot commands and message types</string>
+    <string name="settings_filter_language">Filter language</string>
+    <string name="settings_filter_language_summary">Expressions, preview, filtered splits and import/export</string>
     <string name="settings_notifications_summary">Permissions and message alerts</string>
     <string name="settings_history_summary">Recent messages and local retention</string>
     <string name="settings_export_sync">Export &amp; sync</string>

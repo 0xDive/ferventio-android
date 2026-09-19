@@ -1,6 +1,6 @@
 <resources>
     <string name="settings_home_chat_group">Чат</string>
-    <string name="settings_home_features_group">Функции</string>
+    <string name="settings_home_features_group">Возможности</string>
     <string name="settings_home_data_group">Данные</string>
     <string name="settings_home_app_group">Приложение</string>
     <string name="settings_messages_appearance">Сообщения и внешний вид</string>
@@ -9,6 +9,10 @@
     <string name="settings_input_behavior_summary">Автопрокрутка, быстрая модерация и поле ввода</string>
     <string name="settings_user_card_summary">Действия модерации и варианты таймаута</string>
     <string name="settings_message_rules_summary">Highlights, Ignore и действия уведомлений</string>
+    <string name="settings_highlights_summary">Имя, слова, regex, роли, reply, rewards и bits</string>
+    <string name="settings_ignore_summary">Пользователи, слова, bot-команды и типы сообщений</string>
+    <string name="settings_filter_language">Язык фильтров</string>
+    <string name="settings_filter_language_summary">Выражения, preview, filtered splits и импорт/экспорт</string>
     <string name="settings_notifications_summary">Разрешения и уведомления о сообщениях</string>
     <string name="settings_history_summary">Недавние сообщения и локальное хранение</string>
     <string name="settings_export_sync">Экспорт и синхронизация</string>

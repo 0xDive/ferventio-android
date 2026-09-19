@@ -5,26 +5,51 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Chat
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.DeleteSweep
+import androidx.compose.material.icons.filled.FilterAlt
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -34,7 +59,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.ferventio.app.domain.AppLanguage
 import io.ferventio.app.domain.AppThemeMode
@@ -110,47 +137,93 @@ internal fun FerventioSettingsSheet(
 
     fun openMessageRules() {
         persistIfChanged()
-        onDismiss()
         onOpenMessageRules()
     }
 
     fun openSavedFilters() {
         persistIfChanged()
-        onDismiss()
         onOpenSavedFilters()
     }
 
-    ModalBottomSheet(onDismissRequest = ::saveAndDismiss) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp),
-        ) {
-            SettingsPageHeader(
-                page = page,
-                onBack = {
-                    page = when (page) {
-                        SharedSettingsPage.PRIVACY,
-                        SharedSettingsPage.LICENSES,
-                        -> SharedSettingsPage.ABOUT
-                        else -> SharedSettingsPage.ROOT
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        topBar = {
+            TopAppBar(
+                modifier = Modifier.statusBarsPadding(),
+                title = {
+                    Text(
+                        text = settingsPageTitle(page),
+                        fontWeight = FontWeight.Bold,
+                    )
+                },
+                navigationIcon = {
+                    if (page != SharedSettingsPage.ROOT) {
+                        IconButton(
+                            onClick = {
+                                page = when (page) {
+                                    SharedSettingsPage.PRIVACY,
+                                    SharedSettingsPage.LICENSES,
+                                    -> SharedSettingsPage.ABOUT
+                                    else -> SharedSettingsPage.ROOT
+                                }
+                            },
+                        ) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(Res.string.settings_back),
+                            )
+                        }
                     }
                 },
+                actions = {
+                    if (page == SharedSettingsPage.ROOT) {
+                        IconButton(onClick = ::saveAndDismiss) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = stringResource(Res.string.settings_close),
+                            )
+                        }
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background,
+                ),
             )
-            Spacer(Modifier.height(16.dp))
-
+        },
+    ) { padding ->
+        val horizontalPadding = if (page == SharedSettingsPage.ROOT) 0.dp else 14.dp
+        val topPadding = if (page == SharedSettingsPage.ROOT) 6.dp else 12.dp
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .navigationBarsPadding()
+                .verticalScroll(rememberScrollState())
+                .padding(
+                    start = horizontalPadding,
+                    top = topPadding,
+                    end = horizontalPadding,
+                    bottom = 16.dp,
+                ),
+        ) {
             when (page) {
                 SharedSettingsPage.ROOT -> {
                     if (accountActions.accountManagementAvailable) {
-                        FerventioSettingsAccountProfileCard(
-                            onOpenAccount = { page = SharedSettingsPage.ACCOUNT },
-                            onSignOut = {
-                                saveAndDismiss()
-                                accountActions.onSignOut()
-                            },
-                        )
-                        Spacer(Modifier.height(12.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp),
+                        ) {
+                            FerventioSettingsAccountProfileCard(
+                                onOpenAccount = { page = SharedSettingsPage.ACCOUNT },
+                                onSignOut = {
+                                    saveAndDismiss()
+                                    accountActions.onSignOut()
+                                },
+                            )
+                        }
+                        Spacer(Modifier.height(10.dp))
                     }
                     SettingsHome(
                         preferences = state.preferences,
@@ -249,48 +322,25 @@ internal fun FerventioSettingsSheet(
             }
 
             SettingsSaveState(state)
-            TextButton(
-                onClick = ::saveAndDismiss,
-                modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp),
-            ) {
-                Text(stringResource(Res.string.settings_close))
-            }
         }
     }
 }
 
 @Composable
-private fun SettingsPageHeader(page: SharedSettingsPage, onBack: () -> Unit) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        if (page != SharedSettingsPage.ROOT) {
-            TextButton(onClick = onBack) {
-                Text("‹ ${stringResource(Res.string.settings_back)}")
-            }
-        }
-        Text(
-            text = when (page) {
-                SharedSettingsPage.ROOT -> stringResource(Res.string.settings_title)
-                SharedSettingsPage.APPEARANCE -> stringResource(Res.string.settings_messages_appearance)
-                SharedSettingsPage.CHAT -> stringResource(Res.string.settings_input_behavior)
-                SharedSettingsPage.USER_CARD -> stringResource(Res.string.settings_user_card)
-                SharedSettingsPage.NOTIFICATIONS -> stringResource(Res.string.notifications_title)
-                SharedSettingsPage.HISTORY -> stringResource(Res.string.settings_history)
-                SharedSettingsPage.IMAGE_CACHE -> stringResource(Res.string.image_cache_title)
-                SharedSettingsPage.BACKUP_SYNC -> stringResource(Res.string.settings_export_sync)
-                SharedSettingsPage.ACCOUNT -> stringResource(Res.string.settings_account)
-                SharedSettingsPage.LANGUAGE -> stringResource(Res.string.settings_language)
-                SharedSettingsPage.ABOUT -> stringResource(Res.string.settings_about)
-                SharedSettingsPage.PRIVACY -> stringResource(Res.string.about_privacy_policy)
-                SharedSettingsPage.LICENSES -> stringResource(Res.string.about_open_source_licenses)
-            },
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-        )
-    }
+private fun settingsPageTitle(page: SharedSettingsPage): String = when (page) {
+    SharedSettingsPage.ROOT -> stringResource(Res.string.settings_title)
+    SharedSettingsPage.APPEARANCE -> stringResource(Res.string.settings_messages_appearance)
+    SharedSettingsPage.CHAT -> stringResource(Res.string.settings_input_behavior)
+    SharedSettingsPage.USER_CARD -> stringResource(Res.string.settings_user_card)
+    SharedSettingsPage.NOTIFICATIONS -> stringResource(Res.string.notifications_title)
+    SharedSettingsPage.HISTORY -> stringResource(Res.string.settings_history)
+    SharedSettingsPage.IMAGE_CACHE -> stringResource(Res.string.image_cache_title)
+    SharedSettingsPage.BACKUP_SYNC -> stringResource(Res.string.settings_export_sync)
+    SharedSettingsPage.ACCOUNT -> stringResource(Res.string.settings_account)
+    SharedSettingsPage.LANGUAGE -> stringResource(Res.string.settings_language)
+    SharedSettingsPage.ABOUT -> stringResource(Res.string.settings_about)
+    SharedSettingsPage.PRIVACY -> stringResource(Res.string.about_privacy_policy)
+    SharedSettingsPage.LICENSES -> stringResource(Res.string.about_open_source_licenses)
 }
 
 @Composable
@@ -302,21 +352,24 @@ private fun SettingsHome(
     onOpenMessageRules: () -> Unit,
     onOpenSavedFilters: () -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         SettingsHomeGroup(stringResource(Res.string.settings_home_chat_group)) {
             SettingsMenuRow(
+                icon = Icons.AutoMirrored.Filled.Chat,
                 title = stringResource(Res.string.settings_messages_appearance),
                 summary = stringResource(Res.string.settings_messages_appearance_summary),
                 onClick = { onOpen(SharedSettingsPage.APPEARANCE) },
             )
-            HorizontalDivider()
+            SettingsGroupDivider()
             SettingsMenuRow(
+                icon = Icons.Default.Tune,
                 title = stringResource(Res.string.settings_input_behavior),
                 summary = stringResource(Res.string.settings_input_behavior_summary),
                 onClick = { onOpen(SharedSettingsPage.CHAT) },
             )
-            HorizontalDivider()
+            SettingsGroupDivider()
             SettingsMenuRow(
+                icon = Icons.Default.Person,
                 title = stringResource(Res.string.settings_user_card),
                 summary = stringResource(Res.string.settings_user_card_summary),
                 onClick = { onOpen(SharedSettingsPage.USER_CARD) },
@@ -325,18 +378,28 @@ private fun SettingsHome(
 
         SettingsHomeGroup(stringResource(Res.string.settings_home_features_group)) {
             SettingsMenuRow(
-                title = stringResource(Res.string.message_rules_title),
-                summary = stringResource(Res.string.settings_message_rules_summary),
+                icon = Icons.Default.Palette,
+                title = stringResource(Res.string.message_rules_highlights),
+                summary = stringResource(Res.string.settings_highlights_summary),
                 onClick = onOpenMessageRules,
             )
-            HorizontalDivider()
+            SettingsGroupDivider()
             SettingsMenuRow(
-                title = stringResource(Res.string.saved_filters_title),
-                summary = stringResource(Res.string.saved_filters_summary),
+                icon = Icons.Default.Block,
+                title = stringResource(Res.string.message_rules_ignore),
+                summary = stringResource(Res.string.settings_ignore_summary),
+                onClick = onOpenMessageRules,
+            )
+            SettingsGroupDivider()
+            SettingsMenuRow(
+                icon = Icons.Default.FilterAlt,
+                title = stringResource(Res.string.settings_filter_language),
+                summary = stringResource(Res.string.settings_filter_language_summary),
                 onClick = onOpenSavedFilters,
             )
-            HorizontalDivider()
+            SettingsGroupDivider()
             SettingsMenuRow(
+                icon = Icons.Default.Notifications,
                 title = stringResource(Res.string.notifications_title),
                 summary = stringResource(Res.string.settings_notifications_summary),
                 onClick = { onOpen(SharedSettingsPage.NOTIFICATIONS) },
@@ -345,18 +408,21 @@ private fun SettingsHome(
 
         SettingsHomeGroup(stringResource(Res.string.settings_home_data_group)) {
             SettingsMenuRow(
+                icon = Icons.Default.History,
                 title = stringResource(Res.string.settings_history),
                 summary = stringResource(Res.string.settings_history_summary),
                 onClick = { onOpen(SharedSettingsPage.HISTORY) },
             )
-            HorizontalDivider()
+            SettingsGroupDivider()
             SettingsMenuRow(
+                icon = Icons.Default.DeleteSweep,
                 title = stringResource(Res.string.image_cache_title),
                 summary = stringResource(Res.string.image_cache_summary),
                 onClick = { onOpen(SharedSettingsPage.IMAGE_CACHE) },
             )
-            HorizontalDivider()
+            SettingsGroupDivider()
             SettingsMenuRow(
+                icon = Icons.Default.ContentCopy,
                 title = stringResource(Res.string.settings_export_sync),
                 summary = if (syncRevision > 0L) {
                     stringResource(Res.string.settings_backup_revision, syncRevision)
@@ -369,12 +435,14 @@ private fun SettingsHome(
 
         SettingsHomeGroup(stringResource(Res.string.settings_home_app_group)) {
             SettingsMenuRow(
+                icon = Icons.Default.Translate,
                 title = stringResource(Res.string.settings_language),
                 summary = sharedLanguageLabel(preferences.appLanguage),
                 onClick = { onOpen(SharedSettingsPage.LANGUAGE) },
             )
-            HorizontalDivider()
+            SettingsGroupDivider()
             SettingsMenuRow(
+                icon = Icons.Default.Info,
                 title = stringResource(Res.string.settings_about),
                 summary = stringResource(
                     Res.string.settings_about_summary,
@@ -387,43 +455,96 @@ private fun SettingsHome(
 }
 
 @Composable
-private fun SettingsHomeGroup(title: String, content: @Composable () -> Unit) {
-    Column {
+private fun SettingsHomeGroup(
+    title: String,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(
+        modifier = Modifier.padding(horizontal = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(5.dp),
+    ) {
         Text(
             text = title,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(start = 4.dp, bottom = 6.dp),
+            modifier = Modifier.padding(start = 6.dp),
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold,
         )
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.extraLarge,
-            color = MaterialTheme.colorScheme.surfaceContainerLow,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(
+                1.dp,
+                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.55f),
+            ),
         ) {
-            Column { content() }
+            Column(content = content)
         }
     }
 }
 
 @Composable
-private fun SettingsMenuRow(title: String, summary: String, onClick: () -> Unit) {
+private fun SettingsGroupDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(start = 58.dp),
+        color = MaterialTheme.colorScheme.outlineVariant,
+    )
+}
+
+@Composable
+private fun SettingsMenuRow(
+    icon: ImageVector,
+    title: String,
+    summary: String? = null,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+) {
     Row(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick).padding(14.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            modifier = Modifier.size(25.dp),
+            tint = if (enabled) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.45f)
+            },
+        )
+        Spacer(Modifier.size(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(text = title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
             Text(
-                text = summary,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = title,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = if (enabled) {
+                    MaterialTheme.colorScheme.onSurface
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.55f)
+                },
             )
+            summary?.let { value ->
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
-        Text(
-            text = "›",
-            style = MaterialTheme.typography.titleLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Icon(
+            Icons.Default.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                alpha = if (enabled) 1f else 0.4f,
+            ),
         )
     }
 }
