@@ -94,7 +94,10 @@ internal class TwitchEventSubBootstrapCoordinator(
             if (primaryError != null) {
                 if (firstPrimaryError == null) firstPrimaryError = primaryError
                 failures += primaryError.toFailure(channel, primary.type)
-                if (primaryError.isTwitchAuthenticationFailure()) {
+                if (
+                    primaryError.isTwitchAuthenticationFailure() ||
+                    TwitchEventSubConnectionPolicy.isWebSocketTransportLimit(primaryError)
+                ) {
                     throw TwitchEventSubBootstrapException(
                         failures = failures.toList(),
                         cause = primaryError,

@@ -95,6 +95,35 @@ class TwitchEventSubBootstrapCoordinatorTest {
     }
 
     @Test
+    fun websocketTransportLimitStopsChannelFallbackImmediately() = runTest {
+        val first = channel("one", "first-login")
+        val second = channel("two", "second-login")
+        val calls = mutableListOf<Pair<String, String>>()
+        val coordinator = TwitchEventSubBootstrapCoordinator { _, _, spec ->
+            calls += spec.broadcasterId to spec.type
+            throw TwitchEventSubSubscriptionException(
+                statusCode = 429,
+                twitchMessage = "number of websocket transports limit exceeded",
+            )
+        }
+
+        val error = assertFailsWith<TwitchEventSubBootstrapException> {
+            coordinator.bootstrap(
+                authentication = authentication(),
+                sessionId = "socket-session",
+                channels = listOf(first, second),
+                moderatedChannelIds = emptySet(),
+            )
+        }
+
+        assertEquals(
+            listOf(first.id to TwitchEventSubSubscriptionPolicy.PRIMARY_EVENT_TYPE),
+            calls,
+        )
+        assertTrue(TwitchEventSubConnectionPolicy.isWebSocketTransportLimit(error))
+    }
+
+    @Test
     fun forbiddenPrimaryCanFallBackToNextChannel() = runTest {
         val first = channel("one", "first-login")
         val second = channel("two", "second-login")
