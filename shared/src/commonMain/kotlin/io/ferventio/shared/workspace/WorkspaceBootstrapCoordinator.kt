@@ -89,7 +89,11 @@ class WorkspaceBootstrapCoordinator(
                 authentication = authentication,
                 preferences = preferences,
             ).also { snapshot ->
-                settingsState.markSaveSucceeded(snapshot.preferences, snapshot.revision)
+                settingsState.markSaveSucceeded(
+                    preferences = snapshot.preferences,
+                    revision = snapshot.revision,
+                    customCommands = snapshot.customCommands,
+                )
             }
         } catch (error: Throwable) {
             settingsState.markSaveFailed(error.message)
@@ -401,7 +405,11 @@ class WorkspaceBootstrapCoordinator(
         // No suspension points below this line. This keeps a prepared snapshot atomic from the
         // perspective of overlapping channel mutations: an older revision can no longer resume
         // after a newer mutation and partially overwrite its local workspace/settings state.
-        settingsState?.restore(snapshot.preferences, snapshot.revision)
+        settingsState?.restore(
+            preferences = snapshot.preferences,
+            revision = snapshot.revision,
+            customCommands = snapshot.customCommands,
+        )
         state.replaceChannels(resolved.channels)
         resolved.selectedChannelId?.let(state::selectChannel)
         state.updatePinnedChannelIds(snapshot.channels.pinnedChannelIds)

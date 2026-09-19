@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.InsertEmoticon
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
@@ -28,6 +29,7 @@ import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -37,6 +39,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.Key
@@ -62,11 +65,24 @@ import io.ferventio.app.domain.ChatMessage
 import io.ferventio.app.domain.ConfirmedModerationCommand
 import io.ferventio.app.domain.ComposerAutocomplete
 import io.ferventio.app.domain.ComposerEmoteVisuals
+import io.ferventio.app.domain.CustomCommandComposerResolution
+import io.ferventio.app.domain.CustomCommandComposerResolver
+import io.ferventio.app.domain.CustomCommandContext
+import io.ferventio.app.domain.CustomCommandExecutionPlan
+import io.ferventio.app.domain.CustomCommandReply
+import io.ferventio.app.domain.CustomCommandRisk
+import io.ferventio.app.domain.CustomCommandRuntimeContext
+import io.ferventio.app.domain.CustomCommandUser
 import io.ferventio.app.domain.NukePreviewConfig
 import io.ferventio.app.domain.ThirdPartyEmoteAsset
 import io.ferventio.shared.chat.TwitchChatMessageScopeException
 import io.ferventio.shared.generated.resources.Res
 import io.ferventio.shared.generated.resources.chat_command_unavailable
+import io.ferventio.shared.generated.resources.chat_custom_command_cancel
+import io.ferventio.shared.generated.resources.chat_custom_command_confirm_action
+import io.ferventio.shared.generated.resources.chat_custom_command_confirm_body
+import io.ferventio.shared.generated.resources.chat_custom_command_confirm_title
+import io.ferventio.shared.generated.resources.chat_custom_command_expanded_too_long
 import io.ferventio.shared.generated.resources.chat_composer_placeholder
 import io.ferventio.shared.generated.resources.chat_emotes
 import io.ferventio.shared.generated.resources.chat_message_too_long
@@ -119,6 +135,7 @@ fun SharedChatComposer(
     }
 
     val scope = rememberCoroutineScope()
+    val clipboard = LocalClipboardManager.current
     val preferences = runtime.settings.preferences
     val localUiPreferences = runtime.localUiPreferences
     val hasWriteScope = authentication.accessLease?.session?.scopes?.contains(WRITE_CHAT_SCOPE) == true
@@ -129,6 +146,9 @@ fun SharedChatComposer(
     var autocompleteIndex by rememberSaveable(channel.id) { mutableStateOf(0) }
     var sending by remember(channel.id) { mutableStateOf(false) }
     var errorMessage by remember(channel.id) { mutableStateOf<String?>(null) }
+    var pendingCustomCommandPlan by remember(channel.id) {
+        mutableStateOf<CustomCommandExecutionPlan?>(null)
+    }
     var emotePickerVisible by rememberSaveable(channel.id) { mutableStateOf(false) }
     val trimmed = draft.trim()
     val tooLong = trimmed.length > MAX_CHAT_MESSAGE_LENGTH
@@ -136,6 +156,8 @@ fun SharedChatComposer(
     val scopeRequiredText = stringResource(Res.string.chat_write_scope_required)
     val sendFailedFormat = stringResource(Res.string.chat_send_failed, "%s")
     val commandUnavailableText = stringResource(Res.string.chat_command_unavailable)
+    val customCommandExpandedTooLongText =
+        stringResource(Res.string.chat_custom_command_expanded_too_long)
     val currentUserId = authentication.accessLease?.session?.userId
     val channelMessages = runtime.chat.messages(channel.id)
     val suggestions = remember(draft, channelMessages, emotes, currentUserId) {
@@ -206,10 +228,16 @@ fun SharedChatComposer(
         onSent()
     }
 
-    fun submit() {
-        if (!canSend) return
-        val outgoingText = trimmed
-        when (val submission = routeSharedComposerSubmission(outgoingText)) {
+    fun dispatchResolvedSubmission(
+        resolvedText: String,
+        historyText: String,
+        customPlan: CustomCommandExecutionPlan? = null,
+    ) {
+        if (resolvedText.length > MAX_CHAT_MESSAGE_LENGTH) {
+            errorMessage = customCommandExpandedTooLongText
+            return
+        }
+        when (val submission = routeSharedComposerSubmission(resolvedText)) {
             is SharedComposerSubmission.Error -> {
                 errorMessage = submission.message
                 return
@@ -217,7 +245,7 @@ fun SharedChatComposer(
             is SharedComposerSubmission.UserCard -> {
                 errorMessage = null
                 if (onUserCardCommand(submission.login)) {
-                    finishLocalSubmission(outgoingText)
+                    finishLocalSubmission(historyText)
                 } else {
                     errorMessage = commandUnavailableText
                 }
@@ -226,7 +254,7 @@ fun SharedChatComposer(
             is SharedComposerSubmission.Moderation -> {
                 errorMessage = null
                 if (onModerationCommand(submission.command)) {
-                    finishLocalSubmission(outgoingText)
+                    finishLocalSubmission(historyText)
                 } else {
                     errorMessage = commandUnavailableText
                 }
@@ -239,7 +267,15 @@ fun SharedChatComposer(
                 }
                 return
             }
-            is SharedComposerSubmission.Send -> Unit
+            is SharedComposerSubmission.Send -> {
+                if (
+                    customPlan?.risk == CustomCommandRisk.MODERATION ||
+                    customPlan?.risk == CustomCommandRisk.MASS_MODERATION
+                ) {
+                    errorMessage = commandUnavailableText
+                    return
+                }
+            }
         }
 
         val replyParentMessageId = replyTarget
@@ -247,7 +283,7 @@ fun SharedChatComposer(
             ?.trim()
             ?.takeIf(String::isNotEmpty)
             ?: replyTarget?.id
-        val wireText = (routeSharedComposerSubmission(outgoingText) as SharedComposerSubmission.Send).text
+        val wireText = (routeSharedComposerSubmission(resolvedText) as SharedComposerSubmission.Send).text
         sending = true
         errorMessage = null
         scope.launch {
@@ -258,7 +294,7 @@ fun SharedChatComposer(
                     message = wireText,
                     replyParentMessageId = replyParentMessageId,
                 )
-                finishLocalSubmission(outgoingText)
+                finishLocalSubmission(historyText)
             } catch (_: TwitchChatMessageScopeException) {
                 errorMessage = scopeRequiredText
             } catch (error: Throwable) {
@@ -268,6 +304,73 @@ fun SharedChatComposer(
                 )
             } finally {
                 sending = false
+            }
+        }
+    }
+
+    fun submit() {
+        if (!canSend) return
+        val outgoingText = trimmed
+        val session = authentication.accessLease?.session
+        if (session == null) {
+            errorMessage = commandUnavailableText
+            return
+        }
+        val customReply = replyTarget?.let { target ->
+            CustomCommandReply(
+                messageId = target.serverMessageId
+                    ?.trim()
+                    ?.takeIf(String::isNotEmpty)
+                    ?: target.id,
+                user = CustomCommandUser(
+                    id = target.userId,
+                    login = target.userLogin,
+                    displayName = target.userDisplayName.ifBlank { target.userLogin },
+                ),
+                text = target.text,
+            )
+        }
+        val customContext = CustomCommandRuntimeContext(
+            base = CustomCommandContext(
+                channelName = channel.login,
+                channelId = channel.id,
+                myName = session.login,
+                myId = session.userId,
+            ),
+            selectedUser = customReply?.user,
+            reply = customReply,
+            clipboardText = clipboard.getText()?.text,
+        )
+        when (
+            val resolution = CustomCommandComposerResolver.resolve(
+                input = outgoingText,
+                commands = runtime.settings.customCommands,
+                context = customContext,
+            )
+        ) {
+            is CustomCommandComposerResolution.Error -> {
+                errorMessage = resolution.message
+            }
+            is CustomCommandComposerResolution.PassThrough -> {
+                dispatchResolvedSubmission(
+                    resolvedText = resolution.text,
+                    historyText = outgoingText,
+                )
+            }
+            is CustomCommandComposerResolution.Planned -> {
+                val plan = resolution.plan
+                if (plan.expandedText.length > MAX_CHAT_MESSAGE_LENGTH) {
+                    errorMessage = customCommandExpandedTooLongText
+                } else if (plan.requiresConfirmation) {
+                    errorMessage = null
+                    pendingCustomCommandPlan = plan
+                } else {
+                    dispatchResolvedSubmission(
+                        resolvedText = plan.expandedText,
+                        historyText = plan.expandedText,
+                        customPlan = plan,
+                    )
+                }
             }
         }
     }
@@ -510,6 +613,42 @@ fun SharedChatComposer(
                 onDismiss = { emotePickerVisible = false },
             )
         }
+    }
+
+    pendingCustomCommandPlan?.let { plan ->
+        AlertDialog(
+            onDismissRequest = { pendingCustomCommandPlan = null },
+            title = {
+                Text(stringResource(Res.string.chat_custom_command_confirm_title))
+            },
+            text = {
+                Text(
+                    stringResource(
+                        Res.string.chat_custom_command_confirm_body,
+                        plan.expandedText,
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        pendingCustomCommandPlan = null
+                        dispatchResolvedSubmission(
+                            resolvedText = plan.expandedText,
+                            historyText = plan.expandedText,
+                            customPlan = plan,
+                        )
+                    },
+                ) {
+                    Text(stringResource(Res.string.chat_custom_command_confirm_action))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingCustomCommandPlan = null }) {
+                    Text(stringResource(Res.string.chat_custom_command_cancel))
+                }
+            },
+        )
     }
 }
 

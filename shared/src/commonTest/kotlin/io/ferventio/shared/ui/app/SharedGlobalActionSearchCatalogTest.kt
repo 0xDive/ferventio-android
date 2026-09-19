@@ -1,6 +1,7 @@
 package io.ferventio.shared.ui.app
 
 import io.ferventio.app.domain.ChatChannel
+import io.ferventio.app.domain.CustomCommand
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -53,6 +54,52 @@ class SharedGlobalActionSearchCatalogTest {
         assertTrue(actions.any { it.id == "command:ban" })
         assertTrue(actions.any { it.id == "command:slow" })
         assertTrue(actions.any { it.id == "command:nuke" })
+    }
+
+    @Test
+    fun customCommandsRespectEnabledStateAndModeratorAccess() {
+        val commands = listOf(
+            CustomCommand(
+                name = "hello",
+                template = "Hello {1}",
+                description = "Safe greeting",
+            ),
+            CustomCommand(
+                name = "punish",
+                template = "/timeout {1} 60 custom macro",
+                description = "Moderator macro",
+            ),
+            CustomCommand(
+                name = "disabled",
+                template = "Hidden",
+                enabled = false,
+            ),
+        )
+
+        val viewerActions = buildSharedGlobalActionCatalog(
+            channels = channels,
+            moderatorChannelIds = emptySet(),
+            activeChannelId = "1",
+            strings = strings,
+            canAddChannel = true,
+            reconnectAvailable = true,
+            customCommands = commands,
+        )
+        assertTrue(viewerActions.any { it.id == "command:hello" })
+        assertFalse(viewerActions.any { it.id == "command:punish" })
+        assertFalse(viewerActions.any { it.id == "command:disabled" })
+
+        val moderatorActions = buildSharedGlobalActionCatalog(
+            channels = channels,
+            moderatorChannelIds = setOf("1"),
+            activeChannelId = "1",
+            strings = strings,
+            canAddChannel = true,
+            reconnectAvailable = true,
+            customCommands = commands,
+        )
+        val moderationMacro = moderatorActions.single { it.id == "command:punish" }
+        assertTrue(moderationMacro.requiresConfirmation)
     }
 
     @Test

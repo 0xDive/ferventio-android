@@ -3,6 +3,8 @@ package io.ferventio.shared.settings
 import io.ferventio.app.domain.AppLanguage
 import io.ferventio.app.domain.AppThemeMode
 import io.ferventio.app.domain.ChatNameStyle
+import io.ferventio.app.domain.CustomCommand
+import io.ferventio.app.domain.CustomCommandCodec
 import io.ferventio.app.domain.MessageDensity
 import io.ferventio.app.domain.UserCardModerationLayout
 import kotlinx.serialization.json.Json
@@ -26,6 +28,7 @@ object SharedSettingsPayloadCodec {
     private const val CURRENT_FORMAT_VERSION = 2
     private const val MAX_CHANNELS = 20
     private const val MAX_TAB_TITLE_LENGTH = 32
+    private const val MAX_CUSTOM_COMMANDS = 100
     private val CHANNEL_LOGIN_PATTERN = Regex("[A-Za-z0-9_]{1,25}")
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -39,6 +42,20 @@ object SharedSettingsPayloadCodec {
             ?.getOrNull()
             ?: return SharedAppPreferences()
         return settings.toPreferences().normalized()
+    }
+
+    fun parseCustomCommands(payload: String): List<CustomCommand> {
+        val root = parseRoot(payload)
+        val commands = root["content"]
+            ?.runCatching { jsonObject }
+            ?.getOrNull()
+            ?.get("commands") as? JsonObject
+            ?: return emptyList()
+        return CustomCommandCodec.decode(commands.toString())
+            .getOrThrow()
+            .also { decoded ->
+                require(decoded.size <= MAX_CUSTOM_COMMANDS) { "Too many custom commands" }
+            }
     }
 
     /**

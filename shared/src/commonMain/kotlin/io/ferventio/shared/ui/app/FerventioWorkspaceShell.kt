@@ -320,6 +320,7 @@ fun FerventioWorkspaceShell(
             activeChannelId = selectedChannelId,
             canAddChannel = state.channels.size < MAX_WORKSPACE_CHANNELS,
             reconnectAvailable = diagnosticsActions.reconnectAvailable,
+            customCommands = runtime.settings.customCommands,
             onDismiss = { actionSearchVisible = false },
             onAction = { action ->
                 when {

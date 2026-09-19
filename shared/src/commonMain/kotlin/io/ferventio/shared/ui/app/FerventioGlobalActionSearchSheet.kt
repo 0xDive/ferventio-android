@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import io.ferventio.app.domain.ActionSearchIndex
 import io.ferventio.app.domain.ChatChannel
 import io.ferventio.app.domain.CommandRegistry
+import io.ferventio.app.domain.CustomCommand
 import io.ferventio.app.domain.SearchableAction
 import io.ferventio.app.domain.SearchableActionFactory
 import io.ferventio.app.domain.SearchableActionKind
@@ -80,6 +81,7 @@ internal fun buildSharedGlobalActionCatalog(
     strings: SharedGlobalActionCatalogStrings,
     canAddChannel: Boolean,
     reconnectAvailable: Boolean,
+    customCommands: List<CustomCommand> = emptyList(),
 ): List<SearchableAction> = buildList {
     add(
         SearchableAction(
@@ -135,6 +137,12 @@ internal fun buildSharedGlobalActionCatalog(
             .map(SearchableActionFactory::fromCommandDefinition)
             .filter { action -> action.kind != SearchableActionKind.MODERATION || canModerate }
             .forEach(::add)
+        customCommands
+            .asSequence()
+            .filter(CustomCommand::enabled)
+            .map(SearchableActionFactory::fromCustomCommand)
+            .filter { action -> action.kind != SearchableActionKind.MODERATION || canModerate }
+            .forEach(::add)
     }
 }.distinctBy(SearchableAction::id)
 
@@ -161,6 +169,7 @@ internal fun FerventioGlobalActionSearchSheet(
     activeChannelId: String?,
     canAddChannel: Boolean,
     reconnectAvailable: Boolean,
+    customCommands: List<CustomCommand> = emptyList(),
     onDismiss: () -> Unit,
     onAction: (SearchableAction) -> Unit,
 ) {
@@ -182,6 +191,7 @@ internal fun FerventioGlobalActionSearchSheet(
         strings,
         canAddChannel,
         reconnectAvailable,
+        customCommands,
     ) {
         buildSharedGlobalActionCatalog(
             channels = channels,
@@ -190,6 +200,7 @@ internal fun FerventioGlobalActionSearchSheet(
             strings = strings,
             canAddChannel = canAddChannel,
             reconnectAvailable = reconnectAvailable,
+            customCommands = customCommands,
         )
     }
     val matches = remember(query, actions) { visibleSharedGlobalActions(query, actions) }

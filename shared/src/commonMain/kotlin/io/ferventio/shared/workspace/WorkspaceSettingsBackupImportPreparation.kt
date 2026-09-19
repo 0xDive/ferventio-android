@@ -1,5 +1,6 @@
 package io.ferventio.shared.workspace
 
+import io.ferventio.app.domain.CustomCommand
 import io.ferventio.app.domain.WorkspaceLayout
 import io.ferventio.shared.settings.SharedAppPreferences
 import io.ferventio.shared.settings.SharedMessageRulesPayloadCodec
@@ -31,6 +32,7 @@ internal data class WorkspaceSettingsPreparedImport(
     val messageRules: SharedMessageRulesSnapshot,
     val savedFilters: SharedSavedFiltersSnapshot,
     val workspaceLayout: WorkspaceLayout,
+    val customCommands: List<CustomCommand> = emptyList(),
 )
 
 /**
@@ -68,6 +70,7 @@ internal object WorkspaceSettingsBackupImportPreparation {
             preferences = preferences,
             messageRules = SharedMessageRulesPayloadCodec.parse(raw),
             savedFilters = SharedSavedFiltersPayloadCodec.parse(raw),
+            customCommands = SharedSettingsPayloadCodec.parseCustomCommands(raw),
             workspaceLayout = SharedWorkspaceLayoutPayloadCodec.parse(
                 payload = raw,
                 fallbackChannelId = fallbackChannelId,

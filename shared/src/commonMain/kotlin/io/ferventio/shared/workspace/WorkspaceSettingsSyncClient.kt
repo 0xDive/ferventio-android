@@ -1,6 +1,7 @@
 package io.ferventio.shared.workspace
 
 import io.ferventio.app.domain.AuthenticationPersistenceValidation
+import io.ferventio.app.domain.CustomCommand
 import io.ferventio.app.domain.MobileDeviceIdentity
 import io.ferventio.app.domain.MobileDeviceIdentityValidation
 import io.ferventio.app.domain.StoredAuthentication
@@ -39,6 +40,7 @@ data class WorkspaceSettingsSnapshot(
     val messageRules: SharedMessageRulesSnapshot,
     val savedFilters: SharedSavedFiltersSnapshot,
     val payload: String,
+    val customCommands: List<CustomCommand> = emptyList(),
 )
 
 class WorkspaceSettingsSyncException(
@@ -330,6 +332,7 @@ class WorkspaceSettingsSyncClient(
             messageRules = SharedMessageRulesPayloadCodec.parse(payloadText),
             savedFilters = SharedSavedFiltersPayloadCodec.parse(payloadText),
             payload = payloadText,
+            customCommands = SharedSettingsPayloadCodec.parseCustomCommands(payloadText),
         )
     }
 

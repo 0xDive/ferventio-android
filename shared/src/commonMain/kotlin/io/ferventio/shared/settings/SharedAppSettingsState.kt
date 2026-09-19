@@ -6,6 +6,7 @@ import androidx.compose.runtime.setValue
 import io.ferventio.app.domain.AppLanguage
 import io.ferventio.app.domain.AppThemeMode
 import io.ferventio.app.domain.ChatNameStyle
+import io.ferventio.app.domain.CustomCommand
 import io.ferventio.app.domain.MessageDensity
 import io.ferventio.app.domain.MentionColors
 import io.ferventio.app.domain.UserCardModerationLayout
@@ -81,8 +82,12 @@ enum class SharedSettingsSaveStatus {
 
 class SharedAppSettingsStateHolder(
     initialPreferences: SharedAppPreferences = SharedAppPreferences(),
+    initialCustomCommands: List<CustomCommand> = emptyList(),
 ) {
     var preferences by mutableStateOf(initialPreferences.normalized())
+        private set
+
+    var customCommands by mutableStateOf(normalizeCustomCommands(initialCustomCommands))
         private set
 
     var syncRevision by mutableStateOf(0L)
@@ -94,8 +99,13 @@ class SharedAppSettingsStateHolder(
     var saveErrorMessage by mutableStateOf<String?>(null)
         private set
 
-    fun restore(preferences: SharedAppPreferences, revision: Long) {
+    fun restore(
+        preferences: SharedAppPreferences,
+        revision: Long,
+        customCommands: List<CustomCommand> = this.customCommands,
+    ) {
         this.preferences = preferences.normalized()
+        this.customCommands = normalizeCustomCommands(customCommands)
         syncRevision = revision.coerceAtLeast(0L)
         saveStatus = SharedSettingsSaveStatus.IDLE
         saveErrorMessage = null
@@ -142,8 +152,13 @@ class SharedAppSettingsStateHolder(
         saveErrorMessage = null
     }
 
-    fun markSaveSucceeded(preferences: SharedAppPreferences, revision: Long) {
+    fun markSaveSucceeded(
+        preferences: SharedAppPreferences,
+        revision: Long,
+        customCommands: List<CustomCommand> = this.customCommands,
+    ) {
         this.preferences = preferences.normalized()
+        this.customCommands = normalizeCustomCommands(customCommands)
         syncRevision = revision.coerceAtLeast(0L)
         saveStatus = SharedSettingsSaveStatus.IDLE
         saveErrorMessage = null
@@ -157,8 +172,14 @@ class SharedAppSettingsStateHolder(
 
     fun clear() {
         preferences = SharedAppPreferences()
+        customCommands = emptyList()
         syncRevision = 0L
         saveStatus = SharedSettingsSaveStatus.IDLE
         saveErrorMessage = null
     }
+
+    private fun normalizeCustomCommands(commands: List<CustomCommand>): List<CustomCommand> =
+        commands
+            .distinctBy(CustomCommand::normalizedName)
+            .sortedBy(CustomCommand::normalizedName)
 }

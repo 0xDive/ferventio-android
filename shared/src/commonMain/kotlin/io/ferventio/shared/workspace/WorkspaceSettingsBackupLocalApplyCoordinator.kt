@@ -43,7 +43,11 @@ internal class WorkspaceSettingsBackupLocalApplyCoordinator(
             selectedLogin = prepared.channels.selectedLogin,
         )
 
-        settingsState.restore(prepared.preferences, currentRevision)
+        settingsState.restore(
+            preferences = prepared.preferences,
+            revision = currentRevision,
+            customCommands = prepared.customCommands,
+        )
         rulesState.restore(prepared.messageRules)
         filtersState.restore(prepared.savedFilters)
         state.replaceChannels(resolved.channels)

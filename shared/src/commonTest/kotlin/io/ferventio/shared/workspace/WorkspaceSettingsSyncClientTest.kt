@@ -38,6 +38,17 @@ class WorkspaceSettingsSyncClientTest {
                             "logins": ["alpha", "beta"],
                             "selectedLogin": "beta",
                             "pinnedChannelIds": ["2"]
+                          },
+                          "commands": {
+                            "schemaVersion": 1,
+                            "commands": [
+                              {
+                                "name": "hello",
+                                "template": "Hello {1}!",
+                                "description": "Greets a viewer",
+                                "enabled": true
+                              }
+                            ]
                           }
                         }
                       }
@@ -57,6 +68,8 @@ class WorkspaceSettingsSyncClientTest {
         assertEquals(listOf("alpha", "beta"), snapshot?.channels?.logins)
         assertEquals("beta", snapshot?.channels?.selectedLogin)
         assertEquals(listOf("2"), snapshot?.channels?.pinnedChannelIds)
+        assertEquals("hello", snapshot?.customCommands?.single()?.normalizedName)
+        assertEquals("Hello {1}!", snapshot?.customCommands?.single()?.template)
         assertEquals("Bearer backend-session", authorization)
         assertEquals("installation-id", installationId)
         assertEquals("s".repeat(32), deviceSecret)

@@ -43,6 +43,33 @@ class SharedSettingsPayloadCodecTest {
     }
 
     @Test
+    fun readsAndroidBackupCustomCommands() {
+        val payload = backupPayload(
+            commandsOverride = """
+                {
+                  "schemaVersion":1,
+                  "commands":[
+                    {
+                      "name":"hello",
+                      "template":"Hello {1}!",
+                      "description":"Greets a viewer",
+                      "enabled":true
+                    }
+                  ]
+                }
+            """.trimIndent(),
+        )
+
+        val commands = SharedSettingsPayloadCodec.parseCustomCommands(payload)
+
+        assertEquals(1, commands.size)
+        assertEquals("hello", commands.single().normalizedName)
+        assertEquals("Hello {1}!", commands.single().template)
+        assertEquals("Greets a viewer", commands.single().description)
+        assertTrue(commands.single().enabled)
+    }
+
+    @Test
     fun replacingSettingsKeepsWorkspaceAndProducesAndroidCompatibleHash() {
         val preferences = SharedAppPreferences().copy(
             themeMode = AppThemeMode.LIGHT,
@@ -147,6 +174,7 @@ class SharedSettingsPayloadCodecTest {
     private fun backupPayload(
         settingsOverride: String? = null,
         channelsOverride: String? = null,
+        commandsOverride: String? = null,
     ): String {
         val settings = settingsOverride ?: """
             "appLanguage":"RUSSIAN",
@@ -189,6 +217,7 @@ class SharedSettingsPayloadCodecTest {
             "recentChannelIds":[],
             "tabTitles":{}
         """.trimIndent()
+        val commands = commandsOverride ?: "{}"
         return """
             {
               "format":"ferventio-settings-backup",
@@ -203,7 +232,7 @@ class SharedSettingsPayloadCodecTest {
                 "filters":{},
                 "highlights":[],
                 "ignoreRules":[],
-                "commands":{},
+                "commands":$commands,
                 "favouriteEmotes":[]
               },
               "futureDocumentField":"future-value"
