@@ -46,6 +46,8 @@ internal class TwitchEventSubSocketClient(
         while (currentCoroutineContext().isActive && !closed) {
             var twitchReconnectUrl: String? = null
             var stopAfterRevocation = false
+            var transportLimitRetry = false
+            var retryError: String? = null
             try {
                 publishStatus(
                     if (reconnectAttempt == 0) {
@@ -126,12 +128,16 @@ internal class TwitchEventSubSocketClient(
             } catch (setup: TwitchEventSubBootstrapException) {
                 if (closed) return
                 onError(setup)
-                publishStatus(
-                    status = ConnectionStatus.FAILED,
-                    attempt = reconnectAttempt,
-                    error = setup.message ?: "EventSub subscription bootstrap failed",
-                )
-                return
+                if (!TwitchEventSubConnectionPolicy.isWebSocketTransportLimit(setup)) {
+                    publishStatus(
+                        status = ConnectionStatus.FAILED,
+                        attempt = reconnectAttempt,
+                        error = setup.message ?: "EventSub subscription bootstrap failed",
+                    )
+                    return
+                }
+                transportLimitRetry = true
+                retryError = setup.message ?: "Twitch EventSub WebSocket transport limit reached"
             } catch (error: Throwable) {
                 if (closed) return
                 onError(error)
@@ -141,16 +147,33 @@ internal class TwitchEventSubSocketClient(
             reconnectAttempt += 1
             createSubscriptions = true
             socketUrl = TwitchEventSubConnectionPolicy.DEFAULT_SOCKET_URL
-            if (!TwitchEventSubConnectionPolicy.canRetry(reconnectAttempt)) {
-                publishStatus(ConnectionStatus.FAILED, reconnectAttempt, "automatic reconnect exhausted")
+            val canRetry = if (transportLimitRetry) {
+                TwitchEventSubConnectionPolicy.canRetryTransportLimit(reconnectAttempt)
+            } else {
+                TwitchEventSubConnectionPolicy.canRetry(reconnectAttempt)
+            }
+            if (!canRetry) {
+                publishStatus(
+                    ConnectionStatus.FAILED,
+                    reconnectAttempt,
+                    retryError ?: "automatic reconnect exhausted",
+                )
                 return
             }
-            publishStatus(ConnectionStatus.RECONNECTING, reconnectAttempt)
+            publishStatus(ConnectionStatus.RECONNECTING, reconnectAttempt, retryError)
+            val retryJitter = jitterFraction()
             delayAction(
-                TwitchEventSubConnectionPolicy.reconnectDelayMillis(
-                    attempt = reconnectAttempt,
-                    jitterFraction = jitterFraction(),
-                ),
+                if (transportLimitRetry) {
+                    TwitchEventSubConnectionPolicy.transportLimitRetryDelayMillis(
+                        attempt = reconnectAttempt,
+                        jitterFraction = retryJitter,
+                    )
+                } else {
+                    TwitchEventSubConnectionPolicy.reconnectDelayMillis(
+                        attempt = reconnectAttempt,
+                        jitterFraction = retryJitter,
+                    )
+                },
             )
         }
     }

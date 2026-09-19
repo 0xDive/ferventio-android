@@ -12,8 +12,10 @@ object TwitchEventSubConnectionPolicy {
     const val MAX_KEEPALIVE_SECONDS = 600
     const val KEEPALIVE_GRACE_SECONDS = 10
     const val MAX_AUTOMATIC_RECONNECT_ATTEMPTS = 5
+    const val MAX_TRANSPORT_LIMIT_RECONNECT_ATTEMPTS = 8
     const val AUTHORIZATION_REVOKED = "authorization_revoked"
 
+    private const val TRANSPORT_LIMIT_MIN_RETRY_DELAY_MILLIS = 5_000L
     private const val MAX_BASE_DELAY_MILLIS = 30_000L
     private const val JITTER_PERCENT = 0.25
 
@@ -42,6 +44,31 @@ object TwitchEventSubConnectionPolicy {
     fun shouldStopAfterRevocation(status: String?): Boolean =
         status == AUTHORIZATION_REVOKED
 
+    fun isWebSocketTransportLimit(error: Throwable): Boolean =
+        generateSequence(error) { current -> current.cause }
+            .filterIsInstance<TwitchEventSubSubscriptionException>()
+            .any { failure ->
+                failure.statusCode == 429 &&
+                    failure.twitchMessage
+                        ?.lowercase()
+                        ?.let { message ->
+                            "websocket" in message &&
+                                "transport" in message &&
+                                ("limit" in message || "exceeded" in message)
+                        } == true
+            }
+
     fun canRetry(attempt: Int): Boolean =
         attempt < MAX_AUTOMATIC_RECONNECT_ATTEMPTS
+
+    fun canRetryTransportLimit(attempt: Int): Boolean =
+        attempt < MAX_TRANSPORT_LIMIT_RECONNECT_ATTEMPTS
+
+    fun transportLimitRetryDelayMillis(
+        attempt: Int,
+        jitterFraction: Double,
+    ): Long = maxOf(
+        TRANSPORT_LIMIT_MIN_RETRY_DELAY_MILLIS,
+        reconnectDelayMillis(attempt, jitterFraction),
+    )
 }
