@@ -87,7 +87,7 @@
     <string name="chat_send">Отправить</string>
     <string name="chat_emotes">Эмоуты</string>
     <string name="chat_emote_search">Поиск эмоутов</string>
-    <string name="chat_emote_empty">Для этого канала не найдены эмоуты BTTV, FFZ или 7TV.</string>
+    <string name="chat_emote_empty">Для этого канала нет доступных эмоутов.</string>
     <string name="chat_sending">Отправляется…</string>
     <string name="chat_reply_cancel">Отменить ответ</string>
     <string name="chat_send_failed">Не удалось отправить: %1$s</string>

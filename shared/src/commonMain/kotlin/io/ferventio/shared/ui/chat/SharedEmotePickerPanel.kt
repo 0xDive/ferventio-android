@@ -63,7 +63,7 @@ internal fun SharedEmotePickerPanel(
             }
             .sortedWith(
                 compareByDescending<ThirdPartyEmoteAsset> { it.scope == EmoteScope.CHANNEL }
-                    .thenBy { it.provider.lowercase() }
+                    .thenBy { providerRank(it.provider) }
                     .thenBy { it.code.lowercase() },
             )
             .toList()
@@ -157,4 +157,12 @@ private fun ThirdPartyEmoteAsset.bestPickerImageUrl(): String = when {
     imageUrl2x.isNotBlank() -> imageUrl2x
     imageUrl1x.isNotBlank() -> imageUrl1x
     else -> imageUrl3x
+}
+
+private fun providerRank(provider: String): Int = when (provider.lowercase()) {
+    "twitch" -> 0
+    "betterttv" -> 1
+    "frankerfacez" -> 2
+    "7tv" -> 3
+    else -> 4
 }

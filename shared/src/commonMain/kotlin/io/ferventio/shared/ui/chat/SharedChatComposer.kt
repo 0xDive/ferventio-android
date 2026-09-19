@@ -65,7 +65,7 @@ fun SharedChatComposer(
     replyTarget: ChatMessage?,
     onCancelReply: () -> Unit,
     onSent: () -> Unit,
-    thirdPartyEmotes: Map<String, ThirdPartyEmoteAsset> = emptyMap(),
+    emotes: List<ThirdPartyEmoteAsset> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
     val runtime = LocalFerventioRuntimeState.current
@@ -291,7 +291,7 @@ fun SharedChatComposer(
 
         if (emotePickerVisible) {
             SharedEmotePickerPanel(
-                emotes = thirdPartyEmotes.values.toList(),
+                emotes = emotes,
                 onSelect = { asset ->
                     draft = appendEmoteCode(draft, asset.code)
                     errorMessage = null
