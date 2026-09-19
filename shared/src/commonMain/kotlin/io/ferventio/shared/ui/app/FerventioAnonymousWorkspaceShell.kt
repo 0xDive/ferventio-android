@@ -121,6 +121,17 @@ internal fun FerventioAnonymousWorkspaceShell(
     val attentionDescription = stringResource(Res.string.attention_open)
     val historySearchDescription = stringResource(Res.string.history_search_open)
 
+    fun selectWorkspaceChannel(channelId: String) {
+        if (channelId !in state.channelIds) return
+        state.selectChannel(channelId)
+        val splitId = activeWorkspaceSplitIdForChannelSelection(state.workspaceLayout)
+        if (splitId != null) {
+            onSetSplitChannel(splitId, channelId)
+        } else {
+            onSelectChannel(channelId)
+        }
+    }
+
     ModalNavigationDrawer(
         modifier = modifier,
         drawerState = drawerState,
@@ -142,13 +153,7 @@ internal fun FerventioAnonymousWorkspaceShell(
                         state = state,
                         selectedChannel = selectedChannel,
                         onSelectChannel = { channelId ->
-                            val splitId = activeWorkspaceSplitIdForChannelSelection(state.workspaceLayout)
-                            state.selectChannel(channelId)
-                            if (splitId != null) {
-                                onSetSplitChannel(splitId, channelId)
-                            } else {
-                                onSelectChannel(channelId)
-                            }
+                            selectWorkspaceChannel(channelId)
                             scope.launch { drawerState.close() }
                         },
                         onAddChannel = onAddChannel,
@@ -220,6 +225,7 @@ internal fun FerventioAnonymousWorkspaceShell(
                             onAddSplit = onAddSplit,
                             onRemoveSplit = onRemoveSplit,
                             onSetPrimaryFraction = onSetPrimaryFraction,
+                            onSelectChannel = ::selectWorkspaceChannel,
                             modifier = Modifier.fillMaxSize(),
                             content = content,
                         )
@@ -235,8 +241,7 @@ internal fun FerventioAnonymousWorkspaceShell(
             onOpenEntry = { entry ->
                 if (entry.channelId in state.channelIds) {
                     runtime.attention.requestMessageNavigation(entry.channelId, entry.messageId)
-                    state.selectChannel(entry.channelId)
-                    onSelectChannel(entry.channelId)
+                    selectWorkspaceChannel(entry.channelId)
                 }
                 attentionVisible = false
             },
@@ -258,8 +263,7 @@ internal fun FerventioAnonymousWorkspaceShell(
                     }.getOrDefault(emptyList()).ifEmpty { listOf(message) }
                     runtime.chat.prependHistory(message.channelId, contextMessages)
                     runtime.attention.requestMessageNavigation(message.channelId, message.id)
-                    state.selectChannel(message.channelId)
-                    onSelectChannel(message.channelId)
+                    selectWorkspaceChannel(message.channelId)
                     historySearchVisible = false
                 }
             },

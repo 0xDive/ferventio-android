@@ -127,6 +127,17 @@ fun FerventioWorkspaceShell(
     val canResolveWorkspacePush = state.loadStatus == WorkspaceLoadStatus.READY ||
         pushNavigationChannels.isNotEmpty()
 
+    fun selectWorkspaceChannel(channelId: String) {
+        if (channelId !in state.channelIds) return
+        state.selectChannel(channelId)
+        val splitId = activeWorkspaceSplitIdForChannelSelection(state.workspaceLayout)
+        if (splitId != null) {
+            onSetSplitChannel(splitId, channelId)
+        } else {
+            onSelectChannel(channelId)
+        }
+    }
+
     LaunchedEffect(pendingPushTarget, canResolveWorkspacePush, pushNavigationChannels) {
         val target = pendingPushTarget ?: return@LaunchedEffect
         if (target != PushNavigationTarget.PushSettings && !canResolveWorkspacePush) {
@@ -150,8 +161,7 @@ fun FerventioWorkspaceShell(
 
             is WorkspacePushNavigationAction.OpenModeration -> {
                 // Shared moderation controls are channel-contextual, so land on the target channel.
-                state.selectChannel(action.channelId)
-                onSelectChannel(action.channelId)
+                selectWorkspaceChannel(action.channelId)
             }
 
             is WorkspacePushNavigationAction.OpenMessage -> {
@@ -176,13 +186,11 @@ fun FerventioWorkspaceShell(
                 if (targetAvailable) {
                     runtime.attention.requestMessageNavigation(action.channelId, action.messageId)
                 }
-                state.selectChannel(action.channelId)
-                onSelectChannel(action.channelId)
+                selectWorkspaceChannel(action.channelId)
             }
 
             is WorkspacePushNavigationAction.SelectChannel -> {
-                state.selectChannel(action.channelId)
-                onSelectChannel(action.channelId)
+                selectWorkspaceChannel(action.channelId)
             }
         }
 
@@ -210,13 +218,7 @@ fun FerventioWorkspaceShell(
                         state = state,
                         selectedChannel = selectedChannel,
                         onSelectChannel = { channelId ->
-                            val splitId = activeWorkspaceSplitIdForChannelSelection(state.workspaceLayout)
-                            state.selectChannel(channelId)
-                            if (splitId != null) {
-                                onSetSplitChannel(splitId, channelId)
-                            } else {
-                                onSelectChannel(channelId)
-                            }
+                            selectWorkspaceChannel(channelId)
                             scope.launch { drawerState.close() }
                         },
                         onAddChannel = onAddChannel,
@@ -285,6 +287,7 @@ fun FerventioWorkspaceShell(
                             onAddSplit = onAddSplit,
                             onRemoveSplit = onRemoveSplit,
                             onSetPrimaryFraction = onSetPrimaryFraction,
+                            onSelectChannel = ::selectWorkspaceChannel,
                             modifier = Modifier.fillMaxSize(),
                             content = content,
                         )
@@ -345,8 +348,7 @@ fun FerventioWorkspaceShell(
                     }.getOrDefault(emptyList()).ifEmpty { listOf(message) }
                     runtime.chat.prependHistory(message.channelId, contextMessages)
                     runtime.attention.requestMessageNavigation(message.channelId, message.id)
-                    state.selectChannel(message.channelId)
-                    onSelectChannel(message.channelId)
+                    selectWorkspaceChannel(message.channelId)
                     historySearchVisible = false
                 }
             },

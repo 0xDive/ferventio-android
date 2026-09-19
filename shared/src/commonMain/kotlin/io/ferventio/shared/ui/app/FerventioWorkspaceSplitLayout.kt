@@ -1,6 +1,7 @@
 package io.ferventio.shared.ui.app
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -13,6 +14,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
@@ -22,9 +25,12 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
@@ -49,6 +55,7 @@ import io.ferventio.shared.generated.resources.workspace_split_unassigned
 import io.ferventio.shared.runtime.LocalFerventioRuntimeState
 import io.ferventio.shared.workspace.WorkspaceRuntimeStateHolder
 import io.ferventio.shared.workspace.resolveWorkspaceActiveChannelId
+import kotlinx.coroutines.flow.distinctUntilChanged
 import org.jetbrains.compose.resources.stringResource
 
 /** Android-parity responsive workspace content: compact channel view or wide split layout. */
@@ -63,6 +70,7 @@ internal fun FerventioWorkspaceResponsiveContent(
     onAddSplit: () -> Unit,
     onRemoveSplit: (String) -> Unit,
     onSetPrimaryFraction: (Float) -> Unit,
+    onSelectChannel: (String) -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable (ChatChannel, String, Modifier) -> Unit,
 ) {
@@ -105,9 +113,12 @@ internal fun FerventioWorkspaceResponsiveContent(
             val useWideLayout =
                 (maxWidth >= 600.dp || maxWidth > maxHeight) && splits.size > 1
             if (!useWideLayout) {
-                selectedChannel?.let { channel ->
-                    content(channel, "", Modifier.fillMaxSize())
-                }
+                CompactWorkspaceChannelPager(
+                    channels = state.channels,
+                    selectedChannelId = selectedChannel?.id,
+                    onSelectChannel = onSelectChannel,
+                    content = content,
+                )
             } else {
                 WideWorkspaceSplitLayout(
                     state = state,
@@ -126,6 +137,57 @@ internal fun FerventioWorkspaceResponsiveContent(
         }
     }
 }
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun CompactWorkspaceChannelPager(
+    channels: List<ChatChannel>,
+    selectedChannelId: String?,
+    onSelectChannel: (String) -> Unit,
+    content: @Composable (ChatChannel, String, Modifier) -> Unit,
+) {
+    if (channels.isEmpty()) return
+    val channelIds = remember(channels) { channels.map(ChatChannel::id) }
+    val initialIndex = channelIds.indexOf(selectedChannelId)
+        .takeIf { it >= 0 }
+        ?: 0
+    val pagerState = rememberPagerState(
+        initialPage = initialIndex.coerceIn(0, channels.lastIndex),
+        pageCount = { channels.size },
+    )
+    val latestChannelIds by rememberUpdatedState(channelIds)
+    val latestSelectedChannelId by rememberUpdatedState(selectedChannelId)
+
+    LaunchedEffect(selectedChannelId, channelIds) {
+        val target = channelIds.indexOf(selectedChannelId)
+        if (target >= 0 && target != pagerState.settledPage && !pagerState.isScrollInProgress) {
+            pagerState.scrollToPage(target)
+        }
+    }
+    LaunchedEffect(pagerState) {
+        snapshotFlow { pagerState.settledPage }
+            .distinctUntilChanged()
+            .collect { page ->
+                val channelId = latestChannelIds.getOrNull(page) ?: return@collect
+                if (channelId != latestSelectedChannelId) {
+                    onSelectChannel(channelId)
+                }
+            }
+    }
+
+    HorizontalPager(
+        state = pagerState,
+        modifier = Modifier.fillMaxSize(),
+        key = { index -> channels[index].id },
+        beyondViewportPageCount = 0,
+    ) { page ->
+        val channel = channels[page]
+        key(channel.id) {
+            content(channel, "", Modifier.fillMaxSize())
+        }
+    }
+}
+
 
 @Composable
 private fun WideWorkspaceSplitLayout(
