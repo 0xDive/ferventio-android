@@ -70,6 +70,8 @@ import io.ferventio.shared.generated.resources.chat_users_twitch_total
 import io.ferventio.shared.generated.resources.quick_moderation_error_title
 import io.ferventio.shared.generated.resources.quick_moderation_ok
 import io.ferventio.shared.runtime.LocalFerventioRuntimeState
+import io.ferventio.shared.ui.user.SharedUserCardSheet
+import io.ferventio.shared.ui.user.projectModerationUserCard
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
@@ -91,6 +93,9 @@ internal fun SharedChatUsersSheet(
     var loading by remember(channel.id) { mutableStateOf(false) }
     var loadFailed by remember(channel.id) { mutableStateOf(false) }
     var query by remember(channel.id) { mutableStateOf("") }
+    var userCardData by remember(channel.id) {
+        mutableStateOf<io.ferventio.app.domain.UserCardData?>(null)
+    }
 
     DisposableEffect(client) {
         onDispose { client.close() }
@@ -129,7 +134,8 @@ internal fun SharedChatUsersSheet(
         }
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    if (userCardData == null) {
+        ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -190,6 +196,14 @@ internal fun SharedChatUsersSheet(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .clickable {
+                                    userCardData = projectModerationUserCard(
+                                        channel = channel,
+                                        user = user,
+                                        channelMessages = messages,
+                                        canModerate = canQueryHelix,
+                                    )
+                                }
                                 .padding(vertical = 11.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
@@ -212,6 +226,13 @@ internal fun SharedChatUsersSheet(
                 }
             }
         }
+    }
+
+    userCardData?.let { data ->
+        SharedUserCardSheet(
+            data = data,
+            onDismiss = { userCardData = null },
+        )
     }
 }
 

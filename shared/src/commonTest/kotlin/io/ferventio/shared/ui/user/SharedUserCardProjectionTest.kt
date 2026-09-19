@@ -3,7 +3,10 @@ package io.ferventio.shared.ui.user
 import io.ferventio.app.domain.ChannelUserRole
 import io.ferventio.app.domain.ChatAuthor
 import io.ferventio.app.domain.ChatBadge
+import io.ferventio.app.domain.ChatChannel
 import io.ferventio.app.domain.ChatMessage
+import io.ferventio.app.domain.ModerationUser
+import io.ferventio.app.domain.ModerationUserGroup
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -50,6 +53,58 @@ class SharedUserCardProjectionTest {
         assertEquals(USER_CARD_RECENT_MESSAGE_LIMIT, data.recentMessages.size)
         assertEquals("source", data.recentMessages.last().id)
         assertEquals(ChannelUserRole.VIEWER, data.role)
+    }
+
+    @Test
+    fun projectsModerationUserWithLocalHistoryAndGroupFallback() {
+        val recent = message(
+            id = "recent",
+            userId = "mod-id",
+            login = "moderator",
+            profileImageUrl = "https://example.test/mod.png",
+        )
+        val data = projectModerationUserCard(
+            channel = ChatChannel(
+                id = "channel-id",
+                login = "channel",
+                displayName = "Channel",
+            ),
+            user = ModerationUser(
+                id = "mod-id",
+                login = "moderator",
+                displayName = "Moderator",
+                group = ModerationUserGroup.MODERATOR,
+            ),
+            channelMessages = listOf(recent),
+            canModerate = true,
+        )
+
+        assertEquals(ChannelUserRole.MODERATOR, data.role)
+        assertEquals("https://example.test/mod.png", data.user.profileImageUrl)
+        assertEquals(listOf("recent"), data.recentMessages.map(ChatMessage::id))
+        assertTrue(data.canModerate)
+    }
+
+    @Test
+    fun broadcasterGroupSurvivesWithoutLocalBadges() {
+        val data = projectModerationUserCard(
+            channel = ChatChannel(
+                id = "channel-id",
+                login = "channel",
+                displayName = "Channel",
+            ),
+            user = ModerationUser(
+                id = "channel-id",
+                login = "channel",
+                displayName = "Channel",
+                group = ModerationUserGroup.BROADCASTER,
+            ),
+            channelMessages = emptyList(),
+            canModerate = true,
+        )
+
+        assertEquals(ChannelUserRole.BROADCASTER, data.role)
+        assertTrue(data.recentMessages.isEmpty())
     }
 
     @Test

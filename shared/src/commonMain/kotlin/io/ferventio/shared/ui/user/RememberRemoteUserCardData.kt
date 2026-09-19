@@ -23,7 +23,11 @@ internal fun rememberRemoteUserCardData(
         .asReversed()
         .firstOrNull { it.channelLogin.isNotBlank() }
         ?.channelLogin
-        .orEmpty()
+        ?.takeIf(String::isNotBlank)
+        ?: runtime.workspace.channels
+            .firstOrNull { channel -> channel.id == localData.channelId }
+            ?.login
+            .orEmpty()
     val client = remember { TwitchUserCardClient() }
     var remote by remember(localData.channelId, localData.user.id, localData.user.login) {
         mutableStateOf<UserCardRemoteEnrichment?>(null)

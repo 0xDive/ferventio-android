@@ -2,7 +2,10 @@ package io.ferventio.shared.ui.user
 
 import io.ferventio.app.domain.ChannelUserRole
 import io.ferventio.app.domain.ChatBadge
+import io.ferventio.app.domain.ChatChannel
 import io.ferventio.app.domain.ChatMessage
+import io.ferventio.app.domain.ModerationUser
+import io.ferventio.app.domain.ModerationUserGroup
 import io.ferventio.app.domain.TwitchUser
 import io.ferventio.app.domain.UserCardData
 
@@ -70,6 +73,58 @@ internal fun projectLocalUserCard(
         sourceMessageId = sourceMessage.id,
         recentMessages = recentMessages,
     )
+}
+
+internal fun projectModerationUserCard(
+    channel: ChatChannel,
+    user: ModerationUser,
+    channelMessages: List<ChatMessage>,
+    canModerate: Boolean,
+): UserCardData {
+    val recentMessages = channelMessages
+        .filter { message ->
+            val userId = user.id.trim()
+            if (userId.isNotEmpty() && message.userId.isNotBlank()) {
+                message.userId == userId
+            } else {
+                message.userLogin.equals(user.login, ignoreCase = true)
+            }
+        }
+        .takeLast(USER_CARD_RECENT_MESSAGE_LIMIT)
+    val badgeRole = resolveLocalUserRole(recentMessages.flatMap(ChatMessage::badges))
+    val role = if (badgeRole != ChannelUserRole.VIEWER) {
+        badgeRole
+    } else {
+        user.group.toUserCardRole()
+    }
+    val profileImageUrl = recentMessages
+        .asReversed()
+        .firstOrNull { !it.author.profileImageUrl.isNullOrBlank() }
+        ?.author
+        ?.profileImageUrl
+
+    return UserCardData(
+        channelId = channel.id,
+        user = TwitchUser(
+            id = user.id,
+            login = user.login,
+            displayName = user.displayName.ifBlank { user.login },
+            profileImageUrl = profileImageUrl,
+        ),
+        role = role,
+        canModerate = canModerate,
+        recentMessages = recentMessages,
+    )
+}
+
+private fun ModerationUserGroup.toUserCardRole(): ChannelUserRole = when (this) {
+    ModerationUserGroup.BROADCASTER -> ChannelUserRole.BROADCASTER
+    ModerationUserGroup.MODERATOR,
+    ModerationUserGroup.STAFF -> ChannelUserRole.MODERATOR
+    ModerationUserGroup.VIP -> ChannelUserRole.VIP
+    ModerationUserGroup.CHATBOT,
+    ModerationUserGroup.VIEWER,
+    ModerationUserGroup.UNKNOWN -> ChannelUserRole.VIEWER
 }
 
 internal fun resolveLocalUserRole(badges: Iterable<ChatBadge>): ChannelUserRole {
