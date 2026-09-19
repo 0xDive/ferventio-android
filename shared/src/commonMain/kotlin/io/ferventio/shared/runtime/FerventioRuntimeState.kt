@@ -18,6 +18,7 @@ import io.ferventio.shared.settings.SharedAppSettingsStateHolder
 import io.ferventio.shared.settings.SharedLocalUiPreferencesStateHolder
 import io.ferventio.shared.settings.SharedMessageRulesStateHolder
 import io.ferventio.shared.settings.SharedSavedFiltersStateHolder
+import io.ferventio.shared.user.TwitchUserSafetyRuntime
 import io.ferventio.shared.workspace.WorkspaceRuntimeStateHolder
 
 class FerventioRuntimeState(
@@ -42,6 +43,7 @@ class FerventioRuntimeState(
     val moderation: TwitchModerationRuntime by lazy { TwitchModerationRuntime(chat) }
     val interactive: TwitchInteractiveRuntime by lazy { TwitchInteractiveRuntime(chat) }
     val chatMessages: TwitchChatMessageRuntime by lazy { TwitchChatMessageRuntime(chat) }
+    val userSafety: TwitchUserSafetyRuntime by lazy { TwitchUserSafetyRuntime(chat) }
 
     constructor(
         history: ChatHistoryStore? = null,

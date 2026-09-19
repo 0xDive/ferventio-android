@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="user_card_safety">Safety</string>
+    <string name="user_card_block">Block %1$s</string>
+    <string name="user_card_block_confirm_title">Block %1$s?</string>
+    <string name="user_card_block_confirm_body">This prevents the user from interacting with your Twitch account. This is an account-level action.</string>
+    <string name="user_card_block_done">%1$s blocked</string>
+    <string name="user_card_block_failed">Block failed: %1$s</string>
+</resources>

@@ -105,6 +105,13 @@ internal fun SharedUserCardSheet(
             ?.session
             ?.userId,
     )
+    val canBlockUser = canBlockUserCardUser(
+        data = liveData,
+        authenticatedUserId = runtime.authentication.state.authentication
+            ?.accessLease
+            ?.session
+            ?.userId,
+    )
     val visibleRecentMessages = userCardRecentMessagesForDisplay(
         messages = displayedRecentMessages,
         selectedMessageId = effectiveData.sourceMessageId,
@@ -332,6 +339,15 @@ internal fun SharedUserCardSheet(
             ) {
                 item(key = "moderation") {
                     UserCardModerationActions(
+                        data = liveData,
+                        modifier = Modifier.padding(horizontal = 16.dp),
+                    )
+                }
+            }
+
+            if (canBlockUser) {
+                item(key = "safety") {
+                    UserCardSafetyActions(
                         data = liveData,
                         modifier = Modifier.padding(horizontal = 16.dp),
                     )

@@ -7,8 +7,11 @@ import io.ferventio.app.domain.ChatChannel
 import io.ferventio.app.domain.ChatMessage
 import io.ferventio.app.domain.ModerationUser
 import io.ferventio.app.domain.ModerationUserGroup
+import io.ferventio.app.domain.TwitchUser
+import io.ferventio.app.domain.UserCardData
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class SharedUserCardProjectionTest {
@@ -160,6 +163,28 @@ class SharedUserCardProjectionTest {
             appendUserMentionDraft(
                 currentDraft = "hello",
                 userLogin = "   ",
+            ),
+        )
+    }
+
+    @Test
+    fun userCardBlockAvailabilityRejectsSelfAndMissingIdentity() {
+        val target = UserCardData(
+            channelId = "channel-id",
+            user = TwitchUser(
+                id = "target-id",
+                login = "target",
+                displayName = "Target",
+            ),
+        )
+
+        assertTrue(canBlockUserCardUser(target, authenticatedUserId = "viewer-id"))
+        assertFalse(canBlockUserCardUser(target, authenticatedUserId = "target-id"))
+        assertFalse(canBlockUserCardUser(target, authenticatedUserId = null))
+        assertFalse(
+            canBlockUserCardUser(
+                target.copy(user = target.user.copy(id = "")),
+                authenticatedUserId = "viewer-id",
             ),
         )
     }
