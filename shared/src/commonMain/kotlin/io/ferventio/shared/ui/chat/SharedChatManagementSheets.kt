@@ -60,6 +60,7 @@ import io.ferventio.shared.generated.resources.chat_modes_slow_seconds
 import io.ferventio.shared.generated.resources.chat_modes_subscribers
 import io.ferventio.shared.generated.resources.chat_modes_title
 import io.ferventio.shared.generated.resources.chat_modes_unique
+import io.ferventio.shared.generated.resources.chat_reply_cancel
 import io.ferventio.shared.generated.resources.chat_users_empty
 import io.ferventio.shared.generated.resources.chat_users_local_fallback
 import io.ferventio.shared.generated.resources.chat_users_local_only
@@ -98,6 +99,7 @@ internal fun SharedChatUsersSheet(
         remoteUsers = emptyList()
         twitchTotal = null
         loadFailed = false
+        loading = false
         if (!canQueryHelix || authentication == null) return@LaunchedEffect
         loading = true
         try {
