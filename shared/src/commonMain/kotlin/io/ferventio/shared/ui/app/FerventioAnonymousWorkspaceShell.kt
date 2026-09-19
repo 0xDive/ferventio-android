@@ -61,6 +61,7 @@ import io.ferventio.shared.generated.resources.workspace_no_channels
 import io.ferventio.shared.push.PushAuthorizationStatus
 import io.ferventio.shared.runtime.LocalFerventioRuntimeState
 import io.ferventio.shared.settings.SharedAppPreferences
+import io.ferventio.shared.ui.chat.SharedChatUsersSheet
 import io.ferventio.shared.workspace.WorkspaceLoadStatus
 import io.ferventio.shared.workspace.WorkspaceRuntimeStateHolder
 import io.ferventio.shared.workspace.activeWorkspaceSplitIdForChannelSelection
@@ -106,6 +107,7 @@ internal fun FerventioAnonymousWorkspaceShell(
     var attentionVisible by remember { mutableStateOf(false) }
     var historySearchVisible by remember { mutableStateOf(false) }
     var settingsVisible by remember { mutableStateOf(false) }
+    var chatUsersVisible by remember { mutableStateOf(false) }
     val selectedChannelId = resolveWorkspaceActiveChannelId(
         layout = state.workspaceLayout,
         selectedChannelId = state.selectedChannelId,
@@ -186,6 +188,9 @@ internal fun FerventioAnonymousWorkspaceShell(
                     } else {
                         null
                     },
+                    onOpenUsers = selectedChannel?.let {
+                        { chatUsersVisible = true }
+                    },
                     onOpenMentions = { attentionVisible = true },
                     onOpenSettings = { settingsVisible = true },
                     accountActionLabel = stringResource(Res.string.auth_sign_in_with_twitch),
@@ -233,6 +238,14 @@ internal fun FerventioAnonymousWorkspaceShell(
                 }
             }
         }
+    }
+
+    if (chatUsersVisible && selectedChannel != null) {
+        SharedChatUsersSheet(
+            channel = selectedChannel,
+            canQueryHelix = false,
+            onDismiss = { chatUsersVisible = false },
+        )
     }
 
     if (attentionVisible) {

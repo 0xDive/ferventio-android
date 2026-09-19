@@ -67,6 +67,8 @@ import io.ferventio.shared.push.PushAuthorizationStatus
 import io.ferventio.shared.push.PushNavigationTarget
 import io.ferventio.shared.runtime.LocalFerventioRuntimeState
 import io.ferventio.shared.settings.SharedAppPreferences
+import io.ferventio.shared.ui.chat.SharedChatModesSheet
+import io.ferventio.shared.ui.chat.SharedChatUsersSheet
 import io.ferventio.shared.workspace.WorkspaceLoadStatus
 import io.ferventio.shared.workspace.WorkspaceRuntimeStateHolder
 import io.ferventio.shared.workspace.activeWorkspaceSplitIdForChannelSelection
@@ -113,6 +115,8 @@ fun FerventioWorkspaceShell(
     var settingsVisible by remember { mutableStateOf(false) }
     var attentionVisible by remember { mutableStateOf(false) }
     var historySearchVisible by remember { mutableStateOf(false) }
+    var chatUsersVisible by remember { mutableStateOf(false) }
+    var chatModesVisible by remember { mutableStateOf(false) }
     val selectedChannelId = resolveWorkspaceActiveChannelId(
         layout = state.workspaceLayout,
         selectedChannelId = state.selectedChannelId,
@@ -251,6 +255,14 @@ fun FerventioWorkspaceShell(
                     } else {
                         null
                     },
+                    onOpenUsers = selectedChannel?.let {
+                        { chatUsersVisible = true }
+                    },
+                    onOpenModes = selectedChannel
+                        ?.takeIf { channel -> channel.id in state.moderatorChannelIds }
+                        ?.let {
+                            { chatModesVisible = true }
+                        },
                     onOpenMentions = { attentionVisible = true },
                     onOpenSettings = { settingsVisible = true },
                 )
@@ -295,6 +307,25 @@ fun FerventioWorkspaceShell(
                 }
             }
         }
+    }
+
+    if (chatUsersVisible && selectedChannel != null) {
+        SharedChatUsersSheet(
+            channel = selectedChannel,
+            canQueryHelix = selectedChannel.id in state.moderatorChannelIds,
+            onDismiss = { chatUsersVisible = false },
+        )
+    }
+
+    if (
+        chatModesVisible &&
+        selectedChannel != null &&
+        selectedChannel.id in state.moderatorChannelIds
+    ) {
+        SharedChatModesSheet(
+            channel = selectedChannel,
+            onDismiss = { chatModesVisible = false },
+        )
     }
 
     if (settingsVisible) {

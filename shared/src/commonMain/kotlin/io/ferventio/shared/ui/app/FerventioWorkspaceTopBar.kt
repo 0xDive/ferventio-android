@@ -14,7 +14,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Badge
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -43,6 +45,8 @@ import io.ferventio.shared.generated.resources.chat_status_disconnected
 import io.ferventio.shared.generated.resources.chat_status_failed
 import io.ferventio.shared.generated.resources.chat_status_reconnecting
 import io.ferventio.shared.generated.resources.chat_status_waiting_welcome
+import io.ferventio.shared.generated.resources.chat_users_open
+import io.ferventio.shared.generated.resources.chat_modes_open
 import io.ferventio.shared.generated.resources.history_search_open
 import io.ferventio.shared.generated.resources.settings_open
 import io.ferventio.shared.generated.resources.workspace_menu
@@ -62,6 +66,8 @@ internal fun FerventioWorkspaceTopBar(
     mentionUnreadCount: Int,
     onOpenChannels: () -> Unit,
     onOpenSearch: (() -> Unit)?,
+    onOpenUsers: (() -> Unit)? = null,
+    onOpenModes: (() -> Unit)? = null,
     onOpenMentions: () -> Unit,
     onOpenSettings: () -> Unit,
     accountActionLabel: String? = null,
@@ -135,6 +141,30 @@ internal fun FerventioWorkspaceTopBar(
                     Icon(
                         Icons.Default.Search,
                         contentDescription = stringResource(Res.string.history_search_open),
+                    )
+                }
+            }
+
+            onOpenUsers?.let { action ->
+                IconButton(
+                    onClick = action,
+                    modifier = Modifier.size(38.dp),
+                ) {
+                    Icon(
+                        Icons.Default.People,
+                        contentDescription = stringResource(Res.string.chat_users_open),
+                    )
+                }
+            }
+
+            onOpenModes?.let { action ->
+                IconButton(
+                    onClick = action,
+                    modifier = Modifier.size(38.dp),
+                ) {
+                    Icon(
+                        Icons.Default.Tune,
+                        contentDescription = stringResource(Res.string.chat_modes_open),
                     )
                 }
             }
