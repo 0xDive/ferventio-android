@@ -227,6 +227,7 @@ internal fun SharedChatUsersSheet(
             }
         }
     }
+    }
 
     userCardData?.let { data ->
         SharedUserCardSheet(
