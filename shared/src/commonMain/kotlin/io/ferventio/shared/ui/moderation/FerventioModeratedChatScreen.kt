@@ -19,6 +19,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import io.ferventio.app.domain.ChatChannel
 import io.ferventio.app.domain.ChatMessage
@@ -32,7 +34,10 @@ import io.ferventio.shared.runtime.LocalFerventioRuntimeState
 import io.ferventio.shared.ui.chat.FerventioChatTimeline
 import io.ferventio.shared.ui.chat.InteractiveChatOverlayCards
 import io.ferventio.shared.ui.chat.SharedChatComposer
+import io.ferventio.shared.ui.chat.SharedMessageActionsSheet
+import io.ferventio.shared.ui.chat.SharedReplyThreadSheet
 import io.ferventio.shared.ui.chat.rememberThirdPartyEmoteCatalog
+import io.ferventio.shared.ui.chat.resolveSharedReplyThreadMessages
 import io.ferventio.shared.ui.chat.rememberTwitchUserEmoteCatalog
 import io.ferventio.shared.ui.user.SharedUserCardSheet
 import io.ferventio.shared.ui.user.projectLocalUserCard
@@ -49,6 +54,7 @@ fun FerventioModeratedChatScreen(
 ) {
     val runtime = LocalFerventioRuntimeState.current
     val scope = rememberCoroutineScope()
+    val clipboard = LocalClipboardManager.current
     val canModerateChannel = canPreviewNuke(channel.id, moderatorChannelIds)
     val canWriteChat = runtime.authentication.state.authentication != null
     val authenticationRequiredText = stringResource(Res.string.quick_moderation_auth_required)
@@ -69,7 +75,41 @@ fun FerventioModeratedChatScreen(
     var showNukePreview by remember(channel.id) { mutableStateOf(false) }
     var selectedUserMessage by remember(channel.id) { mutableStateOf<ChatMessage?>(null) }
     var replyTarget by remember(channel.id) { mutableStateOf<ChatMessage?>(null) }
+    var messageActionsTarget by remember(channel.id) { mutableStateOf<ChatMessage?>(null) }
+    var threadTarget by remember(channel.id) { mutableStateOf<ChatMessage?>(null) }
     var quickModerationError by remember(channel.id) { mutableStateOf<String?>(null) }
+
+    fun deleteMessage(message: ChatMessage) {
+        val authentication = runtime.authentication.state.authentication
+        if (authentication == null) {
+            quickModerationError = authenticationRequiredText
+            return
+        }
+        val availability = quickModerationAvailability(
+            message = message,
+            ownUserId = authentication.accessLease?.session?.userId,
+            canModerate = canModerateChannel,
+            preferences = runtime.localUiPreferences.preferences,
+        )
+        if (!availability.canDelete) return
+        val messageId = message.serverMessageId
+            ?.trim()
+            ?.takeIf(String::isNotEmpty)
+            ?: message.id
+        scope.launch {
+            try {
+                runtime.moderation.deleteChatMessage(
+                    authentication = authentication,
+                    broadcasterId = channel.id,
+                    messageId = messageId,
+                )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                quickModerationError = error.message.orEmpty().ifBlank { "Twitch error" }
+            }
+        }
+    }
 
     Column(modifier = modifier.fillMaxSize()) {
         if (canModerateChannel) {
@@ -102,6 +142,7 @@ fun FerventioModeratedChatScreen(
             } else {
                 null
             },
+            onMessageLongPress = { message -> messageActionsTarget = message },
             onRetryMessage = { message ->
                 runtime.authentication.state.authentication?.let { authentication ->
                     scope.launch {
@@ -147,38 +188,7 @@ fun FerventioModeratedChatScreen(
                     }
                 }
             },
-            onQuickDelete = { message ->
-                val authentication = runtime.authentication.state.authentication
-                if (authentication == null) {
-                    quickModerationError = authenticationRequiredText
-                } else {
-                    val availability = quickModerationAvailability(
-                        message = message,
-                        ownUserId = authentication.accessLease?.session?.userId,
-                        canModerate = canModerateChannel,
-                        preferences = runtime.localUiPreferences.preferences,
-                    )
-                    if (availability.canDelete) {
-                        val messageId = message.serverMessageId
-                            ?.trim()
-                            ?.takeIf(String::isNotEmpty)
-                            ?: message.id
-                        scope.launch {
-                            try {
-                                runtime.moderation.deleteChatMessage(
-                                    authentication = authentication,
-                                    broadcasterId = channel.id,
-                                    messageId = messageId,
-                                )
-                            } catch (cancelled: CancellationException) {
-                                throw cancelled
-                            } catch (error: Throwable) {
-                                quickModerationError = error.message.orEmpty().ifBlank { "Twitch error" }
-                            }
-                        }
-                    }
-                }
-            },
+            onQuickDelete = ::deleteMessage,
             providedThirdPartyEmotes = thirdPartyEmotes,
         )
 
@@ -188,6 +198,72 @@ fun FerventioModeratedChatScreen(
             onCancelReply = { replyTarget = null },
             onSent = { replyTarget = null },
             emotes = composerEmotes,
+        )
+    }
+
+    messageActionsTarget?.let { target ->
+        val authentication = runtime.authentication.state.authentication
+        val availability = quickModerationAvailability(
+            message = target,
+            ownUserId = authentication?.accessLease?.session?.userId,
+            canModerate = canModerateChannel,
+            preferences = runtime.localUiPreferences.preferences,
+        )
+        val canonicalMessageId = target.serverMessageId
+            ?.trim()
+            ?.takeIf(String::isNotEmpty)
+            ?: target.id
+        SharedMessageActionsSheet(
+            message = target,
+            canReply = canWriteChat &&
+                !target.isSystem &&
+                !target.isDeleted &&
+                !canonicalMessageId.startsWith("local-"),
+            canOpenThread = !target.isSystem,
+            canOpenUser = target.userId.isNotBlank() || target.userLogin.isNotBlank(),
+            canDelete = availability.canDelete,
+            onDismiss = { messageActionsTarget = null },
+            onReply = {
+                messageActionsTarget = null
+                replyTarget = target
+            },
+            onOpenThread = {
+                messageActionsTarget = null
+                threadTarget = target
+            },
+            onCopy = {
+                clipboard.setText(AnnotatedString(target.text))
+                messageActionsTarget = null
+            },
+            onOpenUser = {
+                messageActionsTarget = null
+                selectedUserMessage = target
+            },
+            onDelete = {
+                messageActionsTarget = null
+                deleteMessage(target)
+            },
+        )
+    }
+
+    threadTarget?.let { target ->
+        val messages = runtime.chat.messages(channel.id)
+        val threadMessages = remember(target.id, messages) {
+            resolveSharedReplyThreadMessages(target, messages)
+        }
+        SharedReplyThreadSheet(
+            target = target,
+            messages = threadMessages,
+            canReply = canWriteChat,
+            onDismiss = { threadTarget = null },
+            onReply = { message ->
+                threadTarget = null
+                replyTarget = message
+            },
+            onOpenUser = { message ->
+                threadTarget = null
+                selectedUserMessage = message
+            },
         )
     }
 

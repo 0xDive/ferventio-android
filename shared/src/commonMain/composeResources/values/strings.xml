@@ -92,6 +92,14 @@
     <string name="chat_reply_cancel">Cancel reply</string>
     <string name="chat_send_failed">Couldn’t send: %1$s</string>
     <string name="chat_retry">Retry</string>
+    <string name="chat_actions_title">Message actions</string>
+    <string name="chat_action_reply">Reply</string>
+    <string name="chat_action_thread">Thread</string>
+    <string name="chat_action_copy">Copy message</string>
+    <string name="chat_action_user">User card</string>
+    <string name="chat_action_delete">Delete message</string>
+    <string name="chat_thread_title">Thread</string>
+    <string name="chat_thread_empty">No replies are loaded for this thread yet.</string>
     <string name="chat_write_scope_required">Signing in again is required to send messages.</string>
     <string name="chat_message_too_long">Message is too long (%1$d/500).</string>
     <string name="chat_status_connected">Chat connected</string>

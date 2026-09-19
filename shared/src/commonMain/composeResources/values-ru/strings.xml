@@ -92,6 +92,14 @@
     <string name="chat_reply_cancel">Отменить ответ</string>
     <string name="chat_send_failed">Не удалось отправить: %1$s</string>
     <string name="chat_retry">Повторить</string>
+    <string name="chat_actions_title">Действия с сообщением</string>
+    <string name="chat_action_reply">Ответить</string>
+    <string name="chat_action_thread">Тред</string>
+    <string name="chat_action_copy">Копировать сообщение</string>
+    <string name="chat_action_user">Карточка пользователя</string>
+    <string name="chat_action_delete">Удалить сообщение</string>
+    <string name="chat_thread_title">Тред</string>
+    <string name="chat_thread_empty">Ответы в этом треде пока не загружены.</string>
     <string name="chat_write_scope_required">Чтобы отправлять сообщения, нужно войти заново.</string>
     <string name="chat_message_too_long">Сообщение слишком длинное (%1$d/500).</string>
     <string name="chat_status_connected">чат подключён</string>

@@ -104,6 +104,7 @@ fun FerventioChatTimeline(
     canModerate: Boolean = false,
     onAuthorClick: ((ChatMessage) -> Unit)? = null,
     onReplyRequest: ((ChatMessage) -> Unit)? = null,
+    onMessageLongPress: ((ChatMessage) -> Unit)? = null,
     onRetryMessage: ((ChatMessage) -> Unit)? = null,
     onQuickBan: ((ChatMessage) -> Unit)? = null,
     onQuickDelete: ((ChatMessage) -> Unit)? = null,
@@ -265,6 +266,7 @@ fun FerventioChatTimeline(
                         cheermoteAssets = cheermoteAssets,
                         onAuthorClick = onAuthorClick,
                         onReplyRequest = onReplyRequest,
+                        onMessageLongPress = onMessageLongPress,
                         onRetryMessage = onRetryMessage,
                         onQuickBan = onQuickBan,
                         onQuickDelete = onQuickDelete,
@@ -424,6 +426,7 @@ private fun ChatMessageRow(
     cheermoteAssets: Map<String, List<CheermoteAsset>>,
     onAuthorClick: ((ChatMessage) -> Unit)?,
     onReplyRequest: ((ChatMessage) -> Unit)?,
+    onMessageLongPress: ((ChatMessage) -> Unit)?,
     onRetryMessage: ((ChatMessage) -> Unit)?,
     onQuickBan: ((ChatMessage) -> Unit)?,
     onQuickDelete: ((ChatMessage) -> Unit)?,
@@ -685,10 +688,13 @@ private fun ChatMessageRow(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 12.dp, vertical = rowVerticalPadding)
-                .pointerInput(text, onAuthorClick, onReplyRequest, canReply) {
+                .pointerInput(text, onAuthorClick, onReplyRequest, onMessageLongPress, canReply) {
                     detectTapGestures(
                         onLongPress = {
-                            if (canReply) onReplyRequest(message)
+                            when {
+                                onMessageLongPress != null -> onMessageLongPress(message)
+                                canReply -> onReplyRequest(message)
+                            }
                         },
                         onTap = { position ->
                             val offset = textLayoutResult?.getOffsetForPosition(position)
