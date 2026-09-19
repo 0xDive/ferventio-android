@@ -72,6 +72,26 @@ class TwitchUserSafetyClientTest {
     }
 
     @Test
+    fun clientPreservesTwitchAuthenticationFailureDetails() = runTest {
+        val engine = MockEngine {
+            respond(
+                content = ByteReadChannel(
+                    """{"error":"Unauthorized","status":401,"message":"OAuth token is invalid"}""",
+                ),
+                status = HttpStatusCode.Unauthorized,
+            )
+        }
+        val client = TwitchUserSafetyClient(HttpClient(engine) { expectSuccess = false })
+
+        val error = assertFailsWith<TwitchUserSafetyMutationException> {
+            client.blockUser(authentication(), "target-id")
+        }
+
+        assertEquals(401, error.statusCode)
+        assertEquals("OAuth token is invalid", error.twitchMessage)
+    }
+
+    @Test
     fun runtimeMarksAuthenticationRequiredOnlyForAuthenticationFailure() = runTest {
         val state = ChatRuntimeStateHolder()
         val runtime = TwitchUserSafetyRuntime(

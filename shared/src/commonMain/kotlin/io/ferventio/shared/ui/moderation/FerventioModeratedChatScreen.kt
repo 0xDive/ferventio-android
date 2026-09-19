@@ -620,15 +620,21 @@ fun FerventioModeratedChatScreen(
     }
 
     commandUserCardData?.let { data ->
-        val replyCandidate = data.recentMessages.lastOrNull()
+        val replyCandidate = data.recentMessages
+            .asReversed()
+            .firstOrNull(::canReplyToUserCardMessage)
         SharedUserCardSheet(
             data = data,
             onDismiss = { commandUserCardData = null },
-            onReply = replyCandidate?.let { message ->
-                {
-                    commandUserCardData = null
-                    replyTarget = message
+            onReply = if (canWriteChat) {
+                replyCandidate?.let { message ->
+                    {
+                        commandUserCardData = null
+                        replyTarget = message
+                    }
                 }
+            } else {
+                null
             },
         )
     }
@@ -647,8 +653,7 @@ fun FerventioModeratedChatScreen(
             onDismiss = { selectedUserMessage = null },
             onReply = if (
                 canWriteChat &&
-                !sourceMessage.isSystem &&
-                !sourceMessage.isDeleted
+                canReplyToUserCardMessage(sourceMessage)
             ) {
                 {
                     selectedUserMessage = null
@@ -687,5 +692,16 @@ fun FerventioModeratedChatScreen(
     }
 }
 
+
+private fun canReplyToUserCardMessage(message: ChatMessage): Boolean {
+    val canonicalMessageId = message.serverMessageId
+        ?.trim()
+        ?.takeIf(String::isNotEmpty)
+        ?: message.id
+    return !message.isSystem &&
+        !message.isDeleted &&
+        canonicalMessageId.isNotBlank() &&
+        !canonicalMessageId.startsWith("local-")
+}
 
 private const val PINNED_CHAT_REFRESH_INTERVAL_MILLIS = 60_000L
