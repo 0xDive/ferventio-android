@@ -59,6 +59,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import coil3.compose.AsyncImagePainter
 import coil3.compose.rememberAsyncImagePainter
+import io.ferventio.app.domain.AutoModHeldMessage
+import io.ferventio.app.domain.AutoModMessageStatus
 import io.ferventio.app.domain.ChatBadge
 import io.ferventio.app.domain.ChatBadgeAsset
 import io.ferventio.app.domain.ChatChannel
@@ -119,6 +121,8 @@ fun FerventioChatTimeline(
     onRetryMessage: ((ChatMessage) -> Unit)? = null,
     onQuickBan: ((ChatMessage) -> Unit)? = null,
     onQuickDelete: ((ChatMessage) -> Unit)? = null,
+    autoModHeldMessages: List<AutoModHeldMessage> = emptyList(),
+    onAutoModDecision: ((String, Boolean) -> Unit)? = null,
     providedThirdPartyEmotes: Map<String, ThirdPartyEmoteAsset>? = null,
 ) {
     val runtime = LocalFerventioRuntimeState.current
@@ -155,6 +159,13 @@ fun FerventioChatTimeline(
     val messages = remember(sourceMessages, collapsePlan.visibleMessageIds) {
         sourceMessages.filter { message -> message.id in collapsePlan.visibleMessageIds }
     }
+    val heldAutoModMessages = remember(autoModHeldMessages) {
+        autoModHeldMessages
+            .filter { message -> message.status == AutoModMessageStatus.HELD }
+            .sortedWith(compareBy(AutoModHeldMessage::heldAtMillis, AutoModHeldMessage::messageId))
+    }
+    val timelineItemCount = messages.size + heldAutoModMessages.size
+    val lastTimelineIndex = (timelineItemCount - 1).coerceAtLeast(0)
     val loadedThirdPartyEmotes = if (providedThirdPartyEmotes == null) {
         rememberThirdPartyEmoteCatalog(
             channelId = channel.id,
@@ -220,10 +231,11 @@ fun FerventioChatTimeline(
         channel.id,
         savedScrollPosition,
         messages,
+        heldAutoModMessages,
         navigationTarget,
         preferences.autoScrollEnabled,
     ) {
-        if (restoredScrollPosition || messages.isEmpty()) return@LaunchedEffect
+        if (restoredScrollPosition || timelineItemCount == 0) return@LaunchedEffect
         if (navigationTarget != null) {
             restoredScrollPosition = true
             return@LaunchedEffect
@@ -232,12 +244,16 @@ fun FerventioChatTimeline(
         val saved = savedScrollPosition
         when {
             saved == null && preferences.autoScrollEnabled -> {
-                listState.scrollToItem(messages.lastIndex)
+                listState.scrollToItem(lastTimelineIndex)
                 followTail = true
             }
             saved != null && saved.isAtBottom -> {
-                listState.scrollToItem(messages.lastIndex)
+                listState.scrollToItem(lastTimelineIndex)
                 followTail = preferences.autoScrollEnabled
+            }
+            messages.isEmpty() -> {
+                listState.scrollToItem(lastTimelineIndex)
+                followTail = false
             }
             saved != null -> {
                 val anchorIndex = saved.anchorMessageId
@@ -260,10 +276,10 @@ fun FerventioChatTimeline(
         restoredScrollPosition = true
     }
 
-    LaunchedEffect(channel.id, listState, attention, messages.size) {
+    LaunchedEffect(channel.id, listState, attention, messages.size, heldAutoModMessages.size) {
         snapshotFlow {
             attention.navigationTarget(channel.id) == null &&
-                listState.isTimelineAtLiveTail(messages.isEmpty())
+                listState.isTimelineAtLiveTail(timelineItemCount == 0)
         }
             .distinctUntilChanged()
             .collect { isAtLiveTail ->
@@ -300,7 +316,7 @@ fun FerventioChatTimeline(
         if (!restoredScrollPosition) return@LaunchedEffect
         followTail = navigationTarget == null &&
             preferences.autoScrollEnabled &&
-            listState.isTimelineAtLiveTail(messages.isEmpty())
+            listState.isTimelineAtLiveTail(timelineItemCount == 0)
     }
     LaunchedEffect(listState, preferences.autoScrollEnabled, attention, channel.id) {
         snapshotFlow { listState.isScrollInProgress }
@@ -309,13 +325,13 @@ fun FerventioChatTimeline(
             .collect {
                 followTail = attention.navigationTarget(channel.id) == null &&
                     preferences.autoScrollEnabled &&
-                    listState.isTimelineAtLiveTail(messages.isEmpty())
+                    listState.isTimelineAtLiveTail(timelineItemCount == 0)
                 saveCurrentScrollPosition()
             }
     }
-    LaunchedEffect(messages.size, followTail) {
-        if (followTail && messages.isNotEmpty()) {
-            listState.animateScrollToItem(messages.lastIndex)
+    LaunchedEffect(messages.size, heldAutoModMessages.size, followTail) {
+        if (followTail && timelineItemCount > 0) {
+            listState.animateScrollToItem(lastTimelineIndex)
         }
     }
     ChatHistoryPagingEffect(
@@ -327,7 +343,7 @@ fun FerventioChatTimeline(
 
     Column(modifier = modifier.fillMaxSize()) {
         ChatConnectionBanner(chat)
-        if (messages.isEmpty()) {
+        if (timelineItemCount == 0) {
             Box(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center,
@@ -366,6 +382,21 @@ fun FerventioChatTimeline(
                             onQuickDelete = onQuickDelete,
                         )
                     }
+                    items(
+                        items = heldAutoModMessages,
+                        key = { message -> "automod:${message.messageId}" },
+                    ) { message ->
+                        SharedAutoModReviewCard(
+                            message = message,
+                            enabled = onAutoModDecision != null,
+                            onApprove = {
+                                onAutoModDecision?.invoke(message.messageId, true)
+                            },
+                            onDeny = {
+                                onAutoModDecision?.invoke(message.messageId, false)
+                            },
+                        )
+                    }
                 }
 
                 if (
@@ -377,7 +408,7 @@ fun FerventioChatTimeline(
                     FilledTonalButton(
                         onClick = {
                             coroutineScope.launch {
-                                listState.animateScrollToItem(messages.lastIndex)
+                                listState.animateScrollToItem(lastTimelineIndex)
                                 followTail = preferences.autoScrollEnabled
                                 saveCurrentScrollPosition()
                                 attention.updateViewport(

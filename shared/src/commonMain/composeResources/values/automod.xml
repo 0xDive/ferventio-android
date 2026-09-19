@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="automod_held_title">AutoMod held this message</string>
+    <string name="automod_category">Category: %1$s %2$s</string>
+    <string name="automod_approve">Allow</string>
+    <string name="automod_deny">Deny</string>
+</resources>

@@ -3,6 +3,8 @@ package io.ferventio.shared.chat
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import io.ferventio.app.domain.AutoModHeldMessage
+import io.ferventio.app.domain.AutoModMessageStatus
 import io.ferventio.app.domain.ChatBadge
 import io.ferventio.app.domain.ChatBadgeAsset
 import io.ferventio.app.domain.ChatMessage
@@ -25,6 +27,7 @@ data class ChatRuntimeSnapshot(
     val badgeAssetsByChannel: Map<String, Map<String, ChatBadgeAsset>> = emptyMap(),
     val cheermoteAssetsByChannel: Map<String, Map<String, List<CheermoteAsset>>> = emptyMap(),
     val interactiveState: InteractiveChatOverlayState = InteractiveChatOverlayState(),
+    val autoModQueue: List<AutoModHeldMessage> = emptyList(),
     val connectionStatus: ConnectionStatus = ConnectionStatus.DISCONNECTED,
     val connectionDetail: String? = null,
     val connectionAttempt: Int = 0,
@@ -51,6 +54,8 @@ class ChatRuntimeStateHolder(
         private set
     var interactiveState by mutableStateOf(InteractiveChatOverlayState())
         private set
+    var autoModQueue by mutableStateOf(emptyList<AutoModHeldMessage>())
+        private set
     var connectionStatus by mutableStateOf(ConnectionStatus.DISCONNECTED)
         private set
     var connectionDetail by mutableStateOf<String?>(null)
@@ -71,6 +76,7 @@ class ChatRuntimeStateHolder(
             badgeAssetsByChannel = badgeAssetsByChannel,
             cheermoteAssetsByChannel = cheermoteAssetsByChannel,
             interactiveState = interactiveState,
+            autoModQueue = autoModQueue,
             connectionStatus = connectionStatus,
             connectionDetail = connectionDetail,
             connectionAttempt = connectionAttempt,
@@ -89,6 +95,7 @@ class ChatRuntimeStateHolder(
             replaceChannelCheermoteAssets(channelId, assets)
         }
         interactiveState = initialSnapshot.interactiveState
+        autoModQueue = normalizeAutoModQueue(initialSnapshot.autoModQueue)
         updateConnection(
             status = initialSnapshot.connectionStatus,
             detail = initialSnapshot.connectionDetail,
@@ -181,6 +188,61 @@ class ChatRuntimeStateHolder(
 
     fun applyInteractive(event: InteractiveChatOverlayEvent) {
         interactiveState = InteractiveChatOverlayReducer.reduce(interactiveState, event)
+    }
+
+    fun autoModHeldMessages(channelId: String): List<AutoModHeldMessage> {
+        val normalizedChannelId = channelId.trim()
+        if (normalizedChannelId.isEmpty()) return emptyList()
+        return autoModQueue
+            .asSequence()
+            .filter { message ->
+                message.channelId == normalizedChannelId &&
+                    message.status == AutoModMessageStatus.HELD
+            }
+            .sortedWith(compareBy(AutoModHeldMessage::heldAtMillis, AutoModHeldMessage::messageId))
+            .toList()
+    }
+
+    fun applyAutoMod(message: AutoModHeldMessage) {
+        require(message.channelId.isNotBlank()) { "AutoMod channel id must not be blank" }
+        require(message.messageId.isNotBlank()) { "AutoMod message id must not be blank" }
+        val existingIndex = autoModQueue.indexOfFirst { it.messageId == message.messageId }
+        val updated = if (existingIndex >= 0) {
+            autoModQueue.toMutableList().apply {
+                this[existingIndex] = mergeAutoModMessage(this[existingIndex], message)
+            }
+        } else {
+            mutableListOf(message).apply { addAll(autoModQueue) }
+        }
+        autoModQueue = normalizeAutoModQueue(updated)
+    }
+
+    fun markAutoModDecision(
+        messageId: String,
+        status: AutoModMessageStatus,
+        moderatorId: String? = null,
+        moderatorLogin: String? = null,
+        moderatorName: String? = null,
+    ): Boolean {
+        require(status != AutoModMessageStatus.HELD) { "AutoMod local decision must be terminal" }
+        val normalizedMessageId = messageId.trim()
+        if (normalizedMessageId.isEmpty()) return false
+        var changed = false
+        val updated = autoModQueue.map { message ->
+            if (message.messageId != normalizedMessageId) {
+                message
+            } else {
+                changed = true
+                message.copy(
+                    status = status,
+                    decidedByUserId = moderatorId?.trim()?.takeIf(String::isNotEmpty),
+                    decidedByUserLogin = moderatorLogin?.trim()?.takeIf(String::isNotEmpty),
+                    decidedByUserName = moderatorName?.trim()?.takeIf(String::isNotEmpty),
+                )
+            }
+        }
+        if (changed) autoModQueue = updated
+        return changed
     }
 
     fun append(message: ChatMessage) {
@@ -420,6 +482,7 @@ class ChatRuntimeStateHolder(
         scrollPositionsByChannel = scrollPositionsByChannel - normalized
         badgeAssetsByChannel = badgeAssetsByChannel - normalized
         cheermoteAssetsByChannel = cheermoteAssetsByChannel - normalized
+        autoModQueue = autoModQueue.filterNot { it.channelId == normalized }
         applyInteractive(InteractiveChatOverlayEvent.ClearChannel(normalized))
     }
 
@@ -430,6 +493,7 @@ class ChatRuntimeStateHolder(
         scrollPositionsByChannel = scrollPositionsByChannel.filterKeys(allowed::contains)
         badgeAssetsByChannel = badgeAssetsByChannel.filterKeys(allowed::contains)
         cheermoteAssetsByChannel = cheermoteAssetsByChannel.filterKeys(allowed::contains)
+        autoModQueue = autoModQueue.filter { it.channelId in allowed }
         val interactiveChannels = interactiveState.pollsByChannel.keys +
             interactiveState.predictionsByChannel.keys + interactiveState.mutationsByChannel.keys
         interactiveChannels.filterNot(allowed::contains).forEach { channelId ->
@@ -472,6 +536,7 @@ class ChatRuntimeStateHolder(
         badgeAssetsByChannel = emptyMap()
         cheermoteAssetsByChannel = emptyMap()
         interactiveState = InteractiveChatOverlayState()
+        autoModQueue = emptyList()
         authenticationRequired = false
         updateConnection(ConnectionStatus.DISCONNECTED)
     }
@@ -642,6 +707,44 @@ class ChatRuntimeStateHolder(
             .filter { asset -> asset.setId.isNotBlank() && asset.id.isNotBlank() }
             .associateBy(ChatBadgeAsset::key)
 
+    private fun normalizeAutoModQueue(value: List<AutoModHeldMessage>): List<AutoModHeldMessage> {
+        val byId = linkedMapOf<String, AutoModHeldMessage>()
+        value.forEach { message ->
+            if (message.channelId.isNotBlank() && message.messageId.isNotBlank()) {
+                byId[message.messageId] = message
+            }
+        }
+        return byId.values
+            .sortedWith(
+                compareByDescending<AutoModHeldMessage> { it.heldAtMillis }
+                    .thenBy(AutoModHeldMessage::messageId),
+            )
+            .take(MAX_AUTOMOD_QUEUE_ITEMS)
+    }
+
+    private fun mergeAutoModMessage(
+        current: AutoModHeldMessage,
+        incoming: AutoModHeldMessage,
+    ): AutoModHeldMessage = current.copy(
+        channelId = incoming.channelId.ifBlank { current.channelId },
+        channelLogin = incoming.channelLogin.ifBlank { current.channelLogin },
+        channelName = incoming.channelName.ifBlank { current.channelName },
+        userId = incoming.userId.ifBlank { current.userId },
+        userLogin = incoming.userLogin.ifBlank { current.userLogin },
+        userName = incoming.userName.ifBlank { current.userName },
+        text = incoming.text.ifBlank { current.text },
+        fragments = incoming.fragments.ifEmpty { current.fragments },
+        reason = incoming.reason ?: current.reason,
+        category = incoming.category ?: current.category,
+        level = incoming.level ?: current.level,
+        boundaries = incoming.boundaries.ifEmpty { current.boundaries },
+        heldAt = incoming.heldAt.ifBlank { current.heldAt },
+        status = incoming.status,
+        decidedByUserId = incoming.decidedByUserId ?: current.decidedByUserId,
+        decidedByUserLogin = incoming.decidedByUserLogin ?: current.decidedByUserLogin,
+        decidedByUserName = incoming.decidedByUserName ?: current.decidedByUserName,
+    )
+
     private fun normalizeCheermoteAssets(
         value: Map<String, List<CheermoteAsset>>,
     ): Map<String, List<CheermoteAsset>> = value.values
@@ -681,5 +784,6 @@ class ChatRuntimeStateHolder(
         val MESSAGE_ORDER = compareBy<ChatMessage>(ChatMessage::timestampMillis, ChatMessage::id)
         const val MAX_MESSAGES_PER_CHANNEL = 5_000
         const val MAX_HISTORY_MESSAGES_PER_CHANNEL = 5_000
+        const val MAX_AUTOMOD_QUEUE_ITEMS = 200
     }
 }

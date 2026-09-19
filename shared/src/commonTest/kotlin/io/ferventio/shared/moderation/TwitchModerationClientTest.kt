@@ -122,6 +122,31 @@ class TwitchModerationClientTest {
     }
 
     @Test
+    fun autoModDecisionUsesOfficialHelixContract() = runTest {
+        var captured: HttpRequestData? = null
+        val engine = MockEngine { request ->
+            captured = request
+            respond(ByteReadChannel(""), HttpStatusCode.NoContent)
+        }
+        val client = TwitchModerationClient(HttpClient(engine) { expectSuccess = false })
+
+        client.decideAutoModMessage(
+            authentication = authentication(scopes = setOf("moderator:manage:automod")),
+            messageId = " held-message ",
+            approve = true,
+        )
+
+        val request = requireNotNull(captured)
+        assertEquals(HttpMethod.Post, request.method)
+        assertEquals("/helix/moderation/automod/message", request.url.encodedPath)
+        assertEquals("Bearer access-token", request.headers[HttpHeaders.Authorization])
+        val body = requestBody(request)
+        assertEquals("moderator-id", body.getValue("user_id").jsonPrimitive.content)
+        assertEquals("held-message", body.getValue("msg_id").jsonPrimitive.content)
+        assertEquals("ALLOW", body.getValue("action").jsonPrimitive.content)
+    }
+
+    @Test
     fun missingMutationScopeFailsBeforeNetworkRequest() = runTest {
         var requestCount = 0
         val engine = MockEngine {
@@ -147,6 +172,15 @@ class TwitchModerationClientTest {
             )
         }
         assertEquals("moderator:manage:chat_messages", chatMessagesError.requiredScope)
+
+        val autoModError = assertFailsWith<TwitchModerationScopeException> {
+            client.decideAutoModMessage(
+                authentication = authentication(scopes = setOf("chat:read")),
+                messageId = "message-id",
+                approve = false,
+            )
+        }
+        assertEquals("moderator:manage:automod", autoModError.requiredScope)
         assertEquals(0, requestCount)
     }
 

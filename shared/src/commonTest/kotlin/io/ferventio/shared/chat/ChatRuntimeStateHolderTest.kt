@@ -1,5 +1,7 @@
 package io.ferventio.shared.chat
 
+import io.ferventio.app.domain.AutoModHeldMessage
+import io.ferventio.app.domain.AutoModMessageStatus
 import io.ferventio.app.domain.ChatAuthor
 import io.ferventio.app.domain.ChatMessage
 import io.ferventio.app.domain.ChatScrollPosition
@@ -168,6 +170,41 @@ class ChatRuntimeStateHolderTest {
 
         assertEquals(emptyList(), holder.messages("1"))
         assertEquals(listOf("b"), holder.messages("2").map { it.id })
+    }
+
+    @Test
+    fun autoModQueueMergesTerminalUpdatesAndFollowsChannelLifecycle() {
+        val holder = ChatRuntimeStateHolder()
+        holder.applyAutoMod(
+            AutoModHeldMessage(
+                channelId = CHANNEL_ID,
+                channelLogin = "channel",
+                channelName = "Channel",
+                userId = "viewer-id",
+                userLogin = "viewer",
+                userName = "Viewer",
+                messageId = "automod-1",
+                text = "held",
+                heldAt = "2026-01-01T00:00:00Z",
+            ),
+        )
+
+        assertEquals(listOf("automod-1"), holder.autoModHeldMessages(CHANNEL_ID).map { it.messageId })
+        assertTrue(
+            holder.markAutoModDecision(
+                messageId = "automod-1",
+                status = AutoModMessageStatus.APPROVED,
+                moderatorId = "mod-id",
+            ),
+        )
+        assertTrue(holder.autoModHeldMessages(CHANNEL_ID).isEmpty())
+        assertEquals(AutoModMessageStatus.APPROVED, holder.autoModQueue.single().status)
+
+        val restored = ChatRuntimeStateHolder(holder.snapshot)
+        assertEquals(AutoModMessageStatus.APPROVED, restored.autoModQueue.single().status)
+
+        holder.retainChannels(listOf("other"))
+        assertTrue(holder.autoModQueue.isEmpty())
     }
 
     @Test

@@ -1,5 +1,7 @@
 package io.ferventio.shared.moderation
 
+import io.ferventio.app.domain.AutoModHeldMessage
+import io.ferventio.app.domain.AutoModMessageStatus
 import io.ferventio.app.domain.BackendSessionCredential
 import io.ferventio.app.domain.ChatAuthor
 import io.ferventio.app.domain.ChatMessage
@@ -108,6 +110,38 @@ class TwitchModerationRuntimeTest {
         assertEquals(emptyList(), state.messages(CHANNEL_ID))
         assertEquals(listOf("other"), state.messages("other-channel").map(ChatMessage::id))
         assertEquals(listOf("clear"), gateway.operations)
+    }
+
+    @Test
+    fun successfulAutoModDecisionRemovesHeldCardLocally() = runTest {
+        val state = ChatRuntimeStateHolder().apply {
+            applyAutoMod(
+                AutoModHeldMessage(
+                    channelId = CHANNEL_ID,
+                    channelLogin = "channel",
+                    channelName = "Channel",
+                    userId = "viewer-id",
+                    userLogin = "viewer",
+                    userName = "Viewer",
+                    messageId = "automod-1",
+                    text = "held",
+                ),
+            )
+        }
+        val gateway = FakeModerationGateway()
+        val runtime = TwitchModerationRuntime(state, gateway)
+
+        assertTrue(
+            runtime.decideAutoModMessage(
+                authentication = authentication(),
+                messageId = "automod-1",
+                approve = false,
+            ),
+        )
+
+        assertTrue(state.autoModHeldMessages(CHANNEL_ID).isEmpty())
+        assertEquals(AutoModMessageStatus.DENIED, state.autoModQueue.single().status)
+        assertEquals(listOf("automod:automod-1:deny"), gateway.operations)
     }
 
     @Test
@@ -268,6 +302,15 @@ class TwitchModerationRuntimeTest {
             operations += "clear"
         }
 
+        override suspend fun decideAutoModMessage(
+            authentication: StoredAuthentication,
+            messageId: String,
+            approve: Boolean,
+        ) {
+            failIfNeeded()
+            operations += "automod:" + messageId + ":" + (if (approve) "allow" else "deny")
+        }
+
         private fun failIfNeeded() {
             failure?.let { throw it }
         }
@@ -310,6 +353,7 @@ class TwitchModerationRuntimeTest {
                 scopes = setOf(
                     "moderator:manage:banned_users",
                     "moderator:manage:chat_messages",
+                    "moderator:manage:automod",
                 ),
                 expiresInSeconds = 7_200L,
             ),

@@ -1,5 +1,6 @@
 package io.ferventio.shared.chat
 
+import io.ferventio.app.domain.AutoModMessageStatus
 import io.ferventio.app.domain.BackendSessionCredential
 import io.ferventio.app.domain.ChatChannel
 import io.ferventio.app.domain.ConnectionStatus
@@ -70,6 +71,60 @@ class TwitchChatSessionRuntimeTest {
 
         assertFalse(runtime.onEnvelope(envelope))
         assertTrue(state.messagesByChannel.isEmpty())
+    }
+
+    @Test
+    fun terminalAutoModUpdatePreventsDelayedHoldFromResurrectingCard() {
+        val state = ChatRuntimeStateHolder()
+        val runtime = runtime(state)
+        val update = TwitchEventSubProtocolParser.parse(
+            """
+            {
+              "metadata": {
+                "message_type": "notification",
+                "message_timestamp": "2026-08-16T17:00:01Z"
+              },
+              "payload": {
+                "subscription": {"type": "automod.message.update"},
+                "event": {
+                  "broadcaster_user_id": "channel-1",
+                  "user_id": "viewer-1",
+                  "user_login": "viewer",
+                  "message_id": "automod-1",
+                  "message": {"text": "held text"},
+                  "status": "denied",
+                  "moderator_user_id": "moderator-id"
+                }
+              }
+            }
+            """.trimIndent(),
+        )
+        val hold = TwitchEventSubProtocolParser.parse(
+            """
+            {
+              "metadata": {
+                "message_type": "notification",
+                "message_timestamp": "2026-08-16T17:00:00Z"
+              },
+              "payload": {
+                "subscription": {"type": "automod.message.hold"},
+                "event": {
+                  "broadcaster_user_id": "channel-1",
+                  "user_id": "viewer-1",
+                  "user_login": "viewer",
+                  "message_id": "automod-1",
+                  "message": {"text": "held text"}
+                }
+              }
+            }
+            """.trimIndent(),
+        )
+
+        assertTrue(runtime.onEnvelope(update))
+        assertEquals(AutoModMessageStatus.DENIED, state.autoModQueue.single().status)
+        assertTrue(runtime.onEnvelope(hold))
+        assertTrue(state.autoModHeldMessages("channel-1").isEmpty())
+        assertEquals(AutoModMessageStatus.DENIED, state.autoModQueue.single().status)
     }
 
     @Test

@@ -1,5 +1,6 @@
 package io.ferventio.shared.moderation
 
+import io.ferventio.app.domain.AutoModMessageStatus
 import io.ferventio.app.domain.ModerationAction
 import io.ferventio.app.domain.StoredAuthentication
 import io.ferventio.shared.chat.ChatRuntimeStateHolder
@@ -97,6 +98,26 @@ class TwitchModerationRuntime(
     ): Boolean = executeMutation {
         gateway.clearChatMessages(authentication, broadcasterId)
         chatState.clearChannelMessages(broadcasterId)
+    }
+
+    suspend fun decideAutoModMessage(
+        authentication: StoredAuthentication,
+        messageId: String,
+        approve: Boolean,
+    ): Boolean = executeMutation {
+        gateway.decideAutoModMessage(
+            authentication = authentication,
+            messageId = messageId,
+            approve = approve,
+        )
+        val session = authentication.accessLease?.session
+        chatState.markAutoModDecision(
+            messageId = messageId,
+            status = if (approve) AutoModMessageStatus.APPROVED else AutoModMessageStatus.DENIED,
+            moderatorId = session?.userId,
+            moderatorLogin = session?.login,
+            moderatorName = session?.login,
+        )
     }
 
     private suspend fun <T> executeMutation(block: suspend () -> T): T = try {

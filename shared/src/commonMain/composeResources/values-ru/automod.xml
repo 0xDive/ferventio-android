@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="automod_held_title">AutoMod задержал сообщение</string>
+    <string name="automod_category">Категория: %1$s %2$s</string>
+    <string name="automod_approve">Разрешить</string>
+    <string name="automod_deny">Отклонить</string>
+</resources>

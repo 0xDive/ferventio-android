@@ -189,6 +189,31 @@ fun FerventioModeratedChatScreen(
         }
     }
 
+    fun decideAutoModMessage(messageId: String, approve: Boolean) {
+        val authentication = runtime.authentication.state.authentication
+        if (authentication == null) {
+            quickModerationError = authenticationRequiredText
+            return
+        }
+        if (!canModerateChannel) {
+            quickModerationError = moderatorRequiredText
+            return
+        }
+        scope.launch {
+            try {
+                runtime.moderation.decideAutoModMessage(
+                    authentication = authentication,
+                    messageId = messageId,
+                    approve = approve,
+                )
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                quickModerationError = error.message.orEmpty().ifBlank { "Twitch error" }
+            }
+        }
+    }
+
     fun deleteMessage(message: ChatMessage) {
         val authentication = runtime.authentication.state.authentication
         if (authentication == null) {
@@ -459,6 +484,12 @@ fun FerventioModeratedChatScreen(
                 }
             },
             onQuickDelete = ::deleteMessage,
+            autoModHeldMessages = runtime.chat.autoModHeldMessages(channel.id),
+            onAutoModDecision = if (canModerateChannel) {
+                { messageId, approve -> decideAutoModMessage(messageId, approve) }
+            } else {
+                null
+            },
             providedThirdPartyEmotes = thirdPartyEmotes,
         )
 

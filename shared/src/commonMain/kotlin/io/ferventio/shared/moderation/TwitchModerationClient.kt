@@ -90,6 +90,14 @@ interface TwitchModerationGateway {
         authentication: StoredAuthentication,
         broadcasterId: String,
     )
+
+    suspend fun decideAutoModMessage(
+        authentication: StoredAuthentication,
+        messageId: String,
+        approve: Boolean,
+    ) {
+        throw UnsupportedOperationException("AutoMod decisions are not supported by this gateway")
+    }
 }
 
 class TwitchModerationClient(
@@ -191,6 +199,43 @@ class TwitchModerationClient(
         broadcasterId: String,
     ) {
         deleteChatMessages(authentication, broadcasterId, null, "clear chat")
+    }
+
+    override suspend fun decideAutoModMessage(
+        authentication: StoredAuthentication,
+        messageId: String,
+        approve: Boolean,
+    ) {
+        AuthenticationPersistenceValidation.requireValid(
+            authentication.backendCredential,
+            authentication.accessLease,
+        )
+        val accessLease = requireNotNull(authentication.accessLease) {
+            "Twitch access lease is required for AutoMod decisions"
+        }
+        requireScope(accessLease, AUTOMOD_SCOPE)
+        val normalizedMessageId = messageId.trim()
+        require(normalizedMessageId.isNotEmpty()) { "AutoMod message id must not be blank" }
+        val moderatorId = accessLease.session.userId.trim()
+        val clientId = accessLease.session.clientId.trim()
+        require(moderatorId.isNotEmpty()) { "AutoMod moderator id must not be blank" }
+        require(clientId.isNotEmpty()) { "AutoMod client id must not be blank" }
+
+        val body = buildJsonObject {
+            put("user_id", moderatorId)
+            put("msg_id", normalizedMessageId)
+            put("action", if (approve) "ALLOW" else "DENY")
+        }
+        val response = client.post(AUTOMOD_MESSAGE_URL) {
+            header("Client-Id", clientId)
+            header(HttpHeaders.Authorization, "Bearer ${accessLease.accessToken}")
+            contentType(ContentType.Application.Json)
+            setBody(json.encodeToString(JsonObject.serializer(), body))
+        }
+        requireSuccess(
+            response,
+            if (approve) "approve AutoMod message" else "deny AutoMod message",
+        )
     }
 
     private suspend fun updateBanState(
@@ -328,9 +373,11 @@ class TwitchModerationClient(
         const val MODERATION_BANS_URL = "https://api.twitch.tv/helix/moderation/bans"
         const val MODERATION_WARNINGS_URL = "https://api.twitch.tv/helix/moderation/warnings"
         const val MODERATION_CHAT_URL = "https://api.twitch.tv/helix/moderation/chat"
+        const val AUTOMOD_MESSAGE_URL = "https://api.twitch.tv/helix/moderation/automod/message"
         const val BANNED_USERS_SCOPE = "moderator:manage:banned_users"
         const val WARNINGS_SCOPE = "moderator:manage:warnings"
         const val CHAT_MESSAGES_SCOPE = "moderator:manage:chat_messages"
+        const val AUTOMOD_SCOPE = "moderator:manage:automod"
         const val MIN_TIMEOUT_SECONDS = 1
         const val MAX_TIMEOUT_SECONDS = 1_209_600
         const val MAX_REASON_LENGTH = 500

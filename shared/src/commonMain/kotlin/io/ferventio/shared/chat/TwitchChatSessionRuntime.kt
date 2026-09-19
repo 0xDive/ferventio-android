@@ -28,6 +28,7 @@ internal class TwitchChatSessionRuntime(
     private val session = authentication.accessLease?.session
     private var evaluatorRules = messageRules?.snapshot ?: SharedMessageRulesSnapshot()
     private var messageRuleEvaluator = compileEvaluator(evaluatorRules)
+    private val autoModOrderingGuard = AutoModEventOrderingGuard()
 
     suspend fun onSessionReady(sessionId: String): Int {
         supplementalSubscriptionsJob?.cancel()
@@ -87,6 +88,25 @@ internal class TwitchChatSessionRuntime(
                 is TwitchChatMutationEvent.ChatCleared -> {
                     state.clearChannelMessages(mutation.channelId)
                     history?.clearChannel(mutation.channelId)
+                }
+            }
+            return true
+        }
+
+        val autoMod = runCatching { TwitchAutoModEventParser.parse(envelope) }.getOrNull()
+        if (autoMod != null) {
+            val message = autoMod.message
+            when (autoMod) {
+                is TwitchAutoModEvent.Held -> {
+                    if (autoModOrderingGuard.shouldAcceptHold(message.messageId)) {
+                        state.applyAutoMod(message)
+                    }
+                }
+                is TwitchAutoModEvent.Updated -> {
+                    if (message.status != io.ferventio.app.domain.AutoModMessageStatus.HELD) {
+                        autoModOrderingGuard.markTerminal(message.messageId)
+                    }
+                    state.applyAutoMod(message)
                 }
             }
             return true
