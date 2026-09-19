@@ -1,6 +1,7 @@
 package io.ferventio.shared.chat
 
 import androidx.compose.runtime.snapshotFlow
+import io.ferventio.app.domain.AutoModHeldMessage
 import io.ferventio.app.domain.ChatHistoryStore
 import io.ferventio.app.domain.ConnectionStatus
 import io.ferventio.app.domain.HighlightAlert
@@ -47,6 +48,7 @@ class AuthenticatedChatRuntimeCoordinator(
     private val settings: SharedAppSettingsStateHolder?,
     private val messageRules: SharedMessageRulesStateHolder? = null,
     private val onHighlightAlert: (HighlightAlert) -> Unit = {},
+    private val onAutoModHeld: (AutoModHeldMessage) -> Unit = {},
 ) {
     constructor() : this(
         ChatRuntimeStateHolder(),
@@ -128,6 +130,11 @@ class AuthenticatedChatRuntimeCoordinator(
                 history = sessionHistory,
                 messageRules = messageRules,
                 onHighlightAlert = onHighlightAlert,
+                onAutoModHeld = { message ->
+                    if (shouldEmitAutoModAlert(sessionSettings)) {
+                        onAutoModHeld(message)
+                    }
+                },
                 onFatalSessionError = { client.close() },
             )
             client = TwitchEventSubSocketClient(
@@ -265,3 +272,6 @@ class AuthenticatedChatRuntimeCoordinator(
         }
     }
 }
+
+internal fun shouldEmitAutoModAlert(settings: SharedAppSettingsStateHolder?): Boolean =
+    settings?.preferences?.autoModNotificationsEnabled != false

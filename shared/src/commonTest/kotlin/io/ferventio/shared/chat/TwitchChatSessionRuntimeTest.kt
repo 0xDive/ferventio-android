@@ -1,5 +1,6 @@
 package io.ferventio.shared.chat
 
+import io.ferventio.app.domain.AutoModHeldMessage
 import io.ferventio.app.domain.AutoModMessageStatus
 import io.ferventio.app.domain.BackendSessionCredential
 import io.ferventio.app.domain.ChatChannel
@@ -74,9 +75,42 @@ class TwitchChatSessionRuntimeTest {
     }
 
     @Test
+    fun acceptedAutoModHoldEmitsOnePlatformAlert() {
+        val state = ChatRuntimeStateHolder()
+        val alerts = mutableListOf<AutoModHeldMessage>()
+        val runtime = runtime(state, onAutoModHeld = alerts::add)
+        val hold = TwitchEventSubProtocolParser.parse(
+            """
+            {
+              "metadata": {
+                "message_type": "notification",
+                "message_timestamp": "2026-08-16T17:00:00Z"
+              },
+              "payload": {
+                "subscription": {"type": "automod.message.hold"},
+                "event": {
+                  "broadcaster_user_id": "channel-1",
+                  "broadcaster_user_login": "channel",
+                  "user_id": "viewer-1",
+                  "user_login": "viewer",
+                  "user_name": "Viewer",
+                  "message_id": "automod-alert",
+                  "message": {"text": "held text"}
+                }
+              }
+            }
+            """.trimIndent(),
+        )
+
+        assertTrue(runtime.onEnvelope(hold))
+        assertEquals(listOf("automod-alert"), alerts.map(AutoModHeldMessage::messageId))
+    }
+
+    @Test
     fun terminalAutoModUpdatePreventsDelayedHoldFromResurrectingCard() {
         val state = ChatRuntimeStateHolder()
-        val runtime = runtime(state)
+        val alerts = mutableListOf<AutoModHeldMessage>()
+        val runtime = runtime(state, onAutoModHeld = alerts::add)
         val update = TwitchEventSubProtocolParser.parse(
             """
             {
@@ -125,6 +159,7 @@ class TwitchChatSessionRuntimeTest {
         assertTrue(runtime.onEnvelope(hold))
         assertTrue(state.autoModHeldMessages("channel-1").isEmpty())
         assertEquals(AutoModMessageStatus.DENIED, state.autoModQueue.single().status)
+        assertTrue(alerts.isEmpty())
     }
 
     @Test
@@ -177,11 +212,15 @@ class TwitchChatSessionRuntimeTest {
         assertEquals("network reset", state.connectionErrorMessage)
     }
 
-    private fun runtime(state: ChatRuntimeStateHolder) = TwitchChatSessionRuntime(
+    private fun runtime(
+        state: ChatRuntimeStateHolder,
+        onAutoModHeld: (AutoModHeldMessage) -> Unit = {},
+    ) = TwitchChatSessionRuntime(
         authentication = authentication(),
         workspace = WorkspaceRuntimeSnapshot(channels = listOf(channel())),
         state = state,
         bootstrapCoordinator = TwitchEventSubBootstrapCoordinator { _, _, _ -> Unit },
+        onAutoModHeld = onAutoModHeld,
     )
 
     private fun channel() = ChatChannel(

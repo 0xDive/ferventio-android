@@ -23,6 +23,7 @@ final class AuthenticatedChatRuntimeBridge {
         self.stateHolder = stateHolder
         self.attentionHolder = attentionHolder
         let highlightAlerts = HighlightAlertRuntimeBridge()
+        let autoModAlerts = AutoModAlertRuntimeBridge()
         self.coordinator = AuthenticatedChatRuntimeCoordinator(
             state: stateHolder,
             attention: attentionHolder,
@@ -31,6 +32,9 @@ final class AuthenticatedChatRuntimeBridge {
             messageRules: messageRulesState,
             onHighlightAlert: { alert in
                 highlightAlerts.handle(alert: alert)
+            },
+            onAutoModHeld: { message in
+                autoModAlerts.handle(message: message)
             }
         )
         self.onAuthenticationRequired = onAuthenticationRequired

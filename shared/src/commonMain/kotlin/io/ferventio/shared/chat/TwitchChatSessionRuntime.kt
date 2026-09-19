@@ -1,5 +1,6 @@
 package io.ferventio.shared.chat
 
+import io.ferventio.app.domain.AutoModHeldMessage
 import io.ferventio.app.domain.HighlightAlert
 import io.ferventio.app.domain.MessageRuleEvaluator
 import io.ferventio.app.domain.StoredAuthentication
@@ -22,6 +23,7 @@ internal class TwitchChatSessionRuntime(
     private val messageRules: SharedMessageRulesStateHolder? = null,
     private val bootstrapCoordinator: TwitchEventSubBootstrapCoordinator = TwitchEventSubBootstrapCoordinator(),
     private val onHighlightAlert: (HighlightAlert) -> Unit = {},
+    private val onAutoModHeld: (AutoModHeldMessage) -> Unit = {},
     private val onFatalSessionError: (Throwable) -> Unit = {},
 ) {
     private var supplementalSubscriptionsJob: Job? = null
@@ -100,6 +102,7 @@ internal class TwitchChatSessionRuntime(
                 is TwitchAutoModEvent.Held -> {
                     if (autoModOrderingGuard.shouldAcceptHold(message.messageId)) {
                         state.applyAutoMod(message)
+                        onAutoModHeld(message)
                     }
                 }
                 is TwitchAutoModEvent.Updated -> {
