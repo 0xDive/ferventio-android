@@ -79,7 +79,6 @@ internal fun WorkspaceChannelManagement(
 ) {
     val attentionState = LocalFerventioRuntimeState.current.attention
     var addDialogVisible by remember { mutableStateOf(false) }
-    var addLogin by remember { mutableStateOf("") }
     var managedChannelId by remember { mutableStateOf<String?>(null) }
     var renameChannelId by remember { mutableStateOf<String?>(null) }
     var renameTitle by remember { mutableStateOf("") }
@@ -99,7 +98,7 @@ internal fun WorkspaceChannelManagement(
             )
             IconButton(
                 onClick = { addDialogVisible = true },
-                enabled = !busy && state.channels.size < MAX_CHANNELS,
+                enabled = !busy && state.channels.size < MAX_WORKSPACE_CHANNELS,
             ) {
                 Icon(
                     Icons.Default.Add,
@@ -114,7 +113,7 @@ internal fun WorkspaceChannelManagement(
             }
         }
 
-        if (state.channels.size >= MAX_CHANNELS) {
+        if (state.channels.size >= MAX_WORKSPACE_CHANNELS) {
             Text(
                 text = stringResource(Res.string.workspace_channel_limit),
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
@@ -246,37 +245,11 @@ internal fun WorkspaceChannelManagement(
     }
 
     if (addDialogVisible) {
-        AlertDialog(
-            onDismissRequest = { if (!busy) addDialogVisible = false },
-            title = { Text(stringResource(Res.string.workspace_add_channel_title)) },
-            text = {
-                OutlinedTextField(
-                    value = addLogin,
-                    onValueChange = { addLogin = it.take(26) },
-                    modifier = Modifier.fillMaxWidth(),
-                    label = { Text(stringResource(Res.string.workspace_channel_login)) },
-                    singleLine = true,
-                    enabled = !busy,
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val login = addLogin.trim()
-                        if (login.isNotEmpty()) {
-                            onAddChannel(login)
-                            addLogin = ""
-                            addDialogVisible = false
-                        }
-                    },
-                    enabled = !busy && addLogin.isNotBlank(),
-                ) { Text(stringResource(Res.string.workspace_add)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { addDialogVisible = false }, enabled = !busy) {
-                    Text(stringResource(Res.string.workspace_cancel))
-                }
-            },
+        WorkspaceAddChannelDialog(
+            busy = busy,
+            canAddChannel = state.channels.size < MAX_WORKSPACE_CHANNELS,
+            onDismiss = { addDialogVisible = false },
+            onAdd = onAddChannel,
         )
     }
 
@@ -442,6 +415,50 @@ internal fun WorkspaceChannelManagement(
     }
 }
 
+@Composable
+internal fun WorkspaceAddChannelDialog(
+    busy: Boolean,
+    canAddChannel: Boolean,
+    onDismiss: () -> Unit,
+    onAdd: (String) -> Unit,
+) {
+    var login by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = { if (!busy) onDismiss() },
+        title = { Text(stringResource(Res.string.workspace_add_channel_title)) },
+        text = {
+            OutlinedTextField(
+                value = login,
+                onValueChange = { login = it.take(26) },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text(stringResource(Res.string.workspace_channel_login)) },
+                singleLine = true,
+                enabled = !busy && canAddChannel,
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val normalizedLogin = login.trim()
+                    if (normalizedLogin.isNotEmpty() && canAddChannel) {
+                        onAdd(normalizedLogin)
+                        onDismiss()
+                    }
+                },
+                enabled = !busy && canAddChannel && login.isNotBlank(),
+            ) {
+                Text(stringResource(Res.string.workspace_add))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !busy) {
+                Text(stringResource(Res.string.workspace_cancel))
+            }
+        },
+    )
+}
+
 private fun compactAttentionCount(value: Int): String = if (value > 99) "99+" else value.toString()
 
-private const val MAX_CHANNELS = 20
+internal const val MAX_WORKSPACE_CHANNELS = 20

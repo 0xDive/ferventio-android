@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="workspace_actions">Actions</string>
+    <string name="action_search_title">Actions</string>
+    <string name="action_search_placeholder">Search actions, channels, or /commands</string>
+    <string name="action_search_settings_title">Settings</string>
+    <string name="action_search_settings_subtitle">Open Ferventio settings</string>
+    <string name="action_search_add_channel_title">Add channel</string>
+    <string name="action_search_add_channel_subtitle">Add a Twitch channel to this workspace</string>
+    <string name="action_search_reconnect_title">Reconnect chat</string>
+    <string name="action_search_reconnect_subtitle">Reconnect the authenticated EventSub session</string>
+    <string name="action_search_requires_preview">Preview required</string>
+    <string name="action_search_requires_confirmation">Confirmation required</string>
+</resources>

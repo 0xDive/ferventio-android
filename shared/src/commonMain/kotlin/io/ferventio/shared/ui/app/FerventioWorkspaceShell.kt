@@ -117,12 +117,15 @@ fun FerventioWorkspaceShell(
     var historySearchVisible by remember { mutableStateOf(false) }
     var chatUsersVisible by remember { mutableStateOf(false) }
     var chatModesVisible by remember { mutableStateOf(false) }
+    var actionSearchVisible by remember { mutableStateOf(false) }
+    var addChannelVisible by remember { mutableStateOf(false) }
     val selectedChannelId = resolveWorkspaceActiveChannelId(
         layout = state.workspaceLayout,
         selectedChannelId = state.selectedChannelId,
         channelIds = state.channelIds,
     )
     val selectedChannel = state.channels.firstOrNull { it.id == selectedChannelId }
+    val diagnosticsActions = currentFerventioDiagnosticsActions()
     val menuDescription = stringResource(Res.string.workspace_menu)
     val attentionDescription = stringResource(Res.string.attention_open)
     val historySearchDescription = stringResource(Res.string.history_search_open)
@@ -263,6 +266,7 @@ fun FerventioWorkspaceShell(
                         ?.let {
                             { chatModesVisible = true }
                         },
+                    onOpenActions = { actionSearchVisible = true },
                     onOpenMentions = { attentionVisible = true },
                     onOpenSettings = { settingsVisible = true },
                 )
@@ -307,6 +311,42 @@ fun FerventioWorkspaceShell(
                 }
             }
         }
+    }
+
+    if (actionSearchVisible) {
+        FerventioGlobalActionSearchSheet(
+            channels = state.channels,
+            moderatorChannelIds = state.moderatorChannelIds,
+            activeChannelId = selectedChannelId,
+            canAddChannel = state.channels.size < MAX_WORKSPACE_CHANNELS,
+            reconnectAvailable = diagnosticsActions.reconnectAvailable,
+            onDismiss = { actionSearchVisible = false },
+            onAction = { action ->
+                when {
+                    action.id == SHARED_ACTION_ID_SETTINGS -> settingsVisible = true
+                    action.id == SHARED_ACTION_ID_ADD_CHANNEL -> addChannelVisible = true
+                    action.id == SHARED_ACTION_ID_RECONNECT -> diagnosticsActions.onReconnect?.invoke()
+                    action.id.startsWith(SHARED_ACTION_CHANNEL_PREFIX) -> {
+                        selectWorkspaceChannel(action.id.removePrefix(SHARED_ACTION_CHANNEL_PREFIX))
+                    }
+                    action.id.startsWith(SHARED_ACTION_COMMAND_PREFIX) -> {
+                        selectedChannelId?.let { channelId ->
+                            val commandName = action.id.removePrefix(SHARED_ACTION_COMMAND_PREFIX)
+                            runtime.localUiPreferences.setDraft(channelId, "/$commandName ")
+                        }
+                    }
+                }
+            },
+        )
+    }
+
+    if (addChannelVisible) {
+        WorkspaceAddChannelDialog(
+            busy = state.mutationInFlight,
+            canAddChannel = state.channels.size < MAX_WORKSPACE_CHANNELS,
+            onDismiss = { addChannelVisible = false },
+            onAdd = onAddChannel,
+        )
     }
 
     if (chatUsersVisible && selectedChannel != null) {

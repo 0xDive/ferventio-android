@@ -51,6 +51,7 @@ import io.ferventio.shared.generated.resources.history_search_open
 import io.ferventio.shared.generated.resources.settings_open
 import io.ferventio.shared.generated.resources.workspace_menu
 import io.ferventio.shared.generated.resources.workspace_more
+import io.ferventio.shared.generated.resources.workspace_actions
 import org.jetbrains.compose.resources.stringResource
 
 /**
@@ -68,6 +69,7 @@ internal fun FerventioWorkspaceTopBar(
     onOpenSearch: (() -> Unit)?,
     onOpenUsers: (() -> Unit)? = null,
     onOpenModes: (() -> Unit)? = null,
+    onOpenActions: (() -> Unit)? = null,
     onOpenMentions: () -> Unit,
     onOpenSettings: () -> Unit,
     accountActionLabel: String? = null,
@@ -203,6 +205,15 @@ internal fun FerventioWorkspaceTopBar(
                             onOpenMentions()
                         },
                     )
+                    if (onOpenActions != null) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(Res.string.workspace_actions)) },
+                            onClick = {
+                                menuExpanded = false
+                                onOpenActions()
+                            },
+                        )
+                    }
                     DropdownMenuItem(
                         text = { Text(stringResource(Res.string.settings_open)) },
                         onClick = {
