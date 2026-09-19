@@ -190,6 +190,18 @@ class SharedUserCardProjectionTest {
     }
 
     @Test
+    fun profileDatePresentationDropsRawIsoTimeSuffix() {
+        assertEquals(
+            "2023-12-01",
+            formatUserCardProfileDate("2023-12-01T18:45:00Z"),
+        )
+        assertEquals(
+            "unknown",
+            formatUserCardProfileDate(" unknown "),
+        )
+    }
+
+    @Test
     fun blankIdsMatchByLoginIgnoringCase() {
         val source = message(id = "source", userId = "", login = "Viewer")
         val sameUser = message(id = "same", userId = "", login = "viewer")

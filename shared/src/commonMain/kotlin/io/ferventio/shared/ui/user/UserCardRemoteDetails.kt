@@ -49,12 +49,22 @@ internal fun UserCardRemoteDetails(
                     data.user.createdAt
                         ?.takeIf(String::isNotBlank)
                         ?.let { createdAt ->
-                            Fact(stringResource(Res.string.user_card_account_created, createdAt))
+                            Fact(
+                                stringResource(
+                                    Res.string.user_card_account_created,
+                                    formatUserCardProfileDate(createdAt),
+                                ),
+                            )
                         }
                     data.followerInfo.followedAt
                         ?.takeIf(String::isNotBlank)
                         ?.let { followedAt ->
-                            Fact(stringResource(Res.string.user_card_following_since, followedAt))
+                            Fact(
+                                stringResource(
+                                    Res.string.user_card_following_since,
+                                    formatUserCardProfileDate(followedAt),
+                                ),
+                            )
                         }
                     when {
                         data.subscriptionStatusHidden -> Fact(
@@ -96,3 +106,16 @@ private fun UserCardData.hasRelationshipFacts(): Boolean =
         !followerInfo.followedAt.isNullOrBlank() ||
         subscriptionStatusHidden ||
         isCurrentlySubscribed != null
+
+internal fun formatUserCardProfileDate(value: String): String {
+    val normalized = value.trim()
+    return if (
+        normalized.length >= 10 &&
+        normalized.getOrNull(4) == '-' &&
+        normalized.getOrNull(7) == '-'
+    ) {
+        normalized.take(10)
+    } else {
+        normalized
+    }
+}
