@@ -10,7 +10,10 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.InlineTextContent
+import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -34,11 +37,23 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.Placeholder
+import androidx.compose.ui.text.PlaceholderVerticalAlign
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.OffsetMapping
+import androidx.compose.ui.text.input.TransformedText
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
+import coil3.compose.AsyncImage
 import io.ferventio.app.domain.ChatChannel
 import io.ferventio.app.domain.ChatMessage
+import io.ferventio.app.domain.ComposerEmoteVisuals
 import io.ferventio.app.domain.ThirdPartyEmoteAsset
 import io.ferventio.shared.chat.TwitchChatMessageScopeException
 import io.ferventio.shared.generated.resources.Res
@@ -91,6 +106,7 @@ fun SharedChatComposer(
     }
 
     val scope = rememberCoroutineScope()
+    val preferences = runtime.settings.preferences
     val hasWriteScope = authentication.accessLease?.session?.scopes?.contains(WRITE_CHAT_SCOPE) == true
     var draft by rememberSaveable(channel.id) { mutableStateOf("") }
     var sending by remember(channel.id) { mutableStateOf(false) }
@@ -101,6 +117,17 @@ fun SharedChatComposer(
     val canSend = hasWriteScope && trimmed.isNotEmpty() && !tooLong && !sending
     val scopeRequiredText = stringResource(Res.string.chat_write_scope_required)
     val sendFailedFormat = stringResource(Res.string.chat_send_failed, "%s")
+    val emoteIndex = remember(emotes) { ComposerEmoteVisuals.buildIndex(emotes) }
+    val composerRichText = remember(draft, emoteIndex, preferences.showComposerEmoteImages) {
+        if (preferences.showComposerEmoteImages) {
+            buildSharedComposerRichText(draft, emoteIndex)
+        } else {
+            null
+        }
+    }
+    val composerVisualTransformation = remember(composerRichText) {
+        composerRichText?.let(::SharedComposerVisualTransformation) ?: VisualTransformation.None
+    }
 
     fun submit() {
         if (!canSend) return
@@ -204,12 +231,23 @@ fun SharedChatComposer(
                         modifier = Modifier.weight(1f),
                         enabled = !sending,
                         textStyle = MaterialTheme.typography.bodyMedium.copy(
-                            color = MaterialTheme.colorScheme.onSurface,
+                            color = if (composerRichText == null) {
+                                MaterialTheme.colorScheme.onSurface
+                            } else {
+                                Color.Transparent
+                            },
                         ),
+                        visualTransformation = composerVisualTransformation,
                         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                         maxLines = 4,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
-                        keyboardActions = KeyboardActions(onSend = { submit() }),
+                        keyboardOptions = KeyboardOptions(
+                            imeAction = if (preferences.sendOnEnter) ImeAction.Send else ImeAction.Default,
+                        ),
+                        keyboardActions = if (preferences.sendOnEnter) {
+                            KeyboardActions(onSend = { submit() })
+                        } else {
+                            KeyboardActions()
+                        },
                         decorationBox = { innerTextField ->
                             Box(contentAlignment = Alignment.CenterStart) {
                                 if (draft.isEmpty()) {
@@ -221,6 +259,17 @@ fun SharedChatComposer(
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
                                     )
+                                } else {
+                                    composerRichText?.let { richText ->
+                                        BasicText(
+                                            text = richText.annotatedText,
+                                            inlineContent = richText.inlineContent,
+                                            style = MaterialTheme.typography.bodyMedium.copy(
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                            ),
+                                            maxLines = 4,
+                                        )
+                                    }
                                 }
                                 innerTextField()
                             }
@@ -308,3 +357,112 @@ private fun appendEmoteCode(input: String, code: String): String = buildString {
     append(code)
     append(' ')
 }
+
+
+private data class SharedComposerRichText(
+    val source: String,
+    val visualText: String,
+    val annotatedText: AnnotatedString,
+    val inlineContent: Map<String, InlineTextContent>,
+    val offsetMapping: OffsetMapping,
+)
+
+private class SharedComposerVisualTransformation(
+    private val richText: SharedComposerRichText,
+) : VisualTransformation {
+    override fun filter(text: AnnotatedString): TransformedText =
+        if (text.text == richText.source) {
+            TransformedText(AnnotatedString(richText.visualText), richText.offsetMapping)
+        } else {
+            TransformedText(text, OffsetMapping.Identity)
+        }
+}
+
+private fun buildSharedComposerRichText(
+    input: String,
+    index: ComposerEmoteVisuals.Index,
+): SharedComposerRichText? {
+    val matches = ComposerEmoteVisuals.findMatches(input, index)
+    if (matches.isEmpty()) return null
+
+    val visual = StringBuilder(input.length)
+    val originalToTransformed = IntArray(input.length + 1)
+    val transformedToOriginal = mutableListOf(0)
+    val inline = linkedMapOf<String, InlineTextContent>()
+    var originalIndex = 0
+    var transformedIndex = 0
+
+    val annotated = buildAnnotatedString {
+        matches.forEachIndexed { matchIndex, match ->
+            while (originalIndex < match.start) {
+                val character = input[originalIndex]
+                append(character)
+                visual.append(character)
+                originalIndex += 1
+                transformedIndex += 1
+                originalToTransformed[originalIndex] = transformedIndex
+                transformedToOriginal += originalIndex
+            }
+
+            val inlineId = "shared-composer-emote-" + matchIndex + "-" +
+                match.asset.provider + ":" + match.asset.id
+            appendInlineContent(inlineId, SHARED_COMPOSER_EMOTE_PLACEHOLDER.toString())
+            visual.append(SHARED_COMPOSER_EMOTE_PLACEHOLDER)
+            inline[inlineId] = InlineTextContent(
+                placeholder = Placeholder(
+                    width = 1.05.em,
+                    height = 1.05.em,
+                    placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
+                ),
+            ) {
+                AsyncImage(
+                    model = match.asset.bestComposerImageUrl(),
+                    contentDescription = match.asset.code,
+                    modifier = Modifier.size(20.dp),
+                    contentScale = ContentScale.Fit,
+                )
+            }
+
+            transformedIndex += 1
+            originalToTransformed[match.start] = transformedIndex - 1
+            for (offset in (match.start + 1)..match.endExclusive) {
+                originalToTransformed[offset] = transformedIndex
+            }
+            transformedToOriginal += match.endExclusive
+            originalIndex = match.endExclusive
+        }
+
+        while (originalIndex < input.length) {
+            val character = input[originalIndex]
+            append(character)
+            visual.append(character)
+            originalIndex += 1
+            transformedIndex += 1
+            originalToTransformed[originalIndex] = transformedIndex
+            transformedToOriginal += originalIndex
+        }
+    }
+
+    val mapping = object : OffsetMapping {
+        override fun originalToTransformed(offset: Int): Int =
+            originalToTransformed[offset.coerceIn(0, originalToTransformed.lastIndex)]
+
+        override fun transformedToOriginal(offset: Int): Int =
+            transformedToOriginal[offset.coerceIn(0, transformedToOriginal.lastIndex)]
+    }
+    return SharedComposerRichText(
+        source = input,
+        visualText = visual.toString(),
+        annotatedText = annotated,
+        inlineContent = inline,
+        offsetMapping = mapping,
+    )
+}
+
+private fun ThirdPartyEmoteAsset.bestComposerImageUrl(): String = when {
+    imageUrl2x.isNotBlank() -> imageUrl2x
+    imageUrl1x.isNotBlank() -> imageUrl1x
+    else -> imageUrl3x
+}
+
+private const val SHARED_COMPOSER_EMOTE_PLACEHOLDER = '\uFFFC'
