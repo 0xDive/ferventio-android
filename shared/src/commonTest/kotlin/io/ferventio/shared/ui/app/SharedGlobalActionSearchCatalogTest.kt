@@ -52,6 +52,7 @@ class SharedGlobalActionSearchCatalogTest {
 
         assertTrue(actions.any { it.id == "command:ban" })
         assertTrue(actions.any { it.id == "command:slow" })
+        assertTrue(actions.any { it.id == "command:nuke" })
     }
 
     @Test

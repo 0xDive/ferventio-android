@@ -311,6 +311,7 @@ private fun SharedGlobalActionRow(
 private val SHARED_ACTION_PALETTE_COMMANDS = setOf(
     "me",
     "user",
+    "nuke",
     "ban",
     "unban",
     "timeout",
