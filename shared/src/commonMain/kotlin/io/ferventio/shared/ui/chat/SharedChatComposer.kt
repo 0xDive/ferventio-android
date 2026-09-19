@@ -332,7 +332,7 @@ fun SharedChatComposer(
         }
         val customContext = CustomCommandRuntimeContext(
             base = CustomCommandContext(
-                channelName = channel.login,
+                channelName = channel.displayName.ifBlank { channel.login },
                 channelId = channel.id,
                 myName = session.login,
                 myId = session.userId,
@@ -361,6 +361,12 @@ fun SharedChatComposer(
                 val plan = resolution.plan
                 if (plan.expandedText.length > MAX_CHAT_MESSAGE_LENGTH) {
                     errorMessage = customCommandExpandedTooLongText
+                } else if (plan.requiresPreview) {
+                    dispatchResolvedSubmission(
+                        resolvedText = plan.expandedText,
+                        historyText = plan.expandedText,
+                        customPlan = plan,
+                    )
                 } else if (plan.requiresConfirmation) {
                     errorMessage = null
                     pendingCustomCommandPlan = plan
