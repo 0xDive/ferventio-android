@@ -65,6 +65,9 @@ fun FerventioAuthenticationRoot(
         -> FerventioAnonymousWorkspaceShell(
             state = workspace,
             onAuthenticate = onAuthenticate,
+            notificationAuthorizationStatus = pushAuthorizationStatus,
+            onRequestNotificationPermission = onRequestNotificationPermission,
+            onOpenNotificationSettings = onOpenNotificationSettings,
             onSelectChannel = onSelectChannel,
             onAddChannel = onAddChannel,
             onSetChannelPinned = onSetChannelPinned,

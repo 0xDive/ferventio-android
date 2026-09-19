@@ -9,6 +9,7 @@
     <string name="workspace_no_channels">No channels yet</string>
     <string name="workspace_no_channels_summary">Your synced channels will appear here.</string>
     <string name="workspace_menu">Open channels</string>
+    <string name="workspace_more">More actions</string>
     <string name="workspace_signed_in_as">Signed in as @%1$s</string>
     <string name="notifications_title">Notifications</string>
     <string name="notifications_enable">Enable notifications</string>
@@ -90,6 +91,7 @@
     <string name="chat_retry">Retry</string>
     <string name="chat_write_scope_required">Signing in again is required to send messages.</string>
     <string name="chat_message_too_long">Message is too long (%1$d/500).</string>
+    <string name="chat_status_connected">Chat connected</string>
     <string name="chat_status_disconnected">Chat disconnected</string>
     <string name="chat_status_connecting">Connecting to chat…</string>
     <string name="chat_status_waiting_welcome">Waiting for Twitch…</string>

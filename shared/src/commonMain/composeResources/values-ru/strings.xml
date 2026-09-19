@@ -9,6 +9,7 @@
     <string name="workspace_no_channels">Пока нет каналов</string>
     <string name="workspace_no_channels_summary">Здесь появятся каналы из синхронизированных настроек.</string>
     <string name="workspace_menu">Открыть каналы</string>
+    <string name="workspace_more">Другие действия</string>
     <string name="workspace_signed_in_as">Выполнен вход как @%1$s</string>
     <string name="notifications_title">Уведомления</string>
     <string name="notifications_enable">Включить уведомления</string>
@@ -90,7 +91,8 @@
     <string name="chat_retry">Повторить</string>
     <string name="chat_write_scope_required">Чтобы отправлять сообщения, нужно войти заново.</string>
     <string name="chat_message_too_long">Сообщение слишком длинное (%1$d/500).</string>
-    <string name="chat_status_disconnected">Чат отключён</string>
+    <string name="chat_status_connected">чат подключён</string>
+    <string name="chat_status_disconnected">не подключено</string>
     <string name="chat_status_connecting">Подключаемся к чату…</string>
     <string name="chat_status_waiting_welcome">Ждём Twitch…</string>
     <string name="chat_status_creating_subscriptions">Подписываемся на события чата…</string>

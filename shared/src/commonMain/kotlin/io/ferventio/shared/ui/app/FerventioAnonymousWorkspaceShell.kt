@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -40,6 +41,7 @@ import io.ferventio.app.domain.HighlightRule
 import io.ferventio.app.domain.IgnoreRule
 import io.ferventio.app.domain.SavedMessageFilter
 import io.ferventio.shared.generated.resources.Res
+import io.ferventio.shared.generated.resources.app_name
 import io.ferventio.shared.generated.resources.attention_open
 import io.ferventio.shared.generated.resources.auth_sign_in_with_twitch
 import io.ferventio.shared.generated.resources.history_search_open
@@ -52,6 +54,7 @@ import io.ferventio.shared.generated.resources.workspace_load_failed
 import io.ferventio.shared.generated.resources.workspace_loading
 import io.ferventio.shared.generated.resources.workspace_menu
 import io.ferventio.shared.generated.resources.workspace_no_channels
+import io.ferventio.shared.push.PushAuthorizationStatus
 import io.ferventio.shared.runtime.LocalFerventioRuntimeState
 import io.ferventio.shared.settings.SharedAppPreferences
 import io.ferventio.shared.workspace.WorkspaceLoadStatus
@@ -67,6 +70,9 @@ import org.jetbrains.compose.resources.stringResource
 internal fun FerventioAnonymousWorkspaceShell(
     state: WorkspaceRuntimeStateHolder,
     onAuthenticate: () -> Unit,
+    notificationAuthorizationStatus: PushAuthorizationStatus = PushAuthorizationStatus.UNKNOWN,
+    onRequestNotificationPermission: () -> Unit = {},
+    onOpenNotificationSettings: () -> Unit = {},
     onSelectChannel: (String) -> Unit,
     onAddChannel: (String) -> Unit,
     onSetChannelPinned: (String, Boolean) -> Unit,
@@ -95,7 +101,7 @@ internal fun FerventioAnonymousWorkspaceShell(
     val scope = rememberCoroutineScope()
     var attentionVisible by remember { mutableStateOf(false) }
     var historySearchVisible by remember { mutableStateOf(false) }
-    var historySettingsVisible by remember { mutableStateOf(false) }
+    var settingsVisible by remember { mutableStateOf(false) }
     var messageRulesVisible by remember { mutableStateOf(false) }
     var savedFiltersVisible by remember { mutableStateOf(false) }
     val selectedChannelId = resolveWorkspaceActiveChannelId(
@@ -116,7 +122,7 @@ internal fun FerventioAnonymousWorkspaceShell(
     ModalNavigationDrawer(
         modifier = modifier,
         drawerState = drawerState,
-        gesturesEnabled = true,
+        gesturesEnabled = drawerState.isOpen,
         drawerContent = {
             ModalDrawerSheet {
                 Column(modifier = Modifier.fillMaxSize()) {
@@ -140,111 +146,32 @@ internal fun FerventioAnonymousWorkspaceShell(
                         onMoveChannel = onMoveChannel,
                         modifier = Modifier.weight(1f),
                     )
-                    HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
-                    TextButton(
-                        onClick = {
-                            scope.launch {
-                                drawerState.close()
-                                messageRulesVisible = true
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-                    ) {
-                        Text(stringResource(Res.string.message_rules_title))
-                    }
-                    TextButton(
-                        onClick = {
-                            scope.launch {
-                                drawerState.close()
-                                savedFiltersVisible = true
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-                    ) {
-                        Text(stringResource(Res.string.saved_filters_title))
-                    }
-                    TextButton(
-                        onClick = {
-                            scope.launch {
-                                drawerState.close()
-                                historySettingsVisible = true
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-                    ) {
-                        Text(stringResource(Res.string.settings_open))
-                    }
-                    TextButton(
-                        onClick = onAuthenticate,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-                    ) {
-                        Text(stringResource(Res.string.auth_sign_in_with_twitch))
-                    }
                 }
             }
         },
     ) {
         Scaffold(
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
-                TopAppBar(
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                    ),
-                    navigationIcon = {
-                        TextButton(
-                            onClick = { scope.launch { drawerState.open() } },
-                            modifier = Modifier.semantics { contentDescription = menuDescription },
-                        ) {
-                            Text(text = "☰", style = MaterialTheme.typography.titleLarge)
-                        }
+                FerventioWorkspaceTopBar(
+                    title = selectedChannel?.let { channel ->
+                        val label = state.channelTabTitles[channel.id]
+                            ?.takeIf(String::isNotBlank)
+                            ?: channel.displayName
+                        "#$label"
+                    } ?: stringResource(Res.string.app_name),
+                    connectionStatus = runtime.chat.connectionStatus,
+                    mentionUnreadCount = runtime.attention.mentionUnreadCount,
+                    onOpenChannels = { scope.launch { drawerState.open() } },
+                    onOpenSearch = if (runtime.history != null && selectedCanonicalChannelId != null) {
+                        { historySearchVisible = true }
+                    } else {
+                        null
                     },
-                    title = {
-                        Text(
-                            text = selectedChannel?.let { channel ->
-                                state.channelTabTitles[channel.id]?.takeIf(String::isNotBlank)
-                                    ?: "#${channel.displayName}"
-                            } ?: stringResource(Res.string.workspace_chats),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    },
-                    actions = {
-                        if (runtime.history != null && selectedCanonicalChannelId != null) {
-                            TextButton(
-                                onClick = { historySearchVisible = true },
-                                modifier = Modifier.semantics {
-                                    contentDescription = historySearchDescription
-                                },
-                            ) {
-                                Text(
-                                    text = "⌕",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                        TextButton(
-                            onClick = { attentionVisible = true },
-                            modifier = Modifier.semantics { contentDescription = attentionDescription },
-                        ) {
-                            val unreadMentions = runtime.attention.mentionUnreadCount
-                            Text(
-                                text = if (unreadMentions > 0) {
-                                    "@${unreadMentions.coerceAtMost(999)}"
-                                } else {
-                                    "@"
-                                },
-                                fontWeight = if (unreadMentions > 0) FontWeight.Bold else FontWeight.Medium,
-                                color = if (unreadMentions > 0) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
-                            )
-                        }
-                    },
+                    onOpenMentions = { attentionVisible = true },
+                    onOpenSettings = { settingsVisible = true },
+                    accountActionLabel = stringResource(Res.string.auth_sign_in_with_twitch),
+                    onAccountAction = onAuthenticate,
                 )
             },
         ) { padding ->
@@ -348,11 +275,16 @@ internal fun FerventioAnonymousWorkspaceShell(
         )
     }
 
-    if (historySettingsVisible) {
-        FerventioAnonymousHistorySettingsSheet(
+    if (settingsVisible) {
+        FerventioSettingsSheet(
             state = runtime.settings,
+            notificationAuthorizationStatus = notificationAuthorizationStatus,
+            onRequestNotificationPermission = onRequestNotificationPermission,
+            onOpenNotificationSettings = onOpenNotificationSettings,
             onSave = onSaveHistoryPreferences,
-            onDismiss = { historySettingsVisible = false },
+            onOpenMessageRules = { messageRulesVisible = true },
+            onOpenSavedFilters = { savedFiltersVisible = true },
+            onDismiss = { settingsVisible = false },
         )
     }
 }

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -42,6 +43,7 @@ import io.ferventio.app.domain.IgnoreRule
 import io.ferventio.app.domain.MAX_SPLITS_PER_TAB
 import io.ferventio.app.domain.SavedMessageFilter
 import io.ferventio.shared.generated.resources.Res
+import io.ferventio.shared.generated.resources.app_name
 import io.ferventio.shared.generated.resources.attention_open
 import io.ferventio.shared.generated.resources.auth_sign_out
 import io.ferventio.shared.generated.resources.history_search_open
@@ -118,7 +120,6 @@ fun FerventioWorkspaceShell(
     val menuDescription = stringResource(Res.string.workspace_menu)
     val attentionDescription = stringResource(Res.string.attention_open)
     val historySearchDescription = stringResource(Res.string.history_search_open)
-    val notificationAction = notificationPermissionAction(notificationAuthorizationStatus)
     val pendingPushTarget = runtime.pushNavigation.pendingTarget
     val pushNavigationChannels = state.channels
     val canResolveWorkspacePush = state.loadStatus == WorkspaceLoadStatus.READY ||
@@ -189,7 +190,7 @@ fun FerventioWorkspaceShell(
     ModalNavigationDrawer(
         modifier = modifier,
         drawerState = drawerState,
-        gesturesEnabled = true,
+        gesturesEnabled = drawerState.isOpen,
         drawerContent = {
             ModalDrawerSheet {
                 Column(modifier = Modifier.fillMaxSize()) {
@@ -213,130 +214,30 @@ fun FerventioWorkspaceShell(
                         onMoveChannel = onMoveChannel,
                         modifier = Modifier.weight(1f),
                     )
-
-                    HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
-                    Text(
-                        text = stringResource(Res.string.notifications_title),
-                        modifier = Modifier.padding(start = 24.dp, top = 12.dp, end = 24.dp),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    TextButton(
-                        onClick = {
-                            when (notificationAction) {
-                                NotificationPermissionAction.REQUEST_PERMISSION -> onRequestNotificationPermission()
-                                NotificationPermissionAction.OPEN_SETTINGS -> onOpenNotificationSettings()
-                                NotificationPermissionAction.NONE -> Unit
-                            }
-                        },
-                        enabled = notificationAction != NotificationPermissionAction.NONE,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-                    ) {
-                        Text(
-                            text = when (notificationAction) {
-                                NotificationPermissionAction.REQUEST_PERMISSION -> stringResource(Res.string.notifications_enable)
-                                NotificationPermissionAction.OPEN_SETTINGS -> stringResource(Res.string.notifications_open_settings)
-                                NotificationPermissionAction.NONE -> stringResource(Res.string.notifications_enabled)
-                            },
-                        )
-                    }
-                    HorizontalDivider(modifier = Modifier.padding(top = 4.dp))
-                    TextButton(
-                        onClick = {
-                            scope.launch {
-                                drawerState.close()
-                                settingsVisible = true
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
-                    ) {
-                        Text(stringResource(Res.string.settings_open))
-                    }
-                    TextButton(
-                        onClick = onSignOut,
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
-                    ) {
-                        Text(
-                            text = stringResource(Res.string.auth_sign_out),
-                            color = MaterialTheme.colorScheme.error,
-                        )
-                    }
                 }
             }
         },
     ) {
         Scaffold(
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
             topBar = {
-                TopAppBar(
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                    ),
-                    navigationIcon = {
-                        TextButton(
-                            onClick = { scope.launch { drawerState.open() } },
-                            modifier = Modifier.semantics { contentDescription = menuDescription },
-                        ) {
-                            Text(text = "☰", style = MaterialTheme.typography.titleLarge)
-                        }
+                FerventioWorkspaceTopBar(
+                    title = selectedChannel?.let { channel ->
+                        val label = state.channelTabTitles[channel.id]
+                            ?.takeIf(String::isNotBlank)
+                            ?: channel.displayName
+                        "#$label"
+                    } ?: stringResource(Res.string.app_name),
+                    connectionStatus = runtime.chat.connectionStatus,
+                    mentionUnreadCount = runtime.attention.mentionUnreadCount,
+                    onOpenChannels = { scope.launch { drawerState.open() } },
+                    onOpenSearch = if (runtime.history != null) {
+                        { historySearchVisible = true }
+                    } else {
+                        null
                     },
-                    title = {
-                        Column {
-                            Text(
-                                text = selectedChannel?.let { channel ->
-                                    state.channelTabTitles[channel.id]?.takeIf(String::isNotBlank)
-                                        ?: "#${channel.displayName}"
-                                } ?: stringResource(Res.string.workspace_chats),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                            login?.takeIf(String::isNotBlank)?.let { value ->
-                                Text(
-                                    text = stringResource(Res.string.workspace_signed_in_as, value),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                        }
-                    },
-                    actions = {
-                        if (runtime.history != null) {
-                            TextButton(
-                                onClick = { historySearchVisible = true },
-                                modifier = Modifier.semantics {
-                                    contentDescription = historySearchDescription
-                                },
-                            ) {
-                                Text(
-                                    text = "⌕",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                        TextButton(
-                            onClick = { attentionVisible = true },
-                            modifier = Modifier.semantics { contentDescription = attentionDescription },
-                        ) {
-                            val unreadMentions = runtime.attention.mentionUnreadCount
-                            Text(
-                                text = if (unreadMentions > 0) {
-                                    "@${unreadMentions.coerceAtMost(999)}"
-                                } else {
-                                    "@"
-                                },
-                                fontWeight = if (unreadMentions > 0) FontWeight.Bold else FontWeight.Medium,
-                                color = if (unreadMentions > 0) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
-                            )
-                        }
-                    },
+                    onOpenMentions = { attentionVisible = true },
+                    onOpenSettings = { settingsVisible = true },
                 )
             },
         ) { padding ->
