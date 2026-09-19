@@ -137,6 +137,7 @@ fun SharedChatComposer(
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
     val preferences = runtime.settings.preferences
+    val rateLimit = runtime.chat.rateLimit(channel.id)
     val localUiPreferences = runtime.localUiPreferences
     val hasWriteScope = authentication.accessLease?.session?.scopes?.contains(WRITE_CHAT_SCOPE) == true
     val draft = localUiPreferences.draft(channel.id)
@@ -389,6 +390,13 @@ fun SharedChatComposer(
             .padding(horizontal = 8.dp, vertical = 5.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+        rateLimit?.let { currentRateLimit ->
+            SharedChatRateLimitBanner(
+                rateLimit = currentRateLimit,
+                modifier = Modifier.padding(horizontal = 2.dp),
+            )
+        }
+
         replyTarget?.let { target ->
             Surface(
                 modifier = Modifier.fillMaxWidth(),

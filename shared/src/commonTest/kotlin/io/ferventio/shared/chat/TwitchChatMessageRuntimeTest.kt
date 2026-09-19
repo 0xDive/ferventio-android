@@ -134,6 +134,34 @@ class TwitchChatMessageRuntimeTest {
     }
 
     @Test
+    fun rateLimitedSendProjectsRetryStateAndSuccessfulRetryClearsIt() = runTest {
+        val state = ChatRuntimeStateHolder()
+        val gateway = RecordingGateway(
+            error = TwitchChatMessageMutationException(
+                statusCode = 429,
+                twitchMessage = "too many messages",
+                retryAtMillis = 9_000L,
+            ),
+        )
+        val runtime = TwitchChatMessageRuntime(state, gateway, currentEpochMillis = { 5_000L })
+
+        assertFailsWith<TwitchChatMessageMutationException> {
+            runtime.send(authentication(), channel(), "hello")
+        }
+
+        val rateLimit = requireNotNull(state.rateLimit("channel-id"))
+        assertEquals("too many messages", rateLimit.message)
+        assertEquals(9_000L, rateLimit.retryAtMillis)
+
+        val failed = state.messages("channel-id").single()
+        gateway.error = null
+        gateway.result = ChatSendResult("server-id")
+        runtime.retry(authentication(), channel(), failed)
+
+        assertEquals(null, state.rateLimit("channel-id"))
+    }
+
+    @Test
     fun unauthorizedSendMarksAuthenticationRequired() = runTest {
         val state = ChatRuntimeStateHolder()
         val gateway = RecordingGateway(

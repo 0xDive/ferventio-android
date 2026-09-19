@@ -5,6 +5,7 @@ import io.ferventio.app.domain.ChatChannel
 import io.ferventio.app.domain.ChatFragment
 import io.ferventio.app.domain.ChatMessage
 import io.ferventio.app.domain.ChatMessageType
+import io.ferventio.app.domain.ChatRateLimitState
 import io.ferventio.app.domain.ChatSendResult
 import io.ferventio.app.domain.MessageFlags
 import io.ferventio.app.domain.OutgoingMessageState
@@ -110,6 +111,7 @@ class TwitchChatMessageRuntime(
                 ?.takeIf(String::isNotEmpty)
                 ?: throw IllegalStateException("Twitch chat send response did not contain message_id")
             chatState.markOutgoingSent(channel.id, localMessageId, serverMessageId)
+            chatState.clearRateLimit(channel.id)
             return result
         } catch (cancelled: CancellationException) {
             chatState.markOutgoingFailed(
@@ -121,6 +123,15 @@ class TwitchChatMessageRuntime(
         } catch (error: Throwable) {
             chatState.markOutgoingFailed(channel.id, localMessageId, error.message)
             val apiError = error.findChatMessageCause<TwitchChatMessageMutationException>()
+            if (apiError?.statusCode == 429) {
+                chatState.updateRateLimit(
+                    channelId = channel.id,
+                    rateLimit = ChatRateLimitState(
+                        message = apiError.twitchMessage,
+                        retryAtMillis = apiError.retryAtMillis,
+                    ),
+                )
+            }
             if (apiError?.statusCode == 401) {
                 chatState.markAuthenticationRequired(apiError.message)
             }

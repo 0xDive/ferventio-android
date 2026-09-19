@@ -8,6 +8,7 @@ import io.ferventio.app.domain.AutoModMessageStatus
 import io.ferventio.app.domain.ChatBadge
 import io.ferventio.app.domain.ChatBadgeAsset
 import io.ferventio.app.domain.ChatMessage
+import io.ferventio.app.domain.ChatRateLimitState
 import io.ferventio.app.domain.ChatScrollPosition
 import io.ferventio.app.domain.CheermoteAsset
 import io.ferventio.app.domain.ConnectionStatus
@@ -55,6 +56,8 @@ class ChatRuntimeStateHolder(
     var interactiveState by mutableStateOf(InteractiveChatOverlayState())
         private set
     var autoModQueue by mutableStateOf(emptyList<AutoModHeldMessage>())
+        private set
+    var rateLimitsByChannel by mutableStateOf(emptyMap<String, ChatRateLimitState>())
         private set
     var connectionStatus by mutableStateOf(ConnectionStatus.DISCONNECTED)
         private set
@@ -116,6 +119,24 @@ class ChatRuntimeStateHolder(
 
     fun scrollPosition(channelId: String): ChatScrollPosition? =
         scrollPositionsByChannel[channelId.trim()]
+
+    fun rateLimit(channelId: String): ChatRateLimitState? =
+        rateLimitsByChannel[channelId.trim()]
+
+    fun updateRateLimit(channelId: String, rateLimit: ChatRateLimitState) {
+        val normalizedChannelId = requireChannelId(channelId)
+        val normalizedMessage = rateLimit.message.trim().takeIf(String::isNotEmpty)
+            ?: "Twitch send rate limit"
+        rateLimitsByChannel = rateLimitsByChannel + (
+            normalizedChannelId to rateLimit.copy(message = normalizedMessage)
+        )
+    }
+
+    fun clearRateLimit(channelId: String) {
+        val normalizedChannelId = channelId.trim()
+        if (normalizedChannelId.isEmpty()) return
+        rateLimitsByChannel = rateLimitsByChannel - normalizedChannelId
+    }
 
     fun updateScrollPosition(position: ChatScrollPosition) {
         val channelId = requireChannelId(position.channelId)
@@ -483,6 +504,7 @@ class ChatRuntimeStateHolder(
         badgeAssetsByChannel = badgeAssetsByChannel - normalized
         cheermoteAssetsByChannel = cheermoteAssetsByChannel - normalized
         autoModQueue = autoModQueue.filterNot { it.channelId == normalized }
+        rateLimitsByChannel = rateLimitsByChannel - normalized
         applyInteractive(InteractiveChatOverlayEvent.ClearChannel(normalized))
     }
 
@@ -494,6 +516,7 @@ class ChatRuntimeStateHolder(
         badgeAssetsByChannel = badgeAssetsByChannel.filterKeys(allowed::contains)
         cheermoteAssetsByChannel = cheermoteAssetsByChannel.filterKeys(allowed::contains)
         autoModQueue = autoModQueue.filter { it.channelId in allowed }
+        rateLimitsByChannel = rateLimitsByChannel.filterKeys(allowed::contains)
         val interactiveChannels = interactiveState.pollsByChannel.keys +
             interactiveState.predictionsByChannel.keys + interactiveState.mutationsByChannel.keys
         interactiveChannels.filterNot(allowed::contains).forEach { channelId ->
@@ -537,6 +560,7 @@ class ChatRuntimeStateHolder(
         cheermoteAssetsByChannel = emptyMap()
         interactiveState = InteractiveChatOverlayState()
         autoModQueue = emptyList()
+        rateLimitsByChannel = emptyMap()
         authenticationRequired = false
         updateConnection(ConnectionStatus.DISCONNECTED)
     }

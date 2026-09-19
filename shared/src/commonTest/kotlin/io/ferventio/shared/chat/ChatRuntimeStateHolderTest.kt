@@ -4,6 +4,7 @@ import io.ferventio.app.domain.AutoModHeldMessage
 import io.ferventio.app.domain.AutoModMessageStatus
 import io.ferventio.app.domain.ChatAuthor
 import io.ferventio.app.domain.ChatMessage
+import io.ferventio.app.domain.ChatRateLimitState
 import io.ferventio.app.domain.ChatScrollPosition
 import io.ferventio.app.domain.ConnectionStatus
 import io.ferventio.app.domain.ModerationAction
@@ -205,6 +206,29 @@ class ChatRuntimeStateHolderTest {
 
         holder.retainChannels(listOf("other"))
         assertTrue(holder.autoModQueue.isEmpty())
+    }
+
+    @Test
+    fun rateLimitStateIsTransientAndFollowsChannelLifecycle() {
+        val holder = ChatRuntimeStateHolder()
+        holder.updateRateLimit(
+            CHANNEL_ID,
+            ChatRateLimitState(
+                message = "rate limited",
+                retryAtMillis = 12_000L,
+            ),
+        )
+
+        assertEquals("rate limited", holder.rateLimit(CHANNEL_ID)?.message)
+        assertEquals(12_000L, holder.rateLimit(CHANNEL_ID)?.retryAtMillis)
+        assertTrue(ChatRuntimeStateHolder(holder.snapshot).rateLimitsByChannel.isEmpty())
+
+        holder.retainChannels(listOf("other"))
+        assertTrue(holder.rateLimitsByChannel.isEmpty())
+
+        holder.updateRateLimit(CHANNEL_ID, ChatRateLimitState("again"))
+        holder.removeChannel(CHANNEL_ID)
+        assertTrue(holder.rateLimitsByChannel.isEmpty())
     }
 
     @Test
