@@ -256,7 +256,7 @@ internal fun FerventioSettingsSheet(
                     onOpenNotificationSettings = onOpenNotificationSettings,
                     update = ::update,
                 )
-                SharedSettingsPage.HIGHLIGHTS -> SettingsContentSection(
+                SharedSettingsPage.HIGHLIGHTS -> FerventioSettingsSection(
                     title = stringResource(Res.string.message_rules_highlights),
                 ) {
                     FerventioMessageRulesPage(
@@ -268,7 +268,7 @@ internal fun FerventioSettingsSheet(
                         onDeleteIgnoreRule = onDeleteIgnoreRule,
                     )
                 }
-                SharedSettingsPage.IGNORE -> SettingsContentSection(
+                SharedSettingsPage.IGNORE -> FerventioSettingsSection(
                     title = stringResource(Res.string.message_rules_ignore),
                 ) {
                     FerventioMessageRulesPage(
@@ -280,7 +280,7 @@ internal fun FerventioSettingsSheet(
                         onDeleteIgnoreRule = onDeleteIgnoreRule,
                     )
                 }
-                SharedSettingsPage.FILTERS -> SettingsContentSection(
+                SharedSettingsPage.FILTERS -> FerventioSettingsSection(
                     title = stringResource(Res.string.settings_filter_language),
                 ) {
                     FerventioSavedFiltersPage(
@@ -494,10 +494,7 @@ private fun SettingsHome(
     }
 }
 
-@Composable
-private fun SettingsContentSection(
-    title: String,
-    content: @Composable ColumnScope.() -> Unit,
+@Composable ColumnScope.() -> Unit,
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -849,113 +846,134 @@ private fun AppearanceSettingsPage(
     preferences: SharedAppPreferences,
     update: ((SharedAppPreferences) -> SharedAppPreferences) -> Unit,
 ) {
-    SettingsSectionTitle(stringResource(Res.string.settings_appearance))
-    SettingsChoiceGroup(
-        title = stringResource(Res.string.settings_theme),
-        options = listOf(
-            AppThemeMode.LIGHT to stringResource(Res.string.settings_theme_light),
-            AppThemeMode.DARK to stringResource(Res.string.settings_theme_dark),
-            AppThemeMode.AMOLED to stringResource(Res.string.settings_theme_amoled),
-        ),
-        selected = preferences.themeMode,
-        onSelected = { value -> update { it.copy(themeMode = value) } },
-    )
-    SettingsChoiceGroup(
-        title = stringResource(Res.string.settings_font_size, preferences.fontScalePercent),
-        options = AppearanceSettingsPresets.FONT_SCALE_PERCENT.map { value -> value to "$value%" },
-        selected = preferences.fontScalePercent,
-        onSelected = { value -> update { it.copy(fontScalePercent = value) } },
-    )
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        FerventioSettingsSection(
+            title = stringResource(Res.string.settings_theme_scale_section),
+        ) {
+            SettingsChoiceGroup(
+                title = stringResource(Res.string.settings_theme),
+                options = listOf(
+                    AppThemeMode.LIGHT to stringResource(Res.string.settings_theme_light),
+                    AppThemeMode.DARK to stringResource(Res.string.settings_theme_dark),
+                    AppThemeMode.AMOLED to stringResource(Res.string.settings_theme_amoled),
+                ),
+                selected = preferences.themeMode,
+                onSelected = { value -> update { it.copy(themeMode = value) } },
+            )
+            SettingsChoiceGroup(
+                title = stringResource(Res.string.settings_font_size, preferences.fontScalePercent),
+                options = AppearanceSettingsPresets.FONT_SCALE_PERCENT.map { value -> value to "$value%" },
+                selected = preferences.fontScalePercent,
+                onSelected = { value -> update { it.copy(fontScalePercent = value) } },
+            )
+        }
 
-    SettingsChoiceGroup(
-        title = stringResource(Res.string.settings_density),
-        options = listOf(
-            MessageDensity.COMPACT to stringResource(Res.string.settings_density_compact),
-            MessageDensity.NORMAL to stringResource(Res.string.settings_density_normal),
-            MessageDensity.RELAXED to stringResource(Res.string.settings_density_relaxed),
-        ),
-        selected = preferences.messageDensity,
-        onSelected = { value -> update { it.copy(messageDensity = value) } },
-    )
-    SettingsChoiceGroup(
-        title = stringResource(Res.string.settings_name_style),
-        options = listOf(
-            ChatNameStyle.DISPLAY_NAME to stringResource(Res.string.settings_name_display),
-            ChatNameStyle.LOGIN to stringResource(Res.string.settings_name_login),
-            ChatNameStyle.DISPLAY_AND_LOGIN to stringResource(Res.string.settings_name_both),
-        ),
-        selected = preferences.nameStyle,
-        onSelected = { value -> update { it.copy(nameStyle = value) } },
-    )
-    SettingsSwitchRow(
-        label = stringResource(Res.string.settings_show_avatars),
-        checked = preferences.showAvatars,
-        onCheckedChange = { value -> update { it.copy(showAvatars = value) } },
-    )
-    SettingsSwitchRow(
-        label = stringResource(Res.string.settings_show_badges),
-        checked = preferences.showBadges,
-        onCheckedChange = { value -> update { it.copy(showBadges = value) } },
-    )
-    SettingsSwitchRow(
-        label = stringResource(Res.string.settings_show_timestamps),
-        checked = preferences.showTimestamps,
-        onCheckedChange = { value -> update { it.copy(showTimestamps = value) } },
-    )
-    SettingsSwitchRow(
-        label = stringResource(Res.string.settings_wrap_messages),
-        checked = preferences.wrapMessageLines,
-        onCheckedChange = { value -> update { it.copy(wrapMessageLines = value) } },
-    )
-    SettingsSwitchRow(
-        label = stringResource(Res.string.settings_show_deleted_content),
-        checked = preferences.showDeletedMessageContent,
-        onCheckedChange = { value -> update { it.copy(showDeletedMessageContent = value) } },
-    )
-    SettingsSwitchRow(
-        label = stringResource(Res.string.settings_show_system_messages),
-        checked = preferences.showSystemMessages,
-        onCheckedChange = { value -> update { it.copy(showSystemMessages = value) } },
-    )
-    Text(
-        text = stringResource(Res.string.settings_mention_color),
-        style = MaterialTheme.typography.bodyMedium,
-        fontWeight = FontWeight.Medium,
-        modifier = Modifier.padding(top = 8.dp),
-    )
-    SettingsMentionColorPicker(
-        selectedArgb = preferences.mentionColorArgb,
-        onSelected = { value -> update { it.copy(mentionColorArgb = value) } },
-    )
+        FerventioSettingsSection(
+            title = stringResource(Res.string.settings_messages_section),
+        ) {
+            SettingsChoiceGroup(
+                title = stringResource(Res.string.settings_density),
+                options = listOf(
+                    MessageDensity.COMPACT to stringResource(Res.string.settings_density_compact),
+                    MessageDensity.NORMAL to stringResource(Res.string.settings_density_normal),
+                    MessageDensity.RELAXED to stringResource(Res.string.settings_density_relaxed),
+                ),
+                selected = preferences.messageDensity,
+                onSelected = { value -> update { it.copy(messageDensity = value) } },
+            )
+            SettingsChoiceGroup(
+                title = stringResource(Res.string.settings_name_style),
+                options = listOf(
+                    ChatNameStyle.DISPLAY_NAME to stringResource(Res.string.settings_name_display),
+                    ChatNameStyle.LOGIN to stringResource(Res.string.settings_name_login),
+                    ChatNameStyle.DISPLAY_AND_LOGIN to stringResource(Res.string.settings_name_both),
+                ),
+                selected = preferences.nameStyle,
+                onSelected = { value -> update { it.copy(nameStyle = value) } },
+            )
+            SettingsSwitchRow(
+                label = stringResource(Res.string.settings_wrap_messages),
+                checked = preferences.wrapMessageLines,
+                onCheckedChange = { value -> update { it.copy(wrapMessageLines = value) } },
+            )
+            SettingsSwitchRow(
+                label = stringResource(Res.string.settings_auto_scroll),
+                checked = preferences.autoScrollEnabled,
+                onCheckedChange = { value -> update { it.copy(autoScrollEnabled = value) } },
+            )
+            SettingsSwitchRow(
+                label = stringResource(Res.string.settings_repeat_collapse),
+                checked = preferences.repeatCollapseEnabled,
+                onCheckedChange = { value -> update { it.copy(repeatCollapseEnabled = value) } },
+            )
+            Text(
+                text = stringResource(Res.string.settings_mention_color),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            SettingsMentionColorPicker(
+                selectedArgb = preferences.mentionColorArgb,
+                onSelected = { value -> update { it.copy(mentionColorArgb = value) } },
+            )
+            SettingsSwitchRow(
+                label = stringResource(Res.string.settings_show_avatars),
+                checked = preferences.showAvatars,
+                onCheckedChange = { value -> update { it.copy(showAvatars = value) } },
+            )
+            SettingsSwitchRow(
+                label = stringResource(Res.string.settings_show_badges),
+                checked = preferences.showBadges,
+                onCheckedChange = { value -> update { it.copy(showBadges = value) } },
+            )
+            SettingsSwitchRow(
+                label = stringResource(Res.string.settings_show_timestamps),
+                checked = preferences.showTimestamps,
+                onCheckedChange = { value -> update { it.copy(showTimestamps = value) } },
+            )
+            SettingsSwitchRow(
+                label = stringResource(Res.string.settings_show_deleted_content),
+                checked = preferences.showDeletedMessageContent,
+                onCheckedChange = { value -> update { it.copy(showDeletedMessageContent = value) } },
+            )
+            SettingsSwitchRow(
+                label = stringResource(Res.string.settings_show_system_messages),
+                checked = preferences.showSystemMessages,
+                onCheckedChange = { value -> update { it.copy(showSystemMessages = value) } },
+            )
+        }
 
-    HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
-    SettingsSectionTitle(stringResource(Res.string.settings_media))
-    SettingsSwitchRow(
-        label = stringResource(Res.string.settings_animate_emotes),
-        checked = preferences.animateEmotes,
-        onCheckedChange = { value -> update { it.copy(animateEmotes = value) } },
-    )
-    SettingsChoiceGroup(
-        title = stringResource(Res.string.settings_emote_size, preferences.emoteScalePercent),
-        options = AppearanceSettingsPresets.EMOTE_SCALE_PERCENT.map { value -> value to "$value%" },
-        selected = preferences.emoteScalePercent,
-        onSelected = { value -> update { it.copy(emoteScalePercent = value) } },
-    )
-    SettingsSwitchRow(
-        label = stringResource(Res.string.settings_bttv),
-        checked = preferences.betterTtvEnabled,
-        onCheckedChange = { value -> update { it.copy(betterTtvEnabled = value) } },
-    )
-    SettingsSwitchRow(
-        label = stringResource(Res.string.settings_ffz),
-        checked = preferences.frankerFaceZEnabled,
-        onCheckedChange = { value -> update { it.copy(frankerFaceZEnabled = value) } },
-    )
-    SettingsSwitchRow(
-        label = stringResource(Res.string.settings_7tv),
-        checked = preferences.sevenTvEnabled,
-        onCheckedChange = { value -> update { it.copy(sevenTvEnabled = value) } },
-    )
+        FerventioSettingsSection(
+            title = stringResource(Res.string.settings_emotes_section),
+        ) {
+            SettingsSwitchRow(
+                label = stringResource(Res.string.settings_animate_emotes),
+                checked = preferences.animateEmotes,
+                onCheckedChange = { value -> update { it.copy(animateEmotes = value) } },
+            )
+            SettingsChoiceGroup(
+                title = stringResource(Res.string.settings_emote_size, preferences.emoteScalePercent),
+                options = AppearanceSettingsPresets.EMOTE_SCALE_PERCENT.map { value -> value to "$value%" },
+                selected = preferences.emoteScalePercent,
+                onSelected = { value -> update { it.copy(emoteScalePercent = value) } },
+            )
+            SettingsSwitchRow(
+                label = stringResource(Res.string.settings_bttv),
+                checked = preferences.betterTtvEnabled,
+                onCheckedChange = { value -> update { it.copy(betterTtvEnabled = value) } },
+            )
+            SettingsSwitchRow(
+                label = stringResource(Res.string.settings_ffz),
+                checked = preferences.frankerFaceZEnabled,
+                onCheckedChange = { value -> update { it.copy(frankerFaceZEnabled = value) } },
+            )
+            SettingsSwitchRow(
+                label = stringResource(Res.string.settings_7tv),
+                checked = preferences.sevenTvEnabled,
+                onCheckedChange = { value -> update { it.copy(sevenTvEnabled = value) } },
+            )
+        }
+    }
 }
 
 @Composable
@@ -963,31 +981,21 @@ private fun ChatBehaviorSettingsPage(
     preferences: SharedAppPreferences,
     update: ((SharedAppPreferences) -> SharedAppPreferences) -> Unit,
 ) {
-    SettingsSectionTitle(stringResource(Res.string.settings_chat))
-    SettingsSwitchRow(
-        label = stringResource(Res.string.settings_auto_scroll),
-        checked = preferences.autoScrollEnabled,
-        onCheckedChange = { value -> update { it.copy(autoScrollEnabled = value) } },
-    )
-    SettingsSwitchRow(
-        label = stringResource(Res.string.settings_repeat_collapse),
-        checked = preferences.repeatCollapseEnabled,
-        onCheckedChange = { value -> update { it.copy(repeatCollapseEnabled = value) } },
-    )
-    QuickModerationSettingsSection()
-
-    HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
-    SettingsSectionTitle(stringResource(Res.string.settings_composer))
-    SettingsSwitchRow(
-        label = stringResource(Res.string.settings_send_on_enter),
-        checked = preferences.sendOnEnter,
-        onCheckedChange = { value -> update { it.copy(sendOnEnter = value) } },
-    )
-    SettingsSwitchRow(
-        label = stringResource(Res.string.settings_composer_emote_images),
-        checked = preferences.showComposerEmoteImages,
-        onCheckedChange = { value -> update { it.copy(showComposerEmoteImages = value) } },
-    )
+    FerventioSettingsSection(
+        title = stringResource(Res.string.settings_composer),
+    ) {
+        SettingsSwitchRow(
+            label = stringResource(Res.string.settings_send_on_enter),
+            checked = preferences.sendOnEnter,
+            onCheckedChange = { value -> update { it.copy(sendOnEnter = value) } },
+        )
+        SettingsSwitchRow(
+            label = stringResource(Res.string.settings_composer_emote_images),
+            checked = preferences.showComposerEmoteImages,
+            onCheckedChange = { value -> update { it.copy(showComposerEmoteImages = value) } },
+        )
+        QuickModerationSettingsSection()
+    }
 }
 
 @Composable
@@ -998,36 +1006,40 @@ private fun NotificationsSettingsPage(
     onOpenNotificationSettings: () -> Unit,
     update: ((SharedAppPreferences) -> SharedAppPreferences) -> Unit,
 ) {
-    SettingsSwitchRow(
-        label = stringResource(Res.string.settings_reply_notifications),
-        checked = preferences.replyNotificationsEnabled,
-        onCheckedChange = { value -> update { it.copy(replyNotificationsEnabled = value) } },
-    )
-    SettingsSwitchRow(
-        label = stringResource(Res.string.settings_automod_notifications),
-        checked = preferences.autoModNotificationsEnabled,
-        onCheckedChange = { value -> update { it.copy(autoModNotificationsEnabled = value) } },
-    )
-    TextButton(
-        onClick = {
-            when (notificationAction) {
-                NotificationPermissionAction.REQUEST_PERMISSION -> onRequestNotificationPermission()
-                NotificationPermissionAction.OPEN_SETTINGS -> onOpenNotificationSettings()
-                NotificationPermissionAction.NONE -> Unit
-            }
-        },
-        enabled = notificationAction != NotificationPermissionAction.NONE,
-        modifier = Modifier.fillMaxWidth(),
+    FerventioSettingsSection(
+        title = stringResource(Res.string.settings_notifications_section),
     ) {
-        Text(
-            when (notificationAction) {
-                NotificationPermissionAction.REQUEST_PERMISSION -> stringResource(Res.string.notifications_enable)
-                NotificationPermissionAction.OPEN_SETTINGS -> stringResource(Res.string.notifications_open_settings)
-                NotificationPermissionAction.NONE -> stringResource(Res.string.notifications_enabled)
-            },
+        SettingsSwitchRow(
+            label = stringResource(Res.string.settings_reply_notifications),
+            checked = preferences.replyNotificationsEnabled,
+            onCheckedChange = { value -> update { it.copy(replyNotificationsEnabled = value) } },
         )
+        SettingsSwitchRow(
+            label = stringResource(Res.string.settings_automod_notifications),
+            checked = preferences.autoModNotificationsEnabled,
+            onCheckedChange = { value -> update { it.copy(autoModNotificationsEnabled = value) } },
+        )
+        TextButton(
+            onClick = {
+                when (notificationAction) {
+                    NotificationPermissionAction.REQUEST_PERMISSION -> onRequestNotificationPermission()
+                    NotificationPermissionAction.OPEN_SETTINGS -> onOpenNotificationSettings()
+                    NotificationPermissionAction.NONE -> Unit
+                }
+            },
+            enabled = notificationAction != NotificationPermissionAction.NONE,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(
+                when (notificationAction) {
+                    NotificationPermissionAction.REQUEST_PERMISSION -> stringResource(Res.string.notifications_enable)
+                    NotificationPermissionAction.OPEN_SETTINGS -> stringResource(Res.string.notifications_open_settings)
+                    NotificationPermissionAction.NONE -> stringResource(Res.string.notifications_enabled)
+                },
+            )
+        }
+        FerventioPushSettingsSection()
     }
-    FerventioPushSettingsSection()
 }
 
 @Composable
@@ -1096,15 +1108,19 @@ private fun UserCardSettingsPage(
     preferences: SharedAppPreferences,
     update: ((SharedAppPreferences) -> SharedAppPreferences) -> Unit,
 ) {
-    SettingsSwitchRow(
-        label = stringResource(Res.string.settings_user_card_show_ban),
-        checked = preferences.userCardShowBanAction,
-        onCheckedChange = { value -> update { it.copy(userCardShowBanAction = value) } },
-    )
-    UserCardModerationSettingsEditor(
-        preferences = preferences,
-        onPreferencesChange = { next -> update { next } },
-    )
+    FerventioSettingsSection(
+        title = stringResource(Res.string.settings_user_card),
+    ) {
+        SettingsSwitchRow(
+            label = stringResource(Res.string.settings_user_card_show_ban),
+            checked = preferences.userCardShowBanAction,
+            onCheckedChange = { value -> update { it.copy(userCardShowBanAction = value) } },
+        )
+        UserCardModerationSettingsEditor(
+            preferences = preferences,
+            onPreferencesChange = { next -> update { next } },
+        )
+    }
 }
 
 @Composable

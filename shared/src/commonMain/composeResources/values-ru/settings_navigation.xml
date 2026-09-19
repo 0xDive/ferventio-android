@@ -4,10 +4,10 @@
     <string name="settings_home_data_group">Данные</string>
     <string name="settings_home_app_group">Приложение</string>
     <string name="settings_messages_appearance">Сообщения и внешний вид</string>
-    <string name="settings_messages_appearance_summary">Тема, текст, имена и отображение сообщений</string>
+    <string name="settings_messages_appearance_summary">Аватары, время, значки, удалённые сообщения и emotes</string>
     <string name="settings_input_behavior">Ввод и поведение</string>
-    <string name="settings_input_behavior_summary">Автопрокрутка, быстрая модерация и поле ввода</string>
-    <string name="settings_user_card_summary">Действия модерации и варианты таймаута</string>
+    <string name="settings_input_behavior_summary">Черновики, Enter, отображение emotes и быстрая модерация</string>
+    <string name="settings_user_card_summary">Timeout-интервалы и порядок кнопок модерации</string>
     <string name="settings_message_rules_summary">Highlights, Ignore и действия уведомлений</string>
     <string name="settings_highlights_summary">Имя, слова, regex, роли, reply, rewards и bits</string>
     <string name="settings_ignore_summary">Пользователи, слова, bot-команды и типы сообщений</string>
@@ -18,7 +18,7 @@
     <string name="settings_export_sync">Экспорт и синхронизация</string>
     <string name="settings_export_sync_summary">Резервная копия, восстановление и ревизия синхронизации</string>
     <string name="settings_backup_description">Резервная копия содержит настройки интерфейса, каналы, workspaces, filters, highlights и ignore rules. Локальная история сообщений и Twitch-токены никогда не экспортируются.</string>
-    <string name="settings_backup_revision">Синхронизированная ревизия %1$d</string>
+    <string name="settings_backup_revision">Ревизия %1$d · Синхронизировано</string>
     <string name="settings_backup_not_synced">Синхронизированной ревизии настроек пока нет.</string>
     <string name="settings_backup_export">Экспортировать копию</string>
     <string name="settings_backup_import">Импортировать копию</string>
@@ -48,5 +48,9 @@
     <string name="settings_language_system_summary">Использовать язык устройства</string>
     <string name="settings_language_russian_summary">Русский</string>
     <string name="settings_language_english_summary">English</string>
+    <string name="settings_theme_scale_section">Тема и масштаб</string>
+    <string name="settings_messages_section">Сообщения</string>
+    <string name="settings_emotes_section">Emotes</string>
+    <string name="settings_notifications_section">Push-уведомления</string>
     <string name="settings_back">Назад</string>
 </resources>
