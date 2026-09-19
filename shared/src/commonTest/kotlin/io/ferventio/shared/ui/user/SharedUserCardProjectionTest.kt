@@ -108,6 +108,34 @@ class SharedUserCardProjectionTest {
     }
 
     @Test
+    fun mobileRecentMessagesKeepNewestFirstAndStayBounded() {
+        val messages = (1..20).map { index -> message(id = "m$index") }
+
+        val visible = userCardRecentMessagesForDisplay(
+            messages = messages,
+            selectedMessageId = null,
+        )
+
+        assertEquals(12, visible.size)
+        assertEquals("m20", visible.first().id)
+        assertEquals("m9", visible.last().id)
+    }
+
+    @Test
+    fun mobileRecentMessagesKeepOlderSelectedMessageVisible() {
+        val messages = (1..20).map { index -> message(id = "m$index") }
+
+        val visible = userCardRecentMessagesForDisplay(
+            messages = messages,
+            selectedMessageId = "m3",
+        )
+
+        assertEquals(12, visible.size)
+        assertEquals("m3", visible.first().id)
+        assertTrue(visible.any { it.id == "m20" })
+    }
+
+    @Test
     fun blankIdsMatchByLoginIgnoringCase() {
         val source = message(id = "source", userId = "", login = "Viewer")
         val sameUser = message(id = "same", userId = "", login = "viewer")

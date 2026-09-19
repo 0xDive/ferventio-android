@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="user_card_done">Done</string>
+    <string name="user_card_more_actions">More actions</string>
+    <string name="user_card_copy_username">Copy username</string>
+</resources>

@@ -1,13 +1,23 @@
 package io.ferventio.shared.ui.user
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Restore
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -20,6 +30,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import io.ferventio.app.domain.UserCardBanState
 import io.ferventio.app.domain.UserCardData
@@ -65,6 +78,7 @@ private data class UserCardModerationFeedback(
 @Composable
 internal fun UserCardModerationActions(
     data: UserCardData,
+    modifier: Modifier = Modifier,
 ) {
     val runtime = LocalFerventioRuntimeState.current
     val authentication = runtime.authentication.state.authentication
@@ -148,71 +162,96 @@ internal fun UserCardModerationActions(
         null -> ""
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(
+        modifier = modifier,
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         Text(
             text = stringResource(Res.string.user_card_moderation_actions),
-            style = MaterialTheme.typography.titleSmall,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        if (availability.canModerateUser) {
-            configuredActions.forEach { action ->
-                when (action) {
-                    is UserCardRuntimeModerationAction.Timeout -> {
-                        OutlinedButton(
-                            onClick = {
-                                pendingAction = UserCardPendingModerationAction.Timeout(
-                                    action.durationSeconds,
+        androidx.compose.material3.Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+        ) {
+            Column {
+                if (availability.canModerateUser) {
+                    configuredActions.forEachIndexed { index, action ->
+                        when (action) {
+                            is UserCardRuntimeModerationAction.Timeout -> {
+                                UserCardModerationActionRow(
+                                    label = userCardTimeoutActionLabel(action.durationSeconds),
+                                    icon = Icons.Default.Timer,
+                                    contentColor = MaterialTheme.colorScheme.error,
+                                    enabled = !mutationInFlight,
+                                    onClick = {
+                                        pendingAction = UserCardPendingModerationAction.Timeout(
+                                            action.durationSeconds,
+                                        )
+                                    },
                                 )
-                            },
-                            enabled = !mutationInFlight,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(userCardTimeoutActionLabel(action.durationSeconds))
+                            }
+                            UserCardRuntimeModerationAction.Warn -> {
+                                UserCardModerationActionRow(
+                                    label = stringResource(Res.string.settings_user_card_action_warn),
+                                    icon = Icons.Default.Warning,
+                                    contentColor = MaterialTheme.colorScheme.tertiary,
+                                    enabled = !mutationInFlight,
+                                    onClick = {
+                                        warnReason = ""
+                                        showWarnDialog = true
+                                    },
+                                )
+                            }
+                            UserCardRuntimeModerationAction.Ban -> {
+                                UserCardModerationActionRow(
+                                    label = stringResource(Res.string.user_card_ban),
+                                    icon = Icons.Default.Block,
+                                    contentColor = MaterialTheme.colorScheme.error,
+                                    enabled = !mutationInFlight,
+                                    onClick = {
+                                        pendingAction = UserCardPendingModerationAction.Ban
+                                    },
+                                )
+                            }
+                            UserCardRuntimeModerationAction.Unban -> {
+                                UserCardModerationActionRow(
+                                    label = stringResource(
+                                        Res.string.settings_user_card_action_unban,
+                                    ),
+                                    icon = Icons.Default.Restore,
+                                    contentColor = MaterialTheme.colorScheme.primary,
+                                    enabled = !mutationInFlight,
+                                    onClick = {
+                                        pendingAction = UserCardPendingModerationAction.Unban
+                                    },
+                                )
+                            }
                         }
-                    }
-                    UserCardRuntimeModerationAction.Warn -> {
-                        OutlinedButton(
-                            onClick = {
-                                warnReason = ""
-                                showWarnDialog = true
-                            },
-                            enabled = !mutationInFlight,
-                            modifier = Modifier.fillMaxWidth(),
+                        if (
+                            index != configuredActions.lastIndex ||
+                            availability.canDeleteSourceMessage
                         ) {
-                            Text(stringResource(Res.string.settings_user_card_action_warn))
-                        }
-                    }
-                    UserCardRuntimeModerationAction.Ban -> {
-                        Button(
-                            onClick = { pendingAction = UserCardPendingModerationAction.Ban },
-                            enabled = !mutationInFlight,
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.error,
-                                contentColor = MaterialTheme.colorScheme.onError,
-                            ),
-                        ) {
-                            Text(stringResource(Res.string.user_card_ban))
-                        }
-                    }
-                    UserCardRuntimeModerationAction.Unban -> {
-                        OutlinedButton(
-                            onClick = { pendingAction = UserCardPendingModerationAction.Unban },
-                            enabled = !mutationInFlight,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(stringResource(Res.string.settings_user_card_action_unban))
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 12.dp),
+                                color = MaterialTheme.colorScheme.outlineVariant,
+                            )
                         }
                     }
                 }
-            }
-        }
-        if (availability.canDeleteSourceMessage) {
-            OutlinedButton(
-                onClick = { pendingAction = UserCardPendingModerationAction.DeleteMessage },
-                enabled = !mutationInFlight,
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                Text(stringResource(Res.string.user_card_delete_message))
+                if (availability.canDeleteSourceMessage) {
+                    UserCardModerationActionRow(
+                        label = stringResource(Res.string.user_card_delete_message),
+                        icon = Icons.Default.Delete,
+                        contentColor = MaterialTheme.colorScheme.error,
+                        enabled = !mutationInFlight,
+                        onClick = {
+                            pendingAction = UserCardPendingModerationAction.DeleteMessage
+                        },
+                    )
+                }
             }
         }
         feedback?.let { result ->
@@ -403,6 +442,44 @@ internal fun UserCardModerationActions(
                 ) {
                     Text(stringResource(Res.string.user_card_cancel))
                 }
+            },
+        )
+    }
+}
+
+@Composable
+private fun UserCardModerationActionRow(
+    label: String,
+    icon: ImageVector,
+    contentColor: Color,
+    enabled: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 14.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = if (enabled) {
+                contentColor
+            } else {
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+            },
+            modifier = Modifier.size(22.dp),
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (enabled) {
+                contentColor
+            } else {
+                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
             },
         )
     }
