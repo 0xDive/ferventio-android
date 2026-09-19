@@ -56,4 +56,19 @@ class SharedComposerCommandRoutingTest {
             routeSharedComposerSubmission("/timeout"),
         )
     }
+    @Test
+    fun nukeCommandRoutesToPreviewInsteadOfChatWire() {
+        val routed = assertIs<SharedComposerSubmission.Nuke>(
+            routeSharedComposerSubmission("/nuke spam phrase"),
+        )
+        assertEquals("spam phrase", routed.config.query)
+    }
+
+    @Test
+    fun emptyNukeCommandReturnsParserError() {
+        assertIs<SharedComposerSubmission.Error>(
+            routeSharedComposerSubmission("/nuke"),
+        )
+    }
+
 }

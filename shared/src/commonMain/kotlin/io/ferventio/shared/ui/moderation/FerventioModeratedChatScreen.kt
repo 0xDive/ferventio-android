@@ -26,12 +26,12 @@ import androidx.compose.ui.unit.dp
 import io.ferventio.app.domain.ChatChannel
 import io.ferventio.app.domain.ChatMessage
 import io.ferventio.app.domain.ConfirmedModerationCommand
+import io.ferventio.app.domain.NukePreviewConfig
 import io.ferventio.app.domain.UserCardData
 import io.ferventio.shared.chat.TwitchChatManagementClient
 import io.ferventio.shared.generated.resources.Res
 import io.ferventio.shared.generated.resources.chat_command_error_title
 import io.ferventio.shared.generated.resources.chat_command_moderator_required
-import io.ferventio.shared.generated.resources.nuke_preview_action
 import io.ferventio.shared.generated.resources.quick_moderation_auth_required
 import io.ferventio.shared.generated.resources.quick_moderation_error_title
 import io.ferventio.shared.generated.resources.quick_moderation_failed
@@ -90,7 +90,7 @@ fun FerventioModeratedChatScreen(
             chatManagementClient.close()
         }
     }
-    var showNukePreview by remember(channel.id) { mutableStateOf(false) }
+    var pendingNukeConfig by remember(channel.id) { mutableStateOf<NukePreviewConfig?>(null) }
     var selectedUserMessage by remember(channel.id) { mutableStateOf<ChatMessage?>(null) }
     var commandUserCardData by remember(channel.id) { mutableStateOf<UserCardData?>(null) }
     var commandError by remember(channel.id) { mutableStateOf<String?>(null) }
@@ -298,23 +298,6 @@ fun FerventioModeratedChatScreen(
     }
 
     Column(modifier = modifier.fillMaxSize()) {
-        if (canModerateChannel) {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surfaceContainerLow,
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    TextButton(onClick = { showNukePreview = true }) {
-                        Text(stringResource(Res.string.nuke_preview_action))
-                    }
-                }
-            }
-        }
-
         InteractiveChatOverlayCards(channelId = channel.id)
 
         FerventioChatTimeline(
@@ -385,6 +368,14 @@ fun FerventioModeratedChatScreen(
             onSent = { replyTarget = null },
             onUserCardCommand = ::openUserCardCommand,
             onModerationCommand = ::executeModerationCommand,
+            onNukeCommand = { config ->
+                if (canModerateChannel) {
+                    pendingNukeConfig = config
+                } else {
+                    commandError = moderatorRequiredText
+                }
+                true
+            },
             emotes = composerEmotes,
         )
     }
@@ -455,11 +446,17 @@ fun FerventioModeratedChatScreen(
         )
     }
 
-    if (showNukePreview && canModerateChannel) {
+    pendingNukeConfig?.let { config ->
         NukePreviewSheet(
             channelId = channel.id,
             messages = nukePreviewMessages(runtime.chat, channel.id),
-            onDismiss = { showNukePreview = false },
+            initialConfig = config,
+            onExecutionCompleted = {
+                runtime.localUiPreferences.setDraft(channel.id, "")
+                replyTarget = null
+                pendingNukeConfig = null
+            },
+            onDismiss = { pendingNukeConfig = null },
         )
     }
 

@@ -64,6 +64,8 @@ import org.jetbrains.compose.resources.stringResource
 internal fun NukePreviewSheet(
     channelId: String,
     messages: List<ChatMessage>,
+    initialConfig: NukePreviewConfig? = null,
+    onExecutionCompleted: () -> Unit = {},
     onDismiss: () -> Unit,
 ) {
     val runtime = LocalFerventioRuntimeState.current
@@ -78,12 +80,15 @@ internal fun NukePreviewSheet(
             .filter(String::isNotEmpty)
             .toSet()
     }
-    var config by remember(channelId, hardExcludedUserIds) {
+    var config by remember(channelId, hardExcludedUserIds, initialConfig) {
+        val base = initialConfig ?: NukePreviewConfig(
+            query = "",
+            maxSamples = 20,
+        )
         mutableStateOf(
-            NukePreviewConfig(
-                query = "",
-                excludedUserIds = hardExcludedUserIds,
-                maxSamples = 20,
+            base.copy(
+                excludedUserIds = base.excludedUserIds + hardExcludedUserIds,
+                maxSamples = base.maxSamples.coerceIn(1, 50),
             ),
         )
     }
@@ -319,6 +324,7 @@ internal fun NukePreviewSheet(
                         preview = preview,
                         previewedAtMillis = previewedAtMillis,
                         onExecutionInFlightChanged = { executionInFlight = it },
+                        onExecutionCompleted = onExecutionCompleted,
                     )
                 }
             }

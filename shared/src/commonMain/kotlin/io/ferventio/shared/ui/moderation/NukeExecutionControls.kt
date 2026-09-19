@@ -52,6 +52,7 @@ internal fun NukeExecutionControls(
     preview: NukePreview,
     previewedAtMillis: Long,
     onExecutionInFlightChanged: (Boolean) -> Unit,
+    onExecutionCompleted: () -> Unit = {},
 ) {
     val runtime = LocalFerventioRuntimeState.current
     val scope = rememberCoroutineScope()
@@ -210,7 +211,11 @@ internal fun NukeExecutionControls(
                                         error.shouldStopNukeExecution()
                                     },
                                 )
-                                result = coordinator.execute(approvedPlan)
+                                val executionResult = coordinator.execute(approvedPlan)
+                                result = executionResult
+                                if (executionResult.completed) {
+                                    onExecutionCompleted()
+                                }
                             } catch (error: Exception) {
                                 failureMessage = error.message
                                     ?.trim()

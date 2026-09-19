@@ -62,6 +62,7 @@ import io.ferventio.app.domain.ChatMessage
 import io.ferventio.app.domain.ConfirmedModerationCommand
 import io.ferventio.app.domain.ComposerAutocomplete
 import io.ferventio.app.domain.ComposerEmoteVisuals
+import io.ferventio.app.domain.NukePreviewConfig
 import io.ferventio.app.domain.ThirdPartyEmoteAsset
 import io.ferventio.shared.chat.TwitchChatMessageScopeException
 import io.ferventio.shared.generated.resources.Res
@@ -91,6 +92,7 @@ fun SharedChatComposer(
     onSent: () -> Unit,
     onUserCardCommand: (String) -> Boolean = { false },
     onModerationCommand: (ConfirmedModerationCommand) -> Boolean = { false },
+    onNukeCommand: (NukePreviewConfig) -> Boolean = { false },
     emotes: List<ThirdPartyEmoteAsset> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
@@ -226,6 +228,13 @@ fun SharedChatComposer(
                 if (onModerationCommand(submission.command)) {
                     finishLocalSubmission(outgoingText)
                 } else {
+                    errorMessage = commandUnavailableText
+                }
+                return
+            }
+            is SharedComposerSubmission.Nuke -> {
+                errorMessage = null
+                if (!onNukeCommand(submission.config)) {
                     errorMessage = commandUnavailableText
                 }
                 return
