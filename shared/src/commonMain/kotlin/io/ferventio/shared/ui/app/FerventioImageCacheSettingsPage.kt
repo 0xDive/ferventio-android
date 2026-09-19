@@ -45,84 +45,70 @@ internal fun FerventioImageCacheSettingsPage() {
     var clearedBytes by remember { mutableStateOf<Long?>(null) }
     var clearFailed by remember { mutableStateOf(false) }
 
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.extraLarge,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+    FerventioSettingsSection(
+        title = stringResource(Res.string.image_cache_section_title),
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
-            Text(
-                text = stringResource(Res.string.image_cache_section_title),
-                style = MaterialTheme.typography.titleMedium,
-            )
-            Text(
-                text = stringResource(Res.string.image_cache_summary),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            if (isClearing) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
-                    Text(
-                        text = stringResource(Res.string.image_cache_clearing),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            } else if (clearedBytes != null) {
-                Text(
-                    text = stringResource(
-                        Res.string.image_cache_cleared_amount,
-                        formatImageCacheBytes(clearedBytes ?: 0L),
-                    ),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            } else if (clearFailed) {
-                Text(
-                    text = stringResource(Res.string.image_cache_clear_failed),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                )
-            }
-
-            Button(
-                enabled = !isClearing,
-                onClick = {
-                    if (isClearing) return@Button
-                    isClearing = true
-                    clearedBytes = null
-                    clearFailed = false
-                    scope.launch {
-                        try {
-                            val totalBytes = withContext(Dispatchers.Default) {
-                                val memoryBytes = imageLoader.memoryCache?.size ?: 0L
-                                val diskBytes = imageLoader.diskCache?.size ?: 0L
-                                imageLoader.memoryCache?.clear()
-                                imageLoader.diskCache?.clear()
-                                memoryBytes + diskBytes
-                            }
-                            clearedBytes = totalBytes
-                        } catch (error: CancellationException) {
-                            throw error
-                        } catch (_: Throwable) {
-                            clearFailed = true
-                        } finally {
-                            isClearing = false
-                        }
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
+        Text(
+            text = stringResource(Res.string.image_cache_summary),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (isClearing) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Text(stringResource(Res.string.image_cache_clear))
+                CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                Text(
+                    text = stringResource(Res.string.image_cache_clearing),
+                    style = MaterialTheme.typography.bodySmall,
+                )
             }
+        } else if (clearedBytes != null) {
+            Text(
+                text = stringResource(
+                    Res.string.image_cache_cleared_amount,
+                    formatImageCacheBytes(clearedBytes ?: 0L),
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        } else if (clearFailed) {
+            Text(
+                text = stringResource(Res.string.image_cache_clear_failed),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+        Button(
+            enabled = !isClearing,
+            onClick = {
+                if (isClearing) return@Button
+                isClearing = true
+                clearedBytes = null
+                clearFailed = false
+                scope.launch {
+                    try {
+                        val totalBytes = withContext(Dispatchers.Default) {
+                            val memoryBytes = imageLoader.memoryCache?.size ?: 0L
+                            val diskBytes = imageLoader.diskCache?.size ?: 0L
+                            imageLoader.memoryCache?.clear()
+                            imageLoader.diskCache?.clear()
+                            memoryBytes + diskBytes
+                        }
+                        clearedBytes = totalBytes
+                    } catch (error: CancellationException) {
+                        throw error
+                    } catch (_: Throwable) {
+                        clearFailed = true
+                    } finally {
+                        isClearing = false
+                    }
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(Res.string.image_cache_clear))
         }
     }
 }

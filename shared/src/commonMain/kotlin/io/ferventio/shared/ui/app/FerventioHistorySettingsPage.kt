@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
 import io.ferventio.shared.generated.resources.Res
+import io.ferventio.shared.generated.resources.settings_history
 import io.ferventio.shared.generated.resources.settings_history_clear
 import io.ferventio.shared.generated.resources.settings_history_clear_cancel
 import io.ferventio.shared.generated.resources.settings_history_clear_confirm
@@ -69,122 +70,127 @@ internal fun FerventioHistorySettingsPage(
     var clearSucceeded by remember { mutableStateOf(false) }
     var clearFailed by remember { mutableStateOf(false) }
 
-    HistorySwitchRow(
-        label = stringResource(Res.string.settings_recent_messages),
-        checked = preferences.recentMessagesEnabled,
-        onCheckedChange = { value -> update { it.copy(recentMessagesEnabled = value) } },
-    )
-    Text(
-        text = stringResource(Res.string.settings_recent_messages_summary),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    Text(
-        text = stringResource(Res.string.settings_recent_messages_privacy_note),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(top = 6.dp),
-    )
-    TextButton(
-        onClick = { uriHandler.openUri(RECENT_MESSAGES_SERVICE_URL) },
-        modifier = Modifier.fillMaxWidth(),
+    FerventioSettingsSection(
+        title = stringResource(Res.string.settings_history),
     ) {
-        Text(stringResource(Res.string.settings_recent_messages_service_info))
-    }
-
-    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-
-    HistorySwitchRow(
-        label = stringResource(Res.string.settings_local_history),
-        checked = preferences.localHistoryEnabled,
-        onCheckedChange = { value -> update { it.copy(localHistoryEnabled = value) } },
-    )
-    Text(
-        text = stringResource(Res.string.settings_history_device_only),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    if (preferences.localHistoryEnabled) {
-        Spacer(Modifier.height(12.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            HistorySettingsPresets.messageLimits.forEach { value ->
-                HistoryPresetRow(
-                    label = stringResource(Res.string.settings_history_limit, value),
-                    selected = preferences.localHistoryLimit == value,
-                    onClick = { update { it.copy(localHistoryLimit = value) } },
-                )
-            }
-        }
-
-        Spacer(Modifier.height(8.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            HistorySettingsPresets.retentionDays.forEach { days ->
-                HistoryPresetRow(
-                    label = if (days == 0) {
-                        stringResource(Res.string.settings_history_retention_unlimited)
-                    } else {
-                        stringResource(Res.string.settings_history_retention, days)
-                    },
-                    selected = preferences.localHistoryRetentionDays == days,
-                    onClick = { update { it.copy(localHistoryRetentionDays = days) } },
-                )
-            }
-        }
-
-        Spacer(Modifier.height(8.dp))
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            HistorySettingsPresets.maxSizeMb.forEach { sizeMb ->
-                HistoryPresetRow(
-                    label = if (sizeMb == 0) {
-                        stringResource(Res.string.settings_history_max_size_unlimited)
-                    } else {
-                        stringResource(Res.string.settings_history_max_size, sizeMb)
-                    },
-                    selected = preferences.localHistoryMaxSizeMb == sizeMb,
-                    onClick = { update { it.copy(localHistoryMaxSizeMb = sizeMb) } },
-                )
-            }
-        }
-    }
-
-    if (runtime.history != null) {
-        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-        when {
-            isClearing -> Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
-                Text(
-                    text = stringResource(Res.string.settings_history_clearing),
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-            clearSucceeded -> Text(
-                text = stringResource(Res.string.settings_history_cleared),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            clearFailed -> Text(
-                text = stringResource(Res.string.settings_history_clear_failed),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.error,
-            )
-        }
+        HistorySwitchRow(
+            label = stringResource(Res.string.settings_recent_messages),
+            checked = preferences.recentMessagesEnabled,
+            onCheckedChange = { value -> update { it.copy(recentMessagesEnabled = value) } },
+        )
+        Text(
+            text = stringResource(Res.string.settings_recent_messages_summary),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = stringResource(Res.string.settings_recent_messages_privacy_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 6.dp),
+        )
         TextButton(
-            enabled = !isClearing,
-            onClick = {
-                clearSucceeded = false
-                clearFailed = false
-                showClearConfirmation = true
-            },
+            onClick = { uriHandler.openUri(RECENT_MESSAGES_SERVICE_URL) },
             modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(
-                text = stringResource(Res.string.settings_history_clear),
-                color = MaterialTheme.colorScheme.error,
-            )
+            Text(stringResource(Res.string.settings_recent_messages_service_info))
         }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+
+        HistorySwitchRow(
+            label = stringResource(Res.string.settings_local_history),
+            checked = preferences.localHistoryEnabled,
+            onCheckedChange = { value -> update { it.copy(localHistoryEnabled = value) } },
+        )
+        Text(
+            text = stringResource(Res.string.settings_history_device_only),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (preferences.localHistoryEnabled) {
+            Spacer(Modifier.height(12.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                HistorySettingsPresets.messageLimits.forEach { value ->
+                    HistoryPresetRow(
+                        label = stringResource(Res.string.settings_history_limit, value),
+                        selected = preferences.localHistoryLimit == value,
+                        onClick = { update { it.copy(localHistoryLimit = value) } },
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                HistorySettingsPresets.retentionDays.forEach { days ->
+                    HistoryPresetRow(
+                        label = if (days == 0) {
+                            stringResource(Res.string.settings_history_retention_unlimited)
+                        } else {
+                            stringResource(Res.string.settings_history_retention, days)
+                        },
+                        selected = preferences.localHistoryRetentionDays == days,
+                        onClick = { update { it.copy(localHistoryRetentionDays = days) } },
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(8.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                HistorySettingsPresets.maxSizeMb.forEach { sizeMb ->
+                    HistoryPresetRow(
+                        label = if (sizeMb == 0) {
+                            stringResource(Res.string.settings_history_max_size_unlimited)
+                        } else {
+                            stringResource(Res.string.settings_history_max_size, sizeMb)
+                        },
+                        selected = preferences.localHistoryMaxSizeMb == sizeMb,
+                        onClick = { update { it.copy(localHistoryMaxSizeMb = sizeMb) } },
+                    )
+                }
+            }
+        }
+
+        if (runtime.history != null) {
+            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
+            when {
+                isClearing -> Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                    Text(
+                        text = stringResource(Res.string.settings_history_clearing),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                clearSucceeded -> Text(
+                    text = stringResource(Res.string.settings_history_cleared),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                clearFailed -> Text(
+                    text = stringResource(Res.string.settings_history_clear_failed),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+            TextButton(
+                enabled = !isClearing,
+                onClick = {
+                    clearSucceeded = false
+                    clearFailed = false
+                    showClearConfirmation = true
+                },
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text = stringResource(Res.string.settings_history_clear),
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
+        }
+
     }
 
     if (showClearConfirmation) {

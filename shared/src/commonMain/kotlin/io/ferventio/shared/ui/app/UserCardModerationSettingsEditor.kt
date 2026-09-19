@@ -5,6 +5,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -146,7 +151,7 @@ internal fun UserCardModerationSettingsEditor(
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.weight(1f),
                 )
-                TextButton(
+                IconButton(
                     onClick = {
                         onPreferencesChange(
                             UserCardSettingsEditor.moveModerationAction(normalized, actionId, -1),
@@ -154,9 +159,9 @@ internal fun UserCardModerationSettingsEditor(
                     },
                     enabled = index > 0,
                 ) {
-                    Text("↑")
+                    Icon(Icons.Default.KeyboardArrowUp, contentDescription = null)
                 }
-                TextButton(
+                IconButton(
                     onClick = {
                         onPreferencesChange(
                             UserCardSettingsEditor.moveModerationAction(normalized, actionId, 1),
@@ -164,7 +169,7 @@ internal fun UserCardModerationSettingsEditor(
                     },
                     enabled = index < actionIds.lastIndex,
                 ) {
-                    Text("↓")
+                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = null)
                 }
             }
         }

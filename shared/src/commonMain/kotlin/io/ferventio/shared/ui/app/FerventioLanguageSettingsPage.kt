@@ -67,36 +67,33 @@ internal fun FerventioLanguageSettingsPage(
         }
     }
 
-    Text(
-        text = stringResource(Res.string.settings_language),
-        style = MaterialTheme.typography.titleMedium,
-        fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.padding(bottom = 8.dp),
-    )
-    OutlinedTextField(
-        value = query,
-        onValueChange = { query = it.take(80) },
-        modifier = Modifier.fillMaxWidth(),
-        singleLine = true,
-        label = { Text(stringResource(Res.string.settings_language_search)) },
-    )
-
-    if (visibleOptions.isEmpty()) {
-        Text(
-            text = stringResource(Res.string.settings_language_no_results),
-            modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+    FerventioSettingsSection(
+        title = stringResource(Res.string.settings_language),
+    ) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = { query = it.take(80) },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            label = { Text(stringResource(Res.string.settings_language_search)) },
         )
-    } else {
-        Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
-            visibleOptions.forEachIndexed { index, option ->
-                SharedLanguageRow(
-                    option = option,
-                    selected = option.language == preferences.appLanguage,
-                    onClick = { onLanguageSelected(option.language) },
-                )
-                if (index != visibleOptions.lastIndex) HorizontalDivider()
+        if (visibleOptions.isEmpty()) {
+            Text(
+                text = stringResource(Res.string.settings_language_no_results),
+                modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                visibleOptions.forEachIndexed { index, option ->
+                    SharedLanguageRow(
+                        option = option,
+                        selected = option.language == preferences.appLanguage,
+                        onClick = { onLanguageSelected(option.language) },
+                    )
+                    if (index != visibleOptions.lastIndex) HorizontalDivider()
+                }
             }
         }
     }
