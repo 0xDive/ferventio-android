@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Forum
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
@@ -39,6 +40,7 @@ import io.ferventio.shared.generated.resources.chat_thread_empty
 import io.ferventio.shared.generated.resources.chat_thread_title
 import org.jetbrains.compose.resources.stringResource
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SharedMessageActionsSheet(
     message: ChatMessage,
@@ -126,6 +128,7 @@ private fun MessageActionItem(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SharedReplyThreadSheet(
     target: ChatMessage,
