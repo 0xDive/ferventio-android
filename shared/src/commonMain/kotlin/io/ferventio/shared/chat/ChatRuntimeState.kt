@@ -46,6 +46,8 @@ class ChatRuntimeStateHolder(
         private set
     private var historyMessagesByChannel by mutableStateOf(emptyMap<String, List<ChatMessage>>())
     private val timelineCacheByChannel = mutableMapOf<String, TimelineCacheEntry>()
+    private val liveMessageIdsByChannel = mutableMapOf<String, MutableSet<String>>()
+    private val liveServerMessageIdsByChannel = mutableMapOf<String, MutableSet<String>>()
     var globalBadgeAssets by mutableStateOf(emptyMap<String, ChatBadgeAsset>())
         private set
     var badgeAssetsByChannel by mutableStateOf(emptyMap<String, Map<String, ChatBadgeAsset>>())
@@ -125,6 +127,7 @@ class ChatRuntimeStateHolder(
         val merged = mergeTimelineMessages(
             history = history,
             live = live,
+            liveIds = liveMessageIdsByChannel[normalizedChannelId].orEmpty(),
         )
         timelineCacheByChannel[normalizedChannelId] = TimelineCacheEntry(
             history = history,
@@ -226,6 +229,7 @@ class ChatRuntimeStateHolder(
         } else {
             messagesByChannel + (normalizedChannelId to normalized)
         }
+        rebuildLiveMessageIndexes(normalizedChannelId, normalized)
         historyMessagesByChannel = historyMessagesByChannel - normalizedChannelId
     }
 
@@ -325,6 +329,20 @@ class ChatRuntimeStateHolder(
     fun append(message: ChatMessage) {
         requireMessage(message)
         val existing = messagesByChannel[message.channelId].orEmpty()
+        val hasExistingId = liveMessageIdsByChannel[message.channelId]?.contains(message.id) == true
+        val hasServerEchoCandidate =
+            liveServerMessageIdsByChannel[message.channelId]?.contains(message.id) == true
+        if (!hasExistingId && !hasServerEchoCandidate) {
+            val updated = appendToBoundedLiveWindow(existing, message)
+            messagesByChannel = messagesByChannel + (message.channelId to updated)
+            updateLiveMessageIndexesForAppend(
+                channelId = message.channelId,
+                existing = existing,
+                message = message,
+            )
+            removeHistoryMessage(message.channelId, message.id)
+            return
+        }
         var serverEchoIndex = -1
         var existingIndex = -1
         for (index in existing.indices) {
@@ -362,6 +380,7 @@ class ChatRuntimeStateHolder(
         }
         if (updated !== existing) {
             messagesByChannel = messagesByChannel + (message.channelId to updated)
+            rebuildLiveMessageIndexes(message.channelId, updated)
         }
         removeHistoryMessage(message.channelId, message.id)
     }
@@ -418,6 +437,7 @@ class ChatRuntimeStateHolder(
         }
         if (localIndex < 0) return false
         val local = existing[localIndex]
+        var liveChanged = false
         if (serverEchoIndex >= 0) {
             val updated = ArrayList<ChatMessage>((existing.size - 1).coerceAtLeast(0))
             for (index in existing.indices) {
@@ -433,6 +453,7 @@ class ChatRuntimeStateHolder(
                 }
             }
             messagesByChannel = messagesByChannel + (normalizedChannelId to updated)
+            liveChanged = true
         } else {
             val updatedLocal = local.copy(
                 outgoingState = OutgoingMessageState.SENT,
@@ -443,7 +464,14 @@ class ChatRuntimeStateHolder(
                 val updated = existing.toMutableList()
                 updated[localIndex] = updatedLocal
                 messagesByChannel = messagesByChannel + (normalizedChannelId to updated)
+                liveChanged = true
             }
+        }
+        if (liveChanged) {
+            rebuildLiveMessageIndexes(
+                normalizedChannelId,
+                messagesByChannel[normalizedChannelId].orEmpty(),
+            )
         }
         removeHistoryMessage(normalizedChannelId, normalizedServerMessageId)
         return true
@@ -477,6 +505,7 @@ class ChatRuntimeStateHolder(
             val updated = existing.toMutableList()
             updated[messageIndex] = updatedMessage
             messagesByChannel = messagesByChannel + (normalizedChannelId to updated)
+            rebuildLiveMessageIndexes(normalizedChannelId, updated)
         }
         return true
     }
@@ -485,8 +514,7 @@ class ChatRuntimeStateHolder(
     fun prependHistory(channelId: String, messages: List<ChatMessage>): Int {
         val normalizedChannelId = requireChannelId(channelId)
         if (messages.isEmpty()) return 0
-        val liveIds = messagesByChannel[normalizedChannelId].orEmpty()
-            .mapTo(hashSetOf(), ChatMessage::id)
+        val liveIds = liveMessageIdsByChannel[normalizedChannelId].orEmpty()
         val existing = historyMessagesByChannel[normalizedChannelId].orEmpty()
         val merged = mergeHistoryMessages(
             channelId = normalizedChannelId,
@@ -587,6 +615,8 @@ class ChatRuntimeStateHolder(
         val existed = normalizedChannelId in messagesByChannel || normalizedChannelId in historyMessagesByChannel
         if (!existed) return false
         messagesByChannel = messagesByChannel - normalizedChannelId
+        liveMessageIdsByChannel.remove(normalizedChannelId)
+        liveServerMessageIdsByChannel.remove(normalizedChannelId)
         historyMessagesByChannel = historyMessagesByChannel - normalizedChannelId
         scrollPositionsByChannel = scrollPositionsByChannel - normalizedChannelId
         return true
@@ -596,6 +626,8 @@ class ChatRuntimeStateHolder(
         val normalized = channelId.trim()
         if (normalized.isEmpty()) return
         messagesByChannel = messagesByChannel - normalized
+        liveMessageIdsByChannel.remove(normalized)
+        liveServerMessageIdsByChannel.remove(normalized)
         historyMessagesByChannel = historyMessagesByChannel - normalized
         scrollPositionsByChannel = scrollPositionsByChannel - normalized
         badgeAssetsByChannel = badgeAssetsByChannel - normalized
@@ -612,6 +644,8 @@ class ChatRuntimeStateHolder(
             .filter(String::isNotEmpty)
             .toSet()
         messagesByChannel = messagesByChannel.retainAllowedKeys(allowed)
+        liveMessageIdsByChannel.keys.retainAll(allowed)
+        liveServerMessageIdsByChannel.keys.retainAll(allowed)
         historyMessagesByChannel = historyMessagesByChannel.retainAllowedKeys(allowed)
         scrollPositionsByChannel = scrollPositionsByChannel.retainAllowedKeys(allowed)
         badgeAssetsByChannel = badgeAssetsByChannel.retainAllowedKeys(allowed)
@@ -677,6 +711,8 @@ class ChatRuntimeStateHolder(
 
     fun clear() {
         messagesByChannel = emptyMap()
+        liveMessageIdsByChannel.clear()
+        liveServerMessageIdsByChannel.clear()
         historyMessagesByChannel = emptyMap()
         scrollPositionsByChannel = emptyMap()
         globalBadgeAssets = emptyMap()
@@ -725,7 +761,64 @@ class ChatRuntimeStateHolder(
             if (channelMessages.isNotEmpty()) normalized[id] = channelMessages
         }
         messagesByChannel = normalized
+        rebuildAllLiveMessageIndexes()
         historyMessagesByChannel = emptyMap()
+    }
+
+    private fun rebuildAllLiveMessageIndexes() {
+        liveMessageIdsByChannel.clear()
+        liveServerMessageIdsByChannel.clear()
+        messagesByChannel.forEach(::rebuildLiveMessageIndexes)
+    }
+
+    private fun rebuildLiveMessageIndexes(
+        channelId: String,
+        messages: List<ChatMessage>,
+    ) {
+        if (messages.isEmpty()) {
+            liveMessageIdsByChannel.remove(channelId)
+            liveServerMessageIdsByChannel.remove(channelId)
+            return
+        }
+        val ids = HashSet<String>(messages.size)
+        val serverIds = HashSet<String>()
+        messages.forEach { message ->
+            ids += message.id
+            message.serverMessageId
+                ?.trim()
+                ?.takeIf(String::isNotEmpty)
+                ?.let(serverIds::add)
+        }
+        liveMessageIdsByChannel[channelId] = ids
+        if (serverIds.isEmpty()) {
+            liveServerMessageIdsByChannel.remove(channelId)
+        } else {
+            liveServerMessageIdsByChannel[channelId] = serverIds
+        }
+    }
+
+    private fun updateLiveMessageIndexesForAppend(
+        channelId: String,
+        existing: List<ChatMessage>,
+        message: ChatMessage,
+    ) {
+        val ids = liveMessageIdsByChannel.getOrPut(channelId) { hashSetOf() }
+        val serverIds = liveServerMessageIdsByChannel.getOrPut(channelId) { hashSetOf() }
+        val retainedExisting = (MAX_MESSAGES_PER_CHANNEL - 1).coerceAtLeast(0)
+        val startIndex = (existing.size - retainedExisting).coerceAtLeast(0)
+        for (index in 0 until startIndex) {
+            val dropped = existing[index]
+            ids.remove(dropped.id)
+            dropped.serverMessageId?.let(serverIds::remove)
+        }
+        ids += message.id
+        message.serverMessageId
+            ?.trim()
+            ?.takeIf(String::isNotEmpty)
+            ?.let(serverIds::add)
+        if (serverIds.isEmpty()) {
+            liveServerMessageIdsByChannel.remove(channelId)
+        }
     }
 
     private fun normalizeMessages(channelId: String, messages: List<ChatMessage>): List<ChatMessage> {
@@ -788,10 +881,10 @@ class ChatRuntimeStateHolder(
     private fun mergeTimelineMessages(
         history: List<ChatMessage>,
         live: List<ChatMessage>,
+        liveIds: Set<String>,
     ): List<ChatMessage> {
         if (history.isEmpty()) return live
         if (live.isEmpty()) return history
-        val liveIds = live.mapTo(hashSetOf(), ChatMessage::id)
         val historyWithoutLiveDuplicates = history.filterNot { it.id in liveIds }
         if (historyWithoutLiveDuplicates.isEmpty()) return live
 

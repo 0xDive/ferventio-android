@@ -236,6 +236,59 @@ class ChatRuntimeStateHolderTest {
     }
 
     @Test
+    fun serverEchoAfterOutgoingAckReplacesPendingRowWithoutDuplicate() {
+        val holder = ChatRuntimeStateHolder()
+        holder.append(
+            message("local", 1L).copy(
+                outgoingState = OutgoingMessageState.SENDING,
+                clientNonce = "nonce-fast-path",
+            ),
+        )
+
+        assertTrue(
+            holder.markOutgoingSent(
+                channelId = CHANNEL_ID,
+                localMessageId = "local",
+                serverMessageId = "server",
+            ),
+        )
+        holder.append(message("server", 2L))
+
+        val messages = holder.messages(CHANNEL_ID)
+        assertEquals(listOf("server"), messages.map(ChatMessage::id))
+        assertEquals("nonce-fast-path", messages.single().clientNonce)
+        assertEquals("server", messages.single().serverMessageId)
+        assertEquals(OutgoingMessageState.SENT, messages.single().outgoingState)
+    }
+
+    @Test
+    fun duplicateLiveMessageStillReplacesInsteadOfAppendingWithIndexesEnabled() {
+        val holder = ChatRuntimeStateHolder()
+        holder.append(message("same", 1L, text = "first"))
+
+        holder.append(message("same", 2L, text = "updated"))
+
+        val messages = holder.messages(CHANNEL_ID)
+        assertEquals(1, messages.size)
+        assertEquals("updated", messages.single().text)
+    }
+
+    @Test
+    fun replaceChannelMessagesRebuildsLiveIdentityIndex() {
+        val holder = ChatRuntimeStateHolder()
+        holder.replaceChannelMessages(
+            CHANNEL_ID,
+            listOf(message("same", 1L, text = "first")),
+        )
+
+        holder.append(message("same", 2L, text = "updated"))
+
+        val messages = holder.messages(CHANNEL_ID)
+        assertEquals(1, messages.size)
+        assertEquals("updated", messages.single().text)
+    }
+
+    @Test
     fun outgoingServerEchoReplacesLocalMessageWithoutRebuildingUnrelatedEntries() {
         val holder = ChatRuntimeStateHolder()
         holder.append(message("before", 1L))
