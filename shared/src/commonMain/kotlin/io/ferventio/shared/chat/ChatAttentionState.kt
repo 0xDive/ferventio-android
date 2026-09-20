@@ -1,6 +1,7 @@
 package io.ferventio.shared.chat
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import io.ferventio.app.domain.AttentionEntry
@@ -39,8 +40,8 @@ class ChatAttentionStateHolder {
     var messageNavigationTargets by mutableStateOf(emptyMap<String, String>())
         private set
 
-    val mentionUnreadCount: Int
-        get() = channelAttention.values.sumOf(SharedChannelAttention::mentionCount)
+    var mentionUnreadCount by mutableIntStateOf(0)
+        private set
 
     fun attention(channelId: String): SharedChannelAttention =
         channelAttention[channelId.trim()] ?: SharedChannelAttention()
@@ -153,11 +154,17 @@ class ChatAttentionStateHolder {
         if (isSystemMessage || isVisibleLive || isOwnMessage) return
 
         val previous = attention(channelId)
+        val nextMentionCount = (
+            previous.mentionCount + if (shouldRecordAttention) 1 else 0
+            ).coerceAtMost(MAX_ATTENTION_COUNT)
+        if (nextMentionCount != previous.mentionCount) {
+            mentionUnreadCount = (mentionUnreadCount + nextMentionCount - previous.mentionCount)
+                .coerceAtLeast(0)
+        }
         channelAttention = channelAttention + (
             channelId to previous.copy(
                 unreadCount = (previous.unreadCount + 1).coerceAtMost(MAX_ATTENTION_COUNT),
-                mentionCount = (previous.mentionCount + if (shouldRecordAttention) 1 else 0)
-                    .coerceAtMost(MAX_ATTENTION_COUNT),
+                mentionCount = nextMentionCount,
                 firstUnreadMessageId = previous.firstUnreadMessageId ?: message.id,
             )
         )
@@ -165,7 +172,10 @@ class ChatAttentionStateHolder {
 
     fun markChannelRead(channelId: String) {
         val normalizedChannelId = requireChannelId(channelId)
-        if (normalizedChannelId in channelAttention) {
+        channelAttention[normalizedChannelId]?.let { previous ->
+            if (previous.mentionCount > 0) {
+                mentionUnreadCount = (mentionUnreadCount - previous.mentionCount).coerceAtLeast(0)
+            }
             channelAttention = channelAttention - normalizedChannelId
         }
         attentionEntries.mapAttentionEntriesIfChanged { entry ->
@@ -220,6 +230,13 @@ class ChatAttentionStateHolder {
             .filter(String::isNotEmpty)
             .toSet()
         if (channelAttention.keys.any { it !in allowed }) {
+            val removedMentionCount = channelAttention.entries
+                .asSequence()
+                .filter { (channelId, _) -> channelId !in allowed }
+                .sumOf { (_, attention) -> attention.mentionCount }
+            if (removedMentionCount > 0) {
+                mentionUnreadCount = (mentionUnreadCount - removedMentionCount).coerceAtLeast(0)
+            }
             channelAttention = channelAttention.filterKeys(allowed::contains)
         }
         if (attentionEntries.any { it.channelId !in allowed }) {
@@ -238,6 +255,7 @@ class ChatAttentionStateHolder {
 
     fun clear() {
         channelAttention = emptyMap()
+        mentionUnreadCount = 0
         attentionEntries = emptyList()
         visibleChannelIds = emptySet()
         channelsAtLiveTail = emptySet()

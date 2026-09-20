@@ -98,6 +98,16 @@ class ChatAttentionStateTest {
     }
 
     @Test
+    fun ordinaryUnreadDoesNotInvalidateMentionTotal() {
+        val state = ChatAttentionStateHolder()
+
+        state.recordIncoming(message("ordinary", "hello"), session, evaluator)
+
+        assertEquals(0, state.mentionUnreadCount)
+        assertEquals(1, state.attention("channel-id").unreadCount)
+    }
+
+    @Test
     fun visibleButScrolledUpStillAccumulatesUnread() {
         val state = ChatAttentionStateHolder()
         state.updateViewport("channel-id", visible = true, isAtLiveTail = false)
