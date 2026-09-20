@@ -10,6 +10,31 @@ import kotlin.test.assertTrue
 
 class FerventioChatTimelineDecorationTest {
     @Test
+    fun repeatProjectionReusesSourceListWhenEveryMessageIsVisible() {
+        val messages = listOf(message("one"), message("two"))
+
+        val result = projectVisibleTimelineMessages(
+            messages = messages,
+            visibleMessageIds = setOf("one", "two"),
+        )
+
+        assertTrue(result === messages)
+    }
+
+    @Test
+    fun repeatProjectionAllocatesOnlyWhenMessagesAreCollapsed() {
+        val messages = listOf(message("one"), message("two"), message("three"))
+
+        val result = projectVisibleTimelineMessages(
+            messages = messages,
+            visibleMessageIds = setOf("one", "three"),
+        )
+
+        assertEquals(listOf("one", "three"), result.map(ChatMessage::id))
+        assertTrue(result !== messages)
+    }
+
+    @Test
     fun timelineDecorationProjectionIgnoresOtherMessageIds() {
         val current = listOf(
             message("one"),

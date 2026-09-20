@@ -177,7 +177,10 @@ fun FerventioChatTimeline(
     }
     val messages = if (preferences.repeatCollapseEnabled) {
         remember(sourceMessages, collapsePlan.visibleMessageIds) {
-            sourceMessages.filter { message -> message.id in collapsePlan.visibleMessageIds }
+            projectVisibleTimelineMessages(
+                messages = sourceMessages,
+                visibleMessageIds = collapsePlan.visibleMessageIds,
+            )
         }
     } else {
         sourceMessages
@@ -453,6 +456,26 @@ fun FerventioChatTimeline(
             }
         }
     }
+}
+
+internal fun projectVisibleTimelineMessages(
+    messages: List<ChatMessage>,
+    visibleMessageIds: Set<String>,
+): List<ChatMessage> {
+    var filtered: MutableList<ChatMessage>? = null
+    for (index in messages.indices) {
+        val message = messages[index]
+        if (message.id in visibleMessageIds) {
+            filtered?.add(message)
+        } else if (filtered == null) {
+            filtered = ArrayList<ChatMessage>(messages.size - 1).apply {
+                for (prefixIndex in 0 until index) {
+                    add(messages[prefixIndex])
+                }
+            }
+        }
+    }
+    return filtered ?: messages
 }
 
 internal fun selectTimelineDecorations(
