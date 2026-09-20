@@ -543,6 +543,7 @@ private fun AutoModMessageCard(
                 AutoModMessageStatus.HELD -> MaterialTheme.colorScheme.surfaceContainer
                 AutoModMessageStatus.APPROVED -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
                 AutoModMessageStatus.DENIED -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
+                AutoModMessageStatus.EXPIRED -> MaterialTheme.colorScheme.surfaceVariant
             },
         ),
     ) {
@@ -560,6 +561,7 @@ private fun AutoModMessageCard(
                         AutoModMessageStatus.HELD -> MaterialTheme.colorScheme.tertiary
                         AutoModMessageStatus.APPROVED -> MaterialTheme.colorScheme.primary
                         AutoModMessageStatus.DENIED -> MaterialTheme.colorScheme.error
+                        AutoModMessageStatus.EXPIRED -> MaterialTheme.colorScheme.onSurfaceVariant
                     },
                 )
             }
@@ -1048,6 +1050,7 @@ private fun autoModStatusText(status: AutoModMessageStatus): String = when (stat
     AutoModMessageStatus.HELD -> "Ожидает"
     AutoModMessageStatus.APPROVED -> "Разрешено"
     AutoModMessageStatus.DENIED -> "Отклонено"
+    AutoModMessageStatus.EXPIRED -> "Истекло"
 }
 
 private fun peopleTabTitle(tab: ModerationPeopleTab): String = when (tab) {

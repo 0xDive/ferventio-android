@@ -71,7 +71,9 @@ import androidx.compose.ui.unit.dp
 import io.ferventio.app.domain.AppLanguage
 import io.ferventio.app.domain.AppThemeMode
 import io.ferventio.app.domain.ChatNameStyle
+import io.ferventio.app.domain.ChatChannel
 import io.ferventio.app.domain.MentionColors
+import io.ferventio.app.domain.NotificationEventType
 import io.ferventio.app.domain.MessageDensity
 import io.ferventio.app.domain.HighlightRule
 import io.ferventio.app.domain.IgnoreRule
@@ -256,6 +258,7 @@ internal fun FerventioSettingsSheet(
                 )
                 SharedSettingsPage.NOTIFICATIONS -> NotificationsSettingsPage(
                     preferences = state.preferences,
+                    channels = runtime.workspace.channels,
                     notificationAction = notificationAction,
                     onRequestNotificationPermission = onRequestNotificationPermission,
                     onOpenNotificationSettings = onOpenNotificationSettings,
@@ -979,24 +982,157 @@ private fun ChatBehaviorSettingsPage(
 @Composable
 private fun NotificationsSettingsPage(
     preferences: SharedAppPreferences,
+    channels: List<ChatChannel>,
     notificationAction: NotificationPermissionAction,
     onRequestNotificationPermission: () -> Unit,
     onOpenNotificationSettings: () -> Unit,
     update: ((SharedAppPreferences) -> SharedAppPreferences) -> Unit,
 ) {
+    fun legacyDefault(ruleId: String): Boolean = when (ruleId) {
+        NotificationEventType.REPLY.ruleId -> preferences.replyNotificationsEnabled
+        NotificationEventType.AUTOMOD_HOLD.ruleId -> preferences.autoModNotificationsEnabled
+        else -> true
+    }
+
+    fun updateGlobalEvent(event: NotificationEventType, enabled: Boolean) {
+        update { current ->
+            val policy = current.notificationPreferences.withGlobalEvent(event.ruleId, enabled)
+            when (event) {
+                NotificationEventType.REPLY -> current.copy(
+                    replyNotificationsEnabled = enabled,
+                    notificationPreferences = policy,
+                )
+                NotificationEventType.AUTOMOD_HOLD -> current.copy(
+                    autoModNotificationsEnabled = enabled,
+                    notificationPreferences = policy,
+                )
+                else -> current.copy(notificationPreferences = policy)
+            }
+        }
+    }
+
     FerventioSettingsSection(
         title = stringResource(Res.string.settings_notifications_section),
     ) {
         SettingsSwitchRow(
-            label = stringResource(Res.string.settings_reply_notifications),
-            checked = preferences.replyNotificationsEnabled,
-            onCheckedChange = { value -> update { it.copy(replyNotificationsEnabled = value) } },
+            label = stringResource(Res.string.notifications_master),
+            checked = preferences.notificationPreferences.enabled,
+            onCheckedChange = { enabled ->
+                update { current ->
+                    current.copy(
+                        notificationPreferences =
+                            current.notificationPreferences.withEnabled(enabled),
+                    )
+                }
+            },
         )
-        SettingsSwitchRow(
-            label = stringResource(Res.string.settings_automod_notifications),
-            checked = preferences.autoModNotificationsEnabled,
-            onCheckedChange = { value -> update { it.copy(autoModNotificationsEnabled = value) } },
+
+        Text(
+            text = stringResource(Res.string.notifications_global_events),
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(top = 8.dp, bottom = 2.dp),
         )
+        NotificationEventType.entries.forEach { event ->
+            SettingsSwitchRow(
+                label = notificationEventLabel(event),
+                checked = preferences.notificationPreferences.isEnabled(
+                    ruleId = event.ruleId,
+                    legacyDefault = ::legacyDefault,
+                ),
+                onCheckedChange = { enabled -> updateGlobalEvent(event, enabled) },
+            )
+        }
+
+        if (channels.isNotEmpty()) {
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            Text(
+                text = stringResource(Res.string.notifications_per_channel),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            channels.forEach { channel ->
+                val custom = channel.id in preferences.notificationPreferences.channelOverrides
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp, bottom = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "#${channel.displayName}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            text = stringResource(Res.string.notifications_custom_channel),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(
+                        checked = custom,
+                        onCheckedChange = { enabled ->
+                            update { current ->
+                                current.copy(
+                                    notificationPreferences = if (enabled) {
+                                        current.notificationPreferences
+                                            .enableChannelOverrides(channel.id)
+                                    } else {
+                                        current.notificationPreferences
+                                            .clearChannelOverride(channel.id)
+                                    },
+                                )
+                            }
+                        },
+                    )
+                }
+
+                if (custom) {
+                    SettingsSwitchRow(
+                        label = stringResource(Res.string.notifications_channel_master),
+                        checked = preferences.notificationPreferences.channelOverrides
+                            .getValue(channel.id)
+                            .enabled,
+                        onCheckedChange = { enabled ->
+                            update { current ->
+                                current.copy(
+                                    notificationPreferences =
+                                        current.notificationPreferences
+                                            .withChannelEnabled(channel.id, enabled),
+                                )
+                            }
+                        },
+                    )
+                    NotificationEventType.entries.forEach { event ->
+                        SettingsSwitchRow(
+                            label = notificationEventLabel(event),
+                            checked = preferences.notificationPreferences.isEnabled(
+                                ruleId = event.ruleId,
+                                channelId = channel.id,
+                                legacyDefault = ::legacyDefault,
+                            ),
+                            onCheckedChange = { enabled ->
+                                update { current ->
+                                    current.copy(
+                                        notificationPreferences =
+                                            current.notificationPreferences.withChannelEvent(
+                                                channelId = channel.id,
+                                                ruleId = event.ruleId,
+                                                value = enabled,
+                                            ),
+                                    )
+                                }
+                            },
+                        )
+                    }
+                    HorizontalDivider(modifier = Modifier.padding(bottom = 4.dp))
+                }
+            }
+        }
+
         TextButton(
             onClick = {
                 when (notificationAction) {
@@ -1018,6 +1154,24 @@ private fun NotificationsSettingsPage(
         }
         FerventioPushSettingsSection()
     }
+}
+
+@Composable
+private fun notificationEventLabel(event: NotificationEventType): String = when (event) {
+    NotificationEventType.MENTION -> stringResource(Res.string.notification_event_mention)
+    NotificationEventType.REPLY -> stringResource(Res.string.notification_event_reply)
+    NotificationEventType.AUTOMOD_HOLD -> stringResource(Res.string.notification_event_automod_hold)
+    NotificationEventType.BAN -> stringResource(Res.string.notification_event_ban)
+    NotificationEventType.TIMEOUT -> stringResource(Res.string.notification_event_timeout)
+    NotificationEventType.HIGHLIGHT -> stringResource(Res.string.notification_event_highlight)
+    NotificationEventType.SELECTED_USER -> stringResource(Res.string.notification_event_selected_user)
+    NotificationEventType.STREAM_ONLINE -> stringResource(Res.string.notification_event_stream_online)
+    NotificationEventType.TITLE_CHANGE -> stringResource(Res.string.notification_event_title_change)
+    NotificationEventType.GAME_CHANGE -> stringResource(Res.string.notification_event_game_change)
+    NotificationEventType.RAID -> stringResource(Res.string.notification_event_raid)
+    NotificationEventType.REWARD -> stringResource(Res.string.notification_event_reward)
+    NotificationEventType.SUBSCRIPTION -> stringResource(Res.string.notification_event_subscription)
+    NotificationEventType.MODERATION_ACTION -> stringResource(Res.string.notification_event_moderation_action)
 }
 
 @Composable

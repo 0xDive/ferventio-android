@@ -111,6 +111,7 @@ class FerventioController(
     private var accessLeaseFallbackActive: Boolean = false
     private var eventSubClient: TwitchEventSubClient? = null
     private var eventSubJob: Job? = null
+    private var lastAutoModExpirySweepAtMillis: Long = 0L
     private val eventSubMaintenanceRuntime = TwitchEventSubTransportMaintenanceRuntime()
     @Volatile
     private var activeEventSubSessionId: String? = null
@@ -1045,7 +1046,15 @@ class FerventioController(
 
     fun setReplyNotificationsEnabled(enabled: Boolean) {
         settingsStore.replyNotificationsEnabled = enabled
-        mutableState.update { it.copy(replyNotificationsEnabled = enabled) }
+        val policy = settingsStore.notificationPreferences
+            .withGlobalEvent(NotificationEventType.REPLY.ruleId, enabled)
+        settingsStore.notificationPreferences = policy
+        mutableState.update {
+            it.copy(
+                replyNotificationsEnabled = enabled,
+                notificationPreferences = policy,
+            )
+        }
     }
 
     fun setNotificationPreferences(value: NotificationPreferences) {
@@ -3249,8 +3258,14 @@ class FerventioController(
 
     fun setAutoModNotificationsEnabled(enabled: Boolean) {
         settingsStore.autoModNotificationsEnabled = enabled
+        val policy = settingsStore.notificationPreferences
+            .withGlobalEvent(NotificationEventType.AUTOMOD_HOLD.ruleId, enabled)
+        settingsStore.notificationPreferences = policy
         mutableState.update { state ->
-            state.copy(moderation = state.moderation.copy(autoModNotificationsEnabled = enabled))
+            state.copy(
+                notificationPreferences = policy,
+                moderation = state.moderation.copy(autoModNotificationsEnabled = enabled),
+            )
         }
     }
 
@@ -3284,7 +3299,26 @@ class FerventioController(
                     )
                 }
                 showNotice(if (approve) "Сообщение AutoMod разрешено" else "Сообщение AutoMod отклонено")
-            }.onFailure { showError(it.userMessage()) }
+            }.onFailure { error ->
+                if (error is TwitchApiException && error.statusCode == 404) {
+                    mutableState.update { state ->
+                        state.copy(
+                            moderation = state.moderation.copy(
+                                autoModQueue = state.moderation.autoModQueue.map { item ->
+                                    if (item.messageId == messageId) {
+                                        item.copy(status = AutoModMessageStatus.EXPIRED)
+                                    } else {
+                                        item
+                                    }
+                                },
+                            ),
+                        )
+                    }
+                    showNotice("Сообщение AutoMod уже обработано или время решения истекло")
+                } else {
+                    showError(error.userMessage())
+                }
+            }
         }
     }
 
@@ -6055,6 +6089,42 @@ class FerventioController(
         }
     }
 
+    private fun sweepStaleAutoModQueue(
+        nowMillis: Long = System.currentTimeMillis(),
+    ) {
+        if (nowMillis - lastAutoModExpirySweepAtMillis < AUTOMOD_EXPIRY_SWEEP_INTERVAL_MILLIS) return
+        lastAutoModExpirySweepAtMillis = nowMillis
+        val cutoff = nowMillis - AUTOMOD_STALE_HOLD_GRACE_MILLIS
+        mutableState.update { state ->
+            val queue = state.moderation.autoModQueue
+            if (
+                queue.none { message ->
+                    message.status == AutoModMessageStatus.HELD &&
+                        message.heldAtMillis > 0L &&
+                        message.heldAtMillis <= cutoff
+                }
+            ) {
+                state
+            } else {
+                state.copy(
+                    moderation = state.moderation.copy(
+                        autoModQueue = queue.map { message ->
+                            if (
+                                message.status == AutoModMessageStatus.HELD &&
+                                message.heldAtMillis > 0L &&
+                                message.heldAtMillis <= cutoff
+                            ) {
+                                message.copy(status = AutoModMessageStatus.EXPIRED)
+                            } else {
+                                message
+                            }
+                        },
+                    ),
+                )
+            }
+        }
+    }
+
     private fun stopTokenValidation() {
         tokenValidationJob?.cancel()
         tokenValidationJob = null
@@ -6092,6 +6162,7 @@ class FerventioController(
     }
 
     private fun handleChatEvent(event: ChatEvent) {
+        sweepStaleAutoModQueue()
         when (event) {
             is ChatEvent.Message -> appendMessage(event.message)
             is ChatEvent.AutoModHeld -> {
@@ -7127,6 +7198,8 @@ class FerventioController(
         const val SETTINGS_SYNC_DEBOUNCE_MILLIS = 1_500L
         const val MAX_USER_CARD_TIMEOUT_PRESETS = 10
         const val MAX_AUTOMOD_QUEUE_ITEMS = 200
+        const val AUTOMOD_EXPIRY_SWEEP_INTERVAL_MILLIS = 30_000L
+        const val AUTOMOD_STALE_HOLD_GRACE_MILLIS = 10 * 60 * 1_000L
         const val MAX_MODERATION_HISTORY_ITEMS = 300
         const val MAX_OBSERVED_CHATTERS = 1_000
         const val OBSERVED_CHATTERS_NOTICE =

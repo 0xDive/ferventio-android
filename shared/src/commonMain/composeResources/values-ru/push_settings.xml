@@ -10,4 +10,23 @@
     <string name="notifications_self_test_sending">Отправляем тестовое уведомление…</string>
     <string name="notifications_self_test_sent">Тестовое уведомление поставлено в очередь.</string>
     <string name="notifications_self_test_failed">Не удалось отправить тестовое уведомление: %1$s</string>
+    <string name="notifications_master">Все уведомления</string>
+    <string name="notifications_global_events">События</string>
+    <string name="notifications_per_channel">Настройки по каналам</string>
+    <string name="notifications_custom_channel">Индивидуальные настройки</string>
+    <string name="notifications_channel_master">Уведомления этого канала</string>
+    <string name="notification_event_mention">Упоминания</string>
+    <string name="notification_event_reply">Ответы</string>
+    <string name="notification_event_automod_hold">Сообщения AutoMod на проверке</string>
+    <string name="notification_event_ban">Баны</string>
+    <string name="notification_event_timeout">Таймауты</string>
+    <string name="notification_event_highlight">Highlights</string>
+    <string name="notification_event_selected_user">Выбранные пользователи</string>
+    <string name="notification_event_stream_online">Начало стрима</string>
+    <string name="notification_event_title_change">Изменение названия</string>
+    <string name="notification_event_game_change">Изменение категории</string>
+    <string name="notification_event_raid">Рейды</string>
+    <string name="notification_event_reward">Награды за баллы канала</string>
+    <string name="notification_event_subscription">Подписки</string>
+    <string name="notification_event_moderation_action">Действия модерации</string>
 </resources>

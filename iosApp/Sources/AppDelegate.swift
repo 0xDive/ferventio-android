@@ -59,7 +59,8 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         do {
             pushBackendRegistrationRuntimeBridge = try PushBackendRegistrationRuntimeBridge.live(
                 stateHolder: runtimeState.pushRegistration,
-                workspaceState: runtimeState.workspace
+                workspaceState: runtimeState.workspace,
+                settingsState: runtimeState.settings
             )
         } catch {
             runtimeState.pushRegistration.markBackendRegistrationFailed(
@@ -134,7 +135,19 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
-        [.banner, .list, .sound]
+        guard let payload = PushNotificationNavigationPayload(
+            userInfo: notification.request.content.userInfo
+        ), let type = payload.type else {
+            return [.banner, .list, .sound]
+        }
+        let enabled = await MainActor.run { [self] in
+            PushNotificationPolicy().isEnabled(
+                preferences: runtimeState.settings.preferences,
+                ruleId: type,
+                channelId: payload.channelID
+            )
+        }
+        return enabled ? [.banner, .list, .sound] : []
     }
 
     nonisolated func userNotificationCenter(
@@ -483,6 +496,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationC
                 authentication: authentication,
                 preferences: preferences
             )
+            await synchronizePushBackendRegistration()
         }
     }
 

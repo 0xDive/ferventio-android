@@ -1,5 +1,6 @@
 package io.ferventio.shared.push
 
+import io.ferventio.shared.settings.SharedAppPreferences
 import io.ferventio.app.domain.AuthenticationPersistenceValidation
 import io.ferventio.app.domain.MobileDeviceIdentity
 import io.ferventio.app.domain.StoredAuthentication
@@ -202,6 +203,25 @@ class ApnsPushRegistrationCoordinator(
         appVersion: String,
         authentication: StoredAuthentication,
         workspace: WorkspaceRuntimeSnapshot,
+    ): PushRegistrationRequest = registerAuthenticatedWorkspace(
+        serverUrl = serverUrl,
+        identity = identity,
+        apnsDeviceToken = apnsDeviceToken,
+        appVersion = appVersion,
+        authentication = authentication,
+        workspace = workspace,
+        preferences = SharedAppPreferences(),
+    )
+
+    @Throws(Exception::class)
+    suspend fun registerAuthenticatedWorkspace(
+        serverUrl: String,
+        identity: MobileDeviceIdentity,
+        apnsDeviceToken: String,
+        appVersion: String,
+        authentication: StoredAuthentication,
+        workspace: WorkspaceRuntimeSnapshot,
+        preferences: SharedAppPreferences,
     ): PushRegistrationRequest {
         val session = requireAuthenticatedSession(authentication)
         return register(
@@ -214,6 +234,10 @@ class ApnsPushRegistrationCoordinator(
                 userLogin = session.login,
                 channelIds = workspace.channelIds,
                 moderatorChannelIds = workspace.channelIds.filter(workspace.moderatorChannelIds::contains),
+                notificationRules = PushNotificationPolicy().enabledRules(
+                    preferences = preferences,
+                    channelIds = workspace.channelIds,
+                ),
             ),
         )
     }

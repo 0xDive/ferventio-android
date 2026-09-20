@@ -14,6 +14,7 @@ import java.time.Instant
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
+import io.ferventio.shared.settings.NotificationPreferencesCodec
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -68,6 +69,7 @@ data class BackupSettings(
     val showComposerEmoteImages: Boolean,
     val replyNotificationsEnabled: Boolean,
     val autoModNotificationsEnabled: Boolean,
+    val notificationPreferences: JsonElement = JsonObject(emptyMap()),
     val recentMessagesEnabled: Boolean = false,
     val localHistoryEnabled: Boolean,
     val localHistoryLimit: Int,
@@ -136,6 +138,9 @@ object SettingsBackupCodec {
                 showComposerEmoteImages = store.showComposerEmoteImages,
                 replyNotificationsEnabled = store.replyNotificationsEnabled,
                 autoModNotificationsEnabled = store.autoModNotificationsEnabled,
+                notificationPreferences = NotificationPreferencesCodec.encodeElement(
+                    store.notificationPreferences,
+                ),
                 localHistoryEnabled = store.localHistoryEnabled,
                 localHistoryLimit = store.localHistoryLimit,
                 localHistoryRetentionDays = store.localHistoryRetentionDays,
@@ -231,6 +236,9 @@ object SettingsBackupCodec {
             store.showComposerEmoteImages = settings.showComposerEmoteImages
             store.replyNotificationsEnabled = settings.replyNotificationsEnabled
             store.autoModNotificationsEnabled = settings.autoModNotificationsEnabled
+            store.notificationPreferences = NotificationPreferencesCodec.decodeElement(
+                settings.notificationPreferences,
+            )
             store.localHistoryEnabled = settings.localHistoryEnabled
             store.localHistoryLimit = settings.localHistoryLimit
             store.localHistoryRetentionDays = settings.localHistoryRetentionDays

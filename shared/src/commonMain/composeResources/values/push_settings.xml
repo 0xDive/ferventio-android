@@ -10,4 +10,23 @@
     <string name="notifications_self_test_sending">Sending test notification…</string>
     <string name="notifications_self_test_sent">Test notification queued.</string>
     <string name="notifications_self_test_failed">Test notification failed: %1$s</string>
+    <string name="notifications_master">All notifications</string>
+    <string name="notifications_global_events">Events</string>
+    <string name="notifications_per_channel">Per-channel settings</string>
+    <string name="notifications_custom_channel">Custom settings</string>
+    <string name="notifications_channel_master">Notifications for this channel</string>
+    <string name="notification_event_mention">Mentions</string>
+    <string name="notification_event_reply">Replies</string>
+    <string name="notification_event_automod_hold">AutoMod held messages</string>
+    <string name="notification_event_ban">Bans</string>
+    <string name="notification_event_timeout">Timeouts</string>
+    <string name="notification_event_highlight">Highlights</string>
+    <string name="notification_event_selected_user">Selected users</string>
+    <string name="notification_event_stream_online">Stream online</string>
+    <string name="notification_event_title_change">Title changes</string>
+    <string name="notification_event_game_change">Category changes</string>
+    <string name="notification_event_raid">Raids</string>
+    <string name="notification_event_reward">Channel point rewards</string>
+    <string name="notification_event_subscription">Subscriptions</string>
+    <string name="notification_event_moderation_action">Moderation actions</string>
 </resources>
