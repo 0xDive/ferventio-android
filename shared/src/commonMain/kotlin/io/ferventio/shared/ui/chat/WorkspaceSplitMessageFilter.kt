@@ -44,8 +44,19 @@ internal fun filterWorkspaceSplitMessages(
     savedFilters: List<SavedMessageFilter>,
     decorations: Map<String, MessageDecoration>,
     showSystemMessages: Boolean,
+): List<ChatMessage> = filterWorkspaceSplitMessages(
+    messages = messages,
+    filter = compileWorkspaceSplitMessageFilter(filterQuery, savedFilters),
+    decorations = decorations,
+    showSystemMessages = showSystemMessages,
+)
+
+internal fun filterWorkspaceSplitMessages(
+    messages: List<ChatMessage>,
+    filter: WorkspaceSplitMessageFilter,
+    decorations: Map<String, MessageDecoration>,
+    showSystemMessages: Boolean,
 ): List<ChatMessage> {
-    val filter = compileWorkspaceSplitMessageFilter(filterQuery, savedFilters)
     if (
         filter.expression.isEmpty() &&
         showSystemMessages &&

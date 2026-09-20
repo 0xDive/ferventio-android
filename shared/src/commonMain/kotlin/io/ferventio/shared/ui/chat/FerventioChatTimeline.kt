@@ -136,17 +136,21 @@ fun FerventioChatTimeline(
     val decorations = runtime.messageRules.decorationsByMessageId
     val savedFilters = runtime.savedFilters.filters
     val canonicalMessages = chat.messages(channel.id)
+    val workspaceFilter = remember(filterQuery, savedFilters) {
+        compileWorkspaceSplitMessageFilter(
+            filterQuery = filterQuery,
+            savedFilters = savedFilters,
+        )
+    }
     val sourceMessages = remember(
         canonicalMessages,
-        filterQuery,
-        savedFilters,
+        workspaceFilter,
         preferences.showSystemMessages,
         decorations,
     ) {
         filterWorkspaceSplitMessages(
             messages = canonicalMessages,
-            filterQuery = filterQuery,
-            savedFilters = savedFilters,
+            filter = workspaceFilter,
             decorations = decorations,
             showSystemMessages = preferences.showSystemMessages,
         )
