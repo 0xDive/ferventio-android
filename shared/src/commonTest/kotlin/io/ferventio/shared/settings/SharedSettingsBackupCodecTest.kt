@@ -54,12 +54,11 @@ class SharedSettingsBackupCodecTest {
     @Test
     fun appliesAndroidDefaultsWhenFormatFieldsAreMissing() {
         val content = androidCompatibleContent()
-        val encoded = SharedSettingsBackupCodec.encodeForTesting(document(content = content))
+        val encoded = SharedSettingsBackupCodec.encodeForTesting(
+            document(content = content, formatVersion = 2),
+        )
             .replace("\"format\":\"ferventio-settings-backup\",", "")
-            .replace(
-                "\"formatVersion\":${SharedSettingsBackupCodec.BACKUP_FORMAT_VERSION},",
-                "",
-            )
+            .replace("\"formatVersion\":2,", "")
 
         val decoded = SharedSettingsBackupCodec.decode(encoded)
 
