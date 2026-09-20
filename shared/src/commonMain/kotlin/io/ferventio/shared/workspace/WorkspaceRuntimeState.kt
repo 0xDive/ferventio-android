@@ -138,7 +138,7 @@ class WorkspaceRuntimeStateHolder(
     fun replaceChannels(value: List<ChatChannel>) {
         val previousIds = channelIdSet
         val previousModerators = moderatorChannelIds
-        setChannels(normalizeChannels(value))
+        updateChannelsSnapshot(normalizeChannels(value))
         reconcileMembership()
         val currentIds = channelIdSet
         if (previousIds != currentIds || previousModerators != moderatorChannelIds) bumpPushContextRevision()
@@ -147,7 +147,7 @@ class WorkspaceRuntimeStateHolder(
     fun addOrReplaceChannel(channel: ChatChannel) {
         requireValidChannel(channel)
         val index = channels.indexOfFirst { it.id == channel.id }
-        setChannels(
+        updateChannelsSnapshot(
             if (index < 0) {
                 channels + channel
             } else {
@@ -175,7 +175,7 @@ class WorkspaceRuntimeStateHolder(
             "Replacement channel id is already present in the workspace"
         }
 
-        setChannels(
+        updateChannelsSnapshot(
             channels.toMutableList().apply {
                 this[index] = this[index].copy(id = nextId)
             },
@@ -213,7 +213,7 @@ class WorkspaceRuntimeStateHolder(
     fun removeChannel(channelId: String) {
         val normalizedId = channelId.trim()
         if (normalizedId.isEmpty() || normalizedId !in channelIdSet) return
-        setChannels(channels.filterNot { it.id == normalizedId })
+        updateChannelsSnapshot(channels.filterNot { it.id == normalizedId })
         reconcileMembership()
         bumpPushContextRevision()
     }
@@ -227,7 +227,7 @@ class WorkspaceRuntimeStateHolder(
     }
 
     fun moveChannel(channelId: String, targetIndex: Int) {
-        setChannels(
+        updateChannelsSnapshot(
             ChannelOrder.move(
                 channels = channels,
                 channelId = channelId.trim(),
@@ -277,7 +277,7 @@ class WorkspaceRuntimeStateHolder(
 
     fun clear() {
         val affectedPushContext = channels.isNotEmpty() || moderatorChannelIds.isNotEmpty()
-        setChannels(emptyList())
+        updateChannelsSnapshot(emptyList())
         selectedChannelId = null
         pinnedChannelIds = emptyList()
         channelTabTitles = emptyMap()
@@ -307,7 +307,7 @@ class WorkspaceRuntimeStateHolder(
         workspaceLayout = workspaceLayout.normalized(available)
     }
 
-    private fun setChannels(value: List<ChatChannel>) {
+    private fun updateChannelsSnapshot(value: List<ChatChannel>) {
         channels = value
         val nextIds = value.map(ChatChannel::id)
         if (nextIds != channelIdsCache) {
