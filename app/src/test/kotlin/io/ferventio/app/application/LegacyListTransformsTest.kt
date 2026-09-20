@@ -64,4 +64,17 @@ class LegacyListTransformsTest {
         assertTrue(overflow === source)
         assertTrue(deleted === source)
     }
+
+    @Test
+    fun distinctBoundedPrependReusesAlreadyLeadingValue() {
+        val source = listOf("one", "two")
+
+        val same = prependLegacyDistinctBounded(source, "one", maxSize = 5)
+        val moved = prependLegacyDistinctBounded(source, "two", maxSize = 5)
+        val capped = prependLegacyDistinctBounded(source, "three", maxSize = 2)
+
+        assertTrue(same === source)
+        assertEquals(listOf("two", "one"), moved)
+        assertEquals(listOf("three", "one"), capped)
+    }
 }

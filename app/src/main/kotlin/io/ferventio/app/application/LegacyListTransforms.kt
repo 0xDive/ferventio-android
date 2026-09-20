@@ -51,3 +51,18 @@ internal inline fun <T, K> removeLegacyListByKey(
     if (index < 0) return source
     return source.toMutableList().apply { removeAt(index) }
 }
+
+internal fun prependLegacyDistinctBounded(
+    source: List<String>,
+    value: String,
+    maxSize: Int,
+): List<String> {
+    if (maxSize <= 0) return emptyList()
+    if (source.firstOrNull() == value && source.size <= maxSize) return source
+    return buildList(minOf(maxSize, source.size + 1)) {
+        add(value)
+        source.forEach { item ->
+            if (item != value && size < maxSize) add(item)
+        }
+    }
+}

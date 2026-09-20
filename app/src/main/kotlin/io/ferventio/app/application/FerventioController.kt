@@ -3674,15 +3674,26 @@ class FerventioController(
         val channel = current.channels.firstOrNull { it.id == message.channelId }
             ?: return showError("Канал больше не открыт")
         mutableState.update { state ->
+            val existing = state.messagesByChannel[channel.id].orEmpty()
+            val updatedMessages = mapLegacyListIfChanged(existing) { current ->
+                if (current.id == message.id) {
+                    current.copy(
+                        outgoingState = OutgoingMessageState.SENDING,
+                        outgoingError = null,
+                    )
+                } else {
+                    current
+                }
+            }
             state.copy(
-                messagesByChannel = state.messagesByChannel + (
-                    channel.id to state.messagesByChannel[channel.id].orEmpty().map { existing ->
-                        if (existing.id == message.id) {
-                            existing.copy(outgoingState = OutgoingMessageState.SENDING, outgoingError = null)
-                        } else existing
-                    }
-                ),
-                rateLimitsByChannel = state.rateLimitsByChannel - channel.id,
+                messagesByChannel = updatedMessages?.let { updated ->
+                    state.messagesByChannel + (channel.id to updated)
+                } ?: state.messagesByChannel,
+                rateLimitsByChannel = if (channel.id in state.rateLimitsByChannel) {
+                    state.rateLimitsByChannel - channel.id
+                } else {
+                    state.rateLimitsByChannel
+                },
             )
         }
         val wireText = if (message.isAction) "/me ${message.text}" else message.text
@@ -3735,19 +3746,27 @@ class FerventioController(
                 }
             }.onSuccess { result ->
                 mutableState.update { state ->
+                    val existing = state.messagesByChannel[channel.id].orEmpty()
+                    val updatedMessages = mapLegacyListIfChanged(existing) { message ->
+                        if (message.id == localMessageId) {
+                            message.copy(
+                                outgoingState = OutgoingMessageState.SENT,
+                                outgoingError = null,
+                                serverMessageId = result.messageId,
+                            )
+                        } else {
+                            message
+                        }
+                    }
                     state.copy(
-                        messagesByChannel = state.messagesByChannel + (
-                            channel.id to state.messagesByChannel[channel.id].orEmpty().map { message ->
-                                if (message.id == localMessageId) {
-                                    message.copy(
-                                        outgoingState = OutgoingMessageState.SENT,
-                                        outgoingError = null,
-                                        serverMessageId = result.messageId,
-                                    )
-                                } else message
-                            }
-                        ),
-                        rateLimitsByChannel = state.rateLimitsByChannel - channel.id,
+                        messagesByChannel = updatedMessages?.let { updated ->
+                            state.messagesByChannel + (channel.id to updated)
+                        } ?: state.messagesByChannel,
+                        rateLimitsByChannel = if (channel.id in state.rateLimitsByChannel) {
+                            state.rateLimitsByChannel - channel.id
+                        } else {
+                            state.rateLimitsByChannel
+                        },
                     )
                 }
             }.onFailure { error ->
@@ -3761,17 +3780,21 @@ class FerventioController(
                             )
                         )
                     } else state.rateLimitsByChannel
+                    val existing = state.messagesByChannel[channel.id].orEmpty()
+                    val updatedMessages = mapLegacyListIfChanged(existing) { message ->
+                        if (message.id == localMessageId) {
+                            message.copy(
+                                outgoingState = OutgoingMessageState.FAILED,
+                                outgoingError = error.userMessage(),
+                            )
+                        } else {
+                            message
+                        }
+                    }
                     state.copy(
-                        messagesByChannel = state.messagesByChannel + (
-                            channel.id to state.messagesByChannel[channel.id].orEmpty().map { message ->
-                                if (message.id == localMessageId) {
-                                    message.copy(
-                                        outgoingState = OutgoingMessageState.FAILED,
-                                        outgoingError = error.userMessage(),
-                                    )
-                                } else message
-                            }
-                        ),
+                        messagesByChannel = updatedMessages?.let { updated ->
+                            state.messagesByChannel + (channel.id to updated)
+                        } ?: state.messagesByChannel,
                         rateLimitsByChannel = rateLimit,
                     )
                 }
@@ -3783,9 +3806,13 @@ class FerventioController(
         val normalized = text.trim()
         if (normalized.isEmpty()) return
         mutableState.update { state ->
-            val updatedChannel = (listOf(normalized) + state.sentMessageHistoryByChannel[channelId].orEmpty())
-                .distinct()
-                .take(MAX_SENT_MESSAGE_HISTORY)
+            val currentChannel = state.sentMessageHistoryByChannel[channelId].orEmpty()
+            val updatedChannel = prependLegacyDistinctBounded(
+                source = currentChannel,
+                value = normalized,
+                maxSize = MAX_SENT_MESSAGE_HISTORY,
+            )
+            if (updatedChannel === currentChannel) return@update state
             val updated = state.sentMessageHistoryByChannel + (channelId to updatedChannel)
             settingsStore.sentMessageHistoryByChannel = updated
             state.copy(sentMessageHistoryByChannel = updated)
