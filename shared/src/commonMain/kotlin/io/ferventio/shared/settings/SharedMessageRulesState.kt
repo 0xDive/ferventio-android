@@ -1,6 +1,7 @@
 package io.ferventio.shared.settings
 
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import io.ferventio.app.domain.HighlightRule
@@ -22,8 +23,11 @@ class SharedMessageRulesStateHolder(
      * Rules are evaluated when an EventSub message is accepted, not while Compose renders it. This
      * keeps already-received messages stable when the user edits rules and matches Android 0.0.5.
      */
-    var decorationsByMessageId by mutableStateOf(emptyMap<String, MessageDecoration>())
-        private set
+    private val mutableDecorationsByMessageId = mutableStateMapOf<String, MessageDecoration>()
+    private val decorationOrder = ArrayDeque<String>()
+
+    val decorationsByMessageId: Map<String, MessageDecoration>
+        get() = mutableDecorationsByMessageId
 
     var saveStatus by mutableStateOf(SharedSettingsSaveStatus.IDLE)
         private set
@@ -80,33 +84,38 @@ class SharedMessageRulesStateHolder(
 
     fun recordDecoration(messageId: String, decoration: MessageDecoration) {
         val id = requireMessageId(messageId)
-        val existing = decorationsByMessageId[id]
+        val existing = mutableDecorationsByMessageId[id]
         if (existing == decoration) return
 
         // Default decoration is represented by absence. Live EventSub delivery is de-duplicated
         // before this state holder, so ordinary messages do not need one map entry each.
         if (decoration == MessageDecoration()) {
             if (existing != null) {
-                decorationsByMessageId = decorationsByMessageId - id
+                mutableDecorationsByMessageId.remove(id)
+                decorationOrder.remove(id)
             }
             return
         }
 
-        val updated = LinkedHashMap(decorationsByMessageId)
-        updated.remove(id)
-        updated[id] = decoration
-        while (updated.size > MAX_LIVE_DECORATIONS) {
-            val oldest = updated.keys.firstOrNull() ?: break
-            updated.remove(oldest)
+        if (existing != null) {
+            decorationOrder.remove(id)
         }
-        decorationsByMessageId = updated
+        mutableDecorationsByMessageId[id] = decoration
+        decorationOrder.addLast(id)
+        while (mutableDecorationsByMessageId.size > MAX_LIVE_DECORATIONS) {
+            if (decorationOrder.isEmpty()) break
+            mutableDecorationsByMessageId.remove(decorationOrder.removeFirst())
+        }
     }
 
     fun decoration(messageId: String): MessageDecoration =
-        decorationsByMessageId[messageId.trim()] ?: MessageDecoration()
+        mutableDecorationsByMessageId[messageId.trim()] ?: MessageDecoration()
 
     fun clearDecorations() {
-        decorationsByMessageId = emptyMap()
+        if (mutableDecorationsByMessageId.isNotEmpty()) {
+            mutableDecorationsByMessageId.clear()
+        }
+        decorationOrder.clear()
     }
 
     fun markSaveStarted() {

@@ -21,6 +21,24 @@ class SharedMessageRulesStateTest {
     }
 
     @Test
+    fun meaningfulDecorationsMutateStableSnapshotMapInsteadOfReplacingIt() {
+        val state = SharedMessageRulesStateHolder()
+        val decorations = state.decorationsByMessageId
+
+        state.recordDecoration(
+            "first",
+            MessageDecoration(highlightColorArgb = 0xFF112233L),
+        )
+        state.recordDecoration(
+            "second",
+            MessageDecoration(highlightColorArgb = 0xFF445566L),
+        )
+
+        assertTrue(state.decorationsByMessageId === decorations)
+        assertEquals(2, decorations.size)
+    }
+
+    @Test
     fun clearingDecorationRemovesPreviouslyMeaningfulEntry() {
         val state = SharedMessageRulesStateHolder()
         state.recordDecoration(

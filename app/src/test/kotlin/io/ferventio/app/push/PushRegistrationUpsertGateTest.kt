@@ -1,6 +1,6 @@
 package io.ferventio.app.push
 
-import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -18,7 +18,7 @@ class PushRegistrationUpsertGateTest {
     )
 
     @Test
-    fun identicalSuccessfulRegistrationIsSkippedUntilCleared() = runTest {
+    fun identicalSuccessfulRegistrationIsSkippedUntilCleared() = runBlocking {
         val gate = PushRegistrationUpsertGate()
         var calls = 0
 
@@ -47,7 +47,7 @@ class PushRegistrationUpsertGateTest {
     }
 
     @Test
-    fun failedOrCancelledRegistrationRemainsRetryable() = runTest {
+    fun failedOrCancelledRegistrationRemainsRetryable() = runBlocking {
         val gate = PushRegistrationUpsertGate()
         var calls = 0
 
@@ -68,7 +68,7 @@ class PushRegistrationUpsertGateTest {
     }
 
     @Test
-    fun samePayloadOnDifferentServerIsNotDeduplicated() = runTest {
+    fun samePayloadOnDifferentServerIsNotDeduplicated() = runBlocking {
         val gate = PushRegistrationUpsertGate()
         var calls = 0
 
