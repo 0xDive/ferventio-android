@@ -24,7 +24,13 @@ class PushNotificationPolicy {
     ): List<String> = preferences.notificationPreferences.enabledRuleIds(
         channelIds = channelIds,
         legacyDefault = { rule -> legacyDefault(preferences, rule) },
-    )
+    ).ifEmpty {
+        listOf(BACKEND_DISABLED_RULE)
+    }
+
+    companion object {
+        const val BACKEND_DISABLED_RULE = "__disabled__"
+    }
 
     private fun legacyDefault(
         preferences: SharedAppPreferences,

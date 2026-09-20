@@ -176,7 +176,7 @@ class TwitchUserCardRuntimeTest {
                         headers = jsonHeaders(),
                     )
                 }
-                "api.ivr.fi" -> {
+                request.url.host == "api.ivr.fi" -> {
                     onRelationshipRequest()
                     respond(
                         content = ByteReadChannel(RELATIONSHIP_JSON),

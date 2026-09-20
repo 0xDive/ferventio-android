@@ -294,10 +294,12 @@ object SettingsBackupCodec {
     internal fun contentHashForVersion(content: SettingsBackupContent, formatVersion: Int): String {
         require(formatVersion in 1..BACKUP_FORMAT_VERSION) { "Неподдерживаемая версия резервной копии: $formatVersion" }
         val canonicalText = compactJson.encodeToString(content).let { encoded ->
-            if (formatVersion == 1) {
-                encoded.replace(Regex(",\"repeatCollapseEnabled\":(?:true|false)"), "")
-            } else {
-                encoded
+            when (formatVersion) {
+                1 -> encoded
+                    .replace(Regex(",\\\"repeatCollapseEnabled\\\":(?:true|false)"), "")
+                    .replace(Regex(",\\\"notificationPreferences\\\":\\{\\}"), "")
+                2 -> encoded.replace(Regex(",\\\"notificationPreferences\\\":\\{\\}"), "")
+                else -> encoded
             }
         }
         return MessageDigest.getInstance("SHA-256")
@@ -369,4 +371,4 @@ object SettingsBackupCodec {
 }
 
 const val BACKUP_FORMAT = "ferventio-settings-backup"
-const val BACKUP_FORMAT_VERSION = 2
+const val BACKUP_FORMAT_VERSION = 3

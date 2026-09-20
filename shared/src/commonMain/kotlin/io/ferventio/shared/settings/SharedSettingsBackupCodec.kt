@@ -106,7 +106,7 @@ internal data class SharedSettingsBackupDecodeResult(
 
 internal object SharedSettingsBackupCodec {
     const val BACKUP_FORMAT = "ferventio-settings-backup"
-    const val BACKUP_FORMAT_VERSION = 2
+    const val BACKUP_FORMAT_VERSION = 3
 
     @OptIn(ExperimentalSerializationApi::class)
     private val compactJson = Json {
@@ -116,6 +116,7 @@ internal object SharedSettingsBackupCodec {
     }
     private val channelLoginPattern = Regex("[A-Za-z0-9_]{1,25}")
     private val v1RepeatCollapseField = Regex(",\"repeatCollapseEnabled\":(?:true|false)")
+    private val legacyNotificationPreferencesField = Regex(",\\\"notificationPreferences\\\":\\{\\}")
 
     fun decode(raw: String): SharedSettingsBackupDecodeResult {
         SharedSettingsBackupInputGuard.requireWithinLimits(raw)
@@ -297,10 +298,12 @@ internal object SharedSettingsBackupCodec {
             "Unsupported Ferventio settings backup version: $formatVersion"
         }
         val canonicalText = compactJson.encodeToString(content).let { encoded ->
-            if (formatVersion == 1) {
-                encoded.replace(v1RepeatCollapseField, "")
-            } else {
-                encoded
+            when (formatVersion) {
+                1 -> encoded
+                    .replace(v1RepeatCollapseField, "")
+                    .replace(legacyNotificationPreferencesField, "")
+                2 -> encoded.replace(legacyNotificationPreferencesField, "")
+                else -> encoded
             }
         }
         return sha256Hex(canonicalText)

@@ -16,6 +16,7 @@ import io.ferventio.app.domain.SavedMessageFilter
 import android.content.Context
 import android.util.Base64
 import io.ferventio.app.BuildConfig
+import io.ferventio.shared.push.PushNotificationPolicy
 import io.ferventio.shared.settings.NotificationPreferencesCodec
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
@@ -283,7 +284,9 @@ class SettingsStore(context: Context) {
         notificationPreferences.enabledRuleIds(
             channelIds = channelIds,
             legacyDefault = ::legacyNotificationDefault,
-        )
+        ).ifEmpty {
+            listOf(PushNotificationPolicy.BACKEND_DISABLED_RULE)
+        }
 
     private fun legacyNotificationDefault(ruleId: String): Boolean = when (ruleId) {
         "reply" -> replyNotificationsEnabled

@@ -44,7 +44,7 @@ class SharedSettingsBackupCurrentCaptureTest {
         )
 
         val decoded = SharedSettingsBackupCodec.decode(captured).document
-        assertEquals(2, decoded.formatVersion)
+        assertEquals(SharedSettingsBackupCodec.BACKUP_FORMAT_VERSION, decoded.formatVersion)
         assertEquals("0.0.6", decoded.appVersion)
         assertEquals(captureTime.toString(), decoded.createdAt)
         assertEquals(AppThemeMode.DARK.name, decoded.content.settings.themeMode)

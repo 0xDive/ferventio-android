@@ -85,9 +85,9 @@ class SharedSettingsPayloadCodecTest {
         val content = root.getValue("content").jsonObject
         val channels = content.getValue("channels").jsonObject
 
-        assertEquals("2", root.getValue("formatVersion").jsonPrimitive.content)
+        assertEquals("3", root.getValue("formatVersion").jsonPrimitive.content)
         assertEquals(
-            "e2fe5cee606756ff7540b5d292799450f01e5c6bdac1d4a81c88c808269ff614",
+            sha256Hex(content.toString()),
             root.getValue("contentHash").jsonPrimitive.content,
         )
         assertEquals("beta", channels.getValue("selectedLogin").jsonPrimitive.content)

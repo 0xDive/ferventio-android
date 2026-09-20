@@ -10,7 +10,10 @@ class SharedSettingsBackupCodecTest {
     fun contentHashMatchesExistingAndroidCompatibleVector() {
         assertEquals(
             "e2fe5cee606756ff7540b5d292799450f01e5c6bdac1d4a81c88c808269ff614",
-            SharedSettingsBackupCodec.contentHashForTesting(androidCompatibleContent()),
+            SharedSettingsBackupCodec.contentHashForTesting(
+                androidCompatibleContent(),
+                formatVersion = 2,
+            ),
         )
     }
 
@@ -23,7 +26,7 @@ class SharedSettingsBackupCodecTest {
             SharedSettingsBackupCodec.encodeForTesting(document),
         )
 
-        assertEquals(2, decoded.document.formatVersion)
+        assertEquals(SharedSettingsBackupCodec.BACKUP_FORMAT_VERSION, decoded.document.formatVersion)
         assertEquals(2, decoded.summary.channelCount)
         assertEquals(1, decoded.summary.workspaceCount)
         assertEquals(0, decoded.summary.filterCount)
@@ -53,12 +56,15 @@ class SharedSettingsBackupCodecTest {
         val content = androidCompatibleContent()
         val encoded = SharedSettingsBackupCodec.encodeForTesting(document(content = content))
             .replace("\"format\":\"ferventio-settings-backup\",", "")
-            .replace("\"formatVersion\":2,", "")
+            .replace(
+                "\"formatVersion\":${SharedSettingsBackupCodec.BACKUP_FORMAT_VERSION},",
+                "",
+            )
 
         val decoded = SharedSettingsBackupCodec.decode(encoded)
 
         assertEquals(SharedSettingsBackupCodec.BACKUP_FORMAT, decoded.document.format)
-        assertEquals(2, decoded.document.formatVersion)
+        assertEquals(SharedSettingsBackupCodec.BACKUP_FORMAT_VERSION, decoded.document.formatVersion)
     }
 
     @Test
