@@ -201,6 +201,32 @@ class ChatAttentionStateTest {
     }
 
     @Test
+    fun remapOverExistingChannelKeepsMentionTotalConsistent() {
+        val state = ChatAttentionStateHolder()
+        state.recordIncoming(
+            message("one", "@viewer"),
+            session,
+            evaluator,
+        )
+        state.recordIncoming(
+            message(
+                id = "two",
+                text = "@viewer",
+                channelId = "replacement",
+                channelLogin = "replacement",
+            ),
+            session,
+            evaluator,
+        )
+        assertEquals(2, state.mentionUnreadCount)
+
+        assertTrue(state.remapChannelId("channel-id", "replacement"))
+
+        assertEquals(1, state.mentionUnreadCount)
+        assertEquals(1, state.attention("replacement").mentionCount)
+    }
+
+    @Test
     fun navigationTargetIsConsumedOnlyByMatchingChannelAndMessage() {
         val state = ChatAttentionStateHolder()
         state.requestMessageNavigation("channel-id", "message-id")

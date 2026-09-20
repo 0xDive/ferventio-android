@@ -203,6 +203,10 @@ class ChatAttentionStateHolder {
         if (!hadState) return false
 
         channelAttention[currentId]?.let { value ->
+            val replaced = channelAttention[nextId]
+            if (replaced != null && replaced.mentionCount > 0) {
+                mentionUnreadCount = (mentionUnreadCount - replaced.mentionCount).coerceAtLeast(0)
+            }
             channelAttention = (channelAttention - currentId) + (nextId to value)
         }
         attentionEntries.mapAttentionEntriesIfChanged { entry ->
