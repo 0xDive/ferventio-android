@@ -7199,7 +7199,7 @@ class FerventioController(
         const val MAX_USER_CARD_TIMEOUT_PRESETS = 10
         const val MAX_AUTOMOD_QUEUE_ITEMS = 200
         const val AUTOMOD_EXPIRY_SWEEP_INTERVAL_MILLIS = 30_000L
-        const val AUTOMOD_STALE_HOLD_GRACE_MILLIS = 10 * 60 * 1_000L
+        const val AUTOMOD_STALE_HOLD_GRACE_MILLIS = 24 * 60 * 60 * 1_000L
         const val MAX_MODERATION_HISTORY_ITEMS = 300
         const val MAX_OBSERVED_CHATTERS = 1_000
         const val OBSERVED_CHATTERS_NOTICE =

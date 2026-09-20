@@ -320,7 +320,7 @@ class AuthenticatedChatRuntimeCoordinator(
 
 private const val METADATA_REFRESH_CONCURRENCY = 4
 private const val AUTOMOD_STALE_SWEEP_INTERVAL_MILLIS = 30_000L
-private const val AUTOMOD_STALE_HOLD_GRACE_MILLIS = 10 * 60 * 1_000L
+private const val AUTOMOD_STALE_HOLD_GRACE_MILLIS = 24 * 60 * 60 * 1_000L
 
 internal fun shouldEmitAutoModAlert(settings: SharedAppSettingsStateHolder?): Boolean =
     settings?.preferences?.autoModNotificationsEnabled != false
