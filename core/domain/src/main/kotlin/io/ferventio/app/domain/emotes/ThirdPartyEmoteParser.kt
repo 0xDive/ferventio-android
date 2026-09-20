@@ -1,8 +1,6 @@
 package io.ferventio.app.domain
 
 object ThirdPartyEmoteParser {
-    private val tokenRegex = Regex("\\s+|\\S+")
-
     fun enrich(
         message: ChatMessage,
         emotesByCode: Map<String, ThirdPartyEmoteAsset>,
@@ -15,9 +13,8 @@ object ThirdPartyEmoteParser {
                     add(fragment)
                     return@forEach
                 }
-                tokenRegex.findAll(fragment.text).forEach { match ->
-                    val token = match.value
-                    val asset = if (token.any(Char::isWhitespace)) {
+                fragment.text.forEachTokenRun { token, whitespace ->
+                    val asset = if (whitespace) {
                         null
                     } else {
                         emotesByCode[token]?.takeIf(ThirdPartyEmoteAsset::textResolvable)
@@ -42,6 +39,25 @@ object ThirdPartyEmoteParser {
             }
         }
         return if (changed) message.copy(fragments = enriched) else message
+    }
+
+    private inline fun String.forEachTokenRun(
+        block: (token: String, whitespace: Boolean) -> Unit,
+    ) {
+        if (isEmpty()) return
+        var start = 0
+        var whitespace = this[0].isWhitespace()
+        var index = 1
+        while (index < length) {
+            val nextWhitespace = this[index].isWhitespace()
+            if (nextWhitespace != whitespace) {
+                block(substring(start, index), whitespace)
+                start = index
+                whitespace = nextWhitespace
+            }
+            index += 1
+        }
+        block(substring(start, length), whitespace)
     }
 
     private fun MutableList<ChatFragment>.removeWhitespaceBeforeComposite() {

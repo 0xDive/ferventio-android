@@ -24,6 +24,23 @@ class ThirdPartyEmoteParserTest {
     }
 
     @Test
+    fun preservesMixedWhitespaceRunsWhileReplacingExactTokens() {
+        val source = "hello\tKEKW\n  world"
+        val result = ThirdPartyEmoteParser.enrich(message(source), mapOf("KEKW" to kekw))
+
+        assertEquals(source, result.fragments.joinToString("") { it.text })
+        assertTrue(result.fragments.any { it is ChatFragment.ThirdPartyEmote && it.text == "KEKW" })
+    }
+
+    @Test
+    fun singleTokenFastPathKeepsNonMatchingTextUntouched() {
+        val source = message("ordinary")
+        val result = ThirdPartyEmoteParser.enrich(source, mapOf("KEKW" to kekw))
+
+        assertTrue(result === source)
+    }
+
+    @Test
     fun doesNotReplaceInsideAnotherWordOrWithPunctuation() {
         val result = ThirdPartyEmoteParser.enrich(message("xKEKW KEKW!"), mapOf("KEKW" to kekw))
         assertTrue(result.fragments.none { it is ChatFragment.ThirdPartyEmote })
