@@ -11,6 +11,7 @@ class SettingsBackupCodecTest {
     fun roundTripPreservesVersionAndContentHash() {
         val content = sampleContent()
         val document = SettingsBackupDocument(
+            formatVersion = BACKUP_FORMAT_VERSION,
             createdAt = Instant.parse("2026-07-25T12:00:00Z").toString(),
             appVersion = "0.0.1-test",
             contentHash = SettingsBackupCodec.contentHash(content),
@@ -33,6 +34,7 @@ class SettingsBackupCodecTest {
     fun tamperedContentIsRejectedBeforeImport() {
         val content = sampleContent()
         val document = SettingsBackupDocument(
+            formatVersion = BACKUP_FORMAT_VERSION,
             createdAt = "2026-07-25T12:00:00Z",
             appVersion = "0.0.1-test",
             contentHash = SettingsBackupCodec.contentHash(content),
@@ -53,6 +55,7 @@ class SettingsBackupCodecTest {
             settings = baseContent.settings.copy(showSystemMessages = true),
         )
         val document = SettingsBackupDocument(
+            formatVersion = BACKUP_FORMAT_VERSION,
             createdAt = "2026-07-25T12:00:00Z",
             appVersion = "0.0.1-test",
             contentHash = SettingsBackupCodec.contentHash(content),
@@ -113,6 +116,7 @@ class SettingsBackupCodecTest {
     fun legacyBackupWithoutRecentMessagesFieldUsesDisabledDefault() {
         val content = sampleContent()
         val document = SettingsBackupDocument(
+            formatVersion = BACKUP_FORMAT_VERSION,
             createdAt = "2026-07-25T12:00:00Z",
             appVersion = "0.0.1-test",
             contentHash = SettingsBackupCodec.contentHash(content),
