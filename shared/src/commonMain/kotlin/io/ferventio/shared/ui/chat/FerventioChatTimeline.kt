@@ -68,6 +68,7 @@ import io.ferventio.app.domain.ChatMessage
 import io.ferventio.app.domain.ChatNameStyle
 import io.ferventio.app.domain.ChatScrollPosition
 import io.ferventio.app.domain.ChatRepeatCollapseConfig
+import io.ferventio.app.domain.ChatRepeatCollapsePlan
 import io.ferventio.app.domain.ChatRepeatCollapser
 import io.ferventio.app.domain.ChatRepeatSummary
 import io.ferventio.app.domain.CheermoteAsset
@@ -151,13 +152,21 @@ fun FerventioChatTimeline(
         )
     }
     val collapsePlan = remember(sourceMessages, preferences.repeatCollapseEnabled) {
-        ChatRepeatCollapser.build(
-            messages = sourceMessages,
-            config = ChatRepeatCollapseConfig(enabled = preferences.repeatCollapseEnabled),
-        )
+        if (preferences.repeatCollapseEnabled) {
+            ChatRepeatCollapser.build(
+                messages = sourceMessages,
+                config = ChatRepeatCollapseConfig(enabled = true),
+            )
+        } else {
+            ChatRepeatCollapsePlan.Empty
+        }
     }
-    val messages = remember(sourceMessages, collapsePlan.visibleMessageIds) {
-        sourceMessages.filter { message -> message.id in collapsePlan.visibleMessageIds }
+    val messages = if (preferences.repeatCollapseEnabled) {
+        remember(sourceMessages, collapsePlan.visibleMessageIds) {
+            sourceMessages.filter { message -> message.id in collapsePlan.visibleMessageIds }
+        }
+    } else {
+        sourceMessages
     }
     val heldAutoModMessages = remember(autoModHeldMessages) {
         autoModHeldMessages

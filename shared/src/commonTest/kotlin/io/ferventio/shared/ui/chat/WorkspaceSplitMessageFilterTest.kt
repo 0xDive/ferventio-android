@@ -67,10 +67,11 @@ class WorkspaceSplitMessageFilterTest {
     }
 
     @Test
-    fun blankQueryKeepsNormalMessages() {
+    fun blankQueryKeepsNormalMessagesWithoutAllocatingAnotherList() {
         val visible = message("visible", "hello")
+        val messages = listOf(visible)
         val result = filterWorkspaceSplitMessages(
-            messages = listOf(visible),
+            messages = messages,
             filterQuery = "",
             savedFilters = emptyList(),
             decorations = emptyMap(),
@@ -78,6 +79,7 @@ class WorkspaceSplitMessageFilterTest {
         )
 
         assertEquals(listOf(visible), result)
+        assertTrue(result === messages)
     }
 
     private fun message(

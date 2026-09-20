@@ -46,6 +46,13 @@ internal fun filterWorkspaceSplitMessages(
     showSystemMessages: Boolean,
 ): List<ChatMessage> {
     val filter = compileWorkspaceSplitMessageFilter(filterQuery, savedFilters)
+    if (
+        filter.expression.isEmpty() &&
+        showSystemMessages &&
+        decorations.values.none { it.ignoreDisplayMode == IgnoreDisplayMode.HIDE }
+    ) {
+        return messages
+    }
     return messages.filter { message ->
         if (!showSystemMessages && message.isSystem) return@filter false
         val decoration = decorations[message.id]

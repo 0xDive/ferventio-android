@@ -9,6 +9,32 @@ import kotlin.test.assertTrue
 
 class SharedMessageRulesStateTest {
     @Test
+    fun defaultDecorationsDoNotAllocateLiveDecorationEntries() {
+        val state = SharedMessageRulesStateHolder()
+
+        repeat(1_000) { index ->
+            state.recordDecoration("message-$index", MessageDecoration())
+        }
+
+        assertTrue(state.decorationsByMessageId.isEmpty())
+        assertEquals(MessageDecoration(), state.decoration("message-999"))
+    }
+
+    @Test
+    fun clearingDecorationRemovesPreviouslyMeaningfulEntry() {
+        val state = SharedMessageRulesStateHolder()
+        state.recordDecoration(
+            "message-id",
+            MessageDecoration(highlightColorArgb = 0xFF112233L),
+        )
+
+        state.recordDecoration("message-id", MessageDecoration())
+
+        assertTrue(state.decorationsByMessageId.isEmpty())
+        assertEquals(MessageDecoration(), state.decoration("message-id"))
+    }
+
+    @Test
     fun restoringEditedRulesDoesNotReevaluateExistingDecorations() {
         val state = SharedMessageRulesStateHolder()
         val originalDecoration = MessageDecoration(

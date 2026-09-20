@@ -80,6 +80,18 @@ class SharedMessageRulesStateHolder(
 
     fun recordDecoration(messageId: String, decoration: MessageDecoration) {
         val id = requireMessageId(messageId)
+        val existing = decorationsByMessageId[id]
+        if (existing == decoration) return
+
+        // Default decoration is represented by absence. Live EventSub delivery is de-duplicated
+        // before this state holder, so ordinary messages do not need one map entry each.
+        if (decoration == MessageDecoration()) {
+            if (existing != null) {
+                decorationsByMessageId = decorationsByMessageId - id
+            }
+            return
+        }
+
         val updated = LinkedHashMap(decorationsByMessageId)
         updated.remove(id)
         updated[id] = decoration
