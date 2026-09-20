@@ -607,12 +607,14 @@ private fun ChannelTabs(
         return
     }
 
-    val selectedIndex = channels
-        .indexOfFirst { it.id == selectedChannelId }
-        .takeIf { it >= 0 }
-        ?.coerceIn(0, channels.lastIndex)
-        ?: 0
-    val channelIds = channels.map(ChatChannel::id)
+    val selectedIndex = remember(channels, selectedChannelId) {
+        channels
+            .indexOfFirst { it.id == selectedChannelId }
+            .takeIf { it >= 0 }
+            ?.coerceIn(0, channels.lastIndex)
+            ?: 0
+    }
+    val channelIds = remember(channels) { channels.map(ChatChannel::id) }
 
     key(channelIds) {
         androidx.compose.material3.ScrollableTabRow(
