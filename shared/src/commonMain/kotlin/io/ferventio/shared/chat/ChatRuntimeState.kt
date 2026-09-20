@@ -768,7 +768,9 @@ class ChatRuntimeStateHolder(
     private fun rebuildAllLiveMessageIndexes() {
         liveMessageIdsByChannel.clear()
         liveServerMessageIdsByChannel.clear()
-        messagesByChannel.forEach(::rebuildLiveMessageIndexes)
+        messagesByChannel.forEach { (channelId, messages) ->
+            rebuildLiveMessageIndexes(channelId, messages)
+        }
     }
 
     private fun rebuildLiveMessageIndexes(
