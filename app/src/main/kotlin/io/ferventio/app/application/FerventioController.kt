@@ -6297,13 +6297,10 @@ class FerventioController(
                 }
                 emptyList()
             }
-        val channels = mutableState.value.channels
-        val remapped = stored.map { entry ->
-            val channel = channels.firstOrNull { candidate ->
-                candidate.id == entry.channelId || candidate.login.equals(entry.channelLogin, ignoreCase = true)
-            }
-            if (channel == null || channel.id == entry.channelId) entry else entry.copy(channelId = channel.id)
-        }
+        val remapped = remapLegacyAttentionEntries(
+            entries = stored,
+            channels = mutableState.value.channels,
+        )
         mutableState.update { state ->
             val restoredAttention = remapped.filterNot(AttentionEntry::isRead)
                 .groupBy(AttentionEntry::channelId)
