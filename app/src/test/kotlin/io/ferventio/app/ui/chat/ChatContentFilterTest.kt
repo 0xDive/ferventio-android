@@ -10,6 +10,34 @@ import kotlin.test.assertTrue
 
 class ChatContentFilterTest {
     @Test
+    fun decorationProjectionDropsOtherChannelMessageIds() {
+        val current = listOf(message("one"), message("two"))
+        val one = MessageDecoration(highlightColorArgb = 0xFF112233L)
+
+        val result = selectLegacyChatDecorations(
+            messages = current,
+            decorations = mapOf(
+                "one" to one,
+                "other" to MessageDecoration(ignoreDisplayMode = IgnoreDisplayMode.HIDE),
+            ),
+        )
+
+        assertEquals(mapOf("one" to one), result)
+    }
+
+    @Test
+    fun decorationProjectionReusesSharedEmptyMapWhenNothingMatches() {
+        val result = selectLegacyChatDecorations(
+            messages = listOf(message("one")),
+            decorations = mapOf(
+                "other" to MessageDecoration(highlightColorArgb = 0xFF445566L),
+            ),
+        )
+
+        assertTrue(result.isEmpty())
+    }
+
+    @Test
     fun unrelatedIgnoreDecorationReusesMessageList() {
         val messages = listOf(message("visible"))
 

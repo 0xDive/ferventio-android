@@ -266,6 +266,23 @@ import androidx.core.graphics.toColorInt
 import android.widget.Toast
 
 
+internal fun selectLegacyChatDecorations(
+    messages: List<ChatMessage>,
+    decorations: Map<String, MessageDecoration>,
+): Map<String, MessageDecoration> {
+    if (messages.isEmpty() || decorations.isEmpty()) return EMPTY_MESSAGE_DECORATIONS
+    var selected: MutableMap<String, MessageDecoration>? = null
+    messages.forEach { message ->
+        decorations[message.id]?.let { decoration ->
+            val target = selected ?: LinkedHashMap<String, MessageDecoration>().also {
+                selected = it
+            }
+            target[message.id] = decoration
+        }
+    }
+    return selected ?: EMPTY_MESSAGE_DECORATIONS
+}
+
 internal fun filterLegacyChatMessages(
     messages: List<ChatMessage>,
     showSystemMessages: Boolean,
@@ -399,7 +416,12 @@ internal fun ChannelChatContent(
     }
     val hasActiveIgnoreRules = remember(state.ignoreRules) { state.ignoreRules.any(IgnoreRule::enabled) }
     val needsDecorationFiltering = filterExpression == HIGHLIGHTS_FILTER_QUERY || hasActiveIgnoreRules
-    val messageDecorations = state.messageDecorationsById
+    val messageDecorations = remember(rawMessages, state.messageDecorationsById) {
+        selectLegacyChatDecorations(
+            messages = rawMessages,
+            decorations = state.messageDecorationsById,
+        )
+    }
     val filteringDecorations = if (needsDecorationFiltering) messageDecorations else EMPTY_MESSAGE_DECORATIONS
     val messages = remember(
         rawMessages,
