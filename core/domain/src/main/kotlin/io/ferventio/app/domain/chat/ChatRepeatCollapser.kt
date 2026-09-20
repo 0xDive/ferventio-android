@@ -100,7 +100,7 @@ object ChatRepeatCollapser {
         val anchorByMessageId = LinkedHashMap<String, String>()
         val summaries = LinkedHashMap<String, ChatRepeatSummary>()
 
-        var run = mutableListOf<ChatMessage>()
+        val run = ArrayList<ChatMessage>()
         var runKey: String? = null
 
         fun flushRun() {
@@ -125,7 +125,7 @@ object ChatRepeatCollapser {
                 run.forEach { message -> visibleIds += message.id }
             }
 
-            run = mutableListOf()
+            run.clear()
             runKey = null
         }
 
