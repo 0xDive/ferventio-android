@@ -41,7 +41,7 @@ class TwitchUserCardRuntime internal constructor(
         userLogin = userLogin,
     )
 
-    suspend fun enrich(
+    internal suspend fun enrich(
         authentication: StoredAuthentication,
         userId: String,
         userLogin: String,
