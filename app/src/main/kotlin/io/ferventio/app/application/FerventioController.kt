@@ -615,8 +615,10 @@ class FerventioController(
 
 
     fun renameChannelTab(channelId: String, title: String) {
-        if (mutableState.value.channels.none { it.id == channelId }) return
+        val current = mutableState.value
+        if (current.channels.none { it.id == channelId }) return
         val normalizedTitle = title.trim().take(32)
+        if (current.channelTabTitles[channelId].orEmpty() == normalizedTitle) return
         mutableState.update { state ->
             val updated = if (normalizedTitle.isBlank()) {
                 state.channelTabTitles - channelId
@@ -632,27 +634,74 @@ class FerventioController(
         val canMarkRead = ChannelReadPolicy.canMarkRead(channelId, mutableState.value.visibleChannelIds)
         if (!canMarkRead) return
         mutableState.update { state ->
-            val unreadForChannel = state.attentionEntries.count { it.channelId == channelId && !it.isRead }
-            state.copy(
-                channelAttention = state.channelAttention - channelId,
-                attentionEntries = state.attentionEntries.map { entry ->
-                    if (entry.channelId == channelId) entry.copy(isRead = true) else entry
-                },
-                mentionUnreadCount = (state.mentionUnreadCount - unreadForChannel).coerceAtLeast(0),
-            )
+            var unreadForChannel = 0
+            val updatedEntries = mapLegacyListIfChanged(state.attentionEntries) { entry ->
+                if (entry.channelId == channelId && !entry.isRead) {
+                    unreadForChannel += 1
+                    entry.copy(isRead = true)
+                } else {
+                    entry
+                }
+            }
+            val hasChannelAttention = channelId in state.channelAttention
+            if (updatedEntries == null && !hasChannelAttention) {
+                state
+            } else {
+                state.copy(
+                    channelAttention = if (hasChannelAttention) {
+                        state.channelAttention - channelId
+                    } else {
+                        state.channelAttention
+                    },
+                    attentionEntries = updatedEntries ?: state.attentionEntries,
+                    mentionUnreadCount =
+                        (state.mentionUnreadCount - unreadForChannel).coerceAtLeast(0),
+                )
+            }
         }
         scope.launch { runCatching { historyRepository.markChannelAttentionRead(channelId) } }
     }
 
     fun markAllMentionsRead() {
         mutableState.update { state ->
-            state.copy(
-                attentionEntries = state.attentionEntries.map { entry -> entry.copy(isRead = true) },
-                mentionUnreadCount = 0,
-                channelAttention = state.channelAttention.mapValues { (_, attention) ->
-                    attention.copy(mentionCount = 0)
-                }.filterValues(ChannelAttention::hasUnread),
-            )
+            val updatedEntries = mapLegacyListIfChanged(state.attentionEntries) { entry ->
+                if (entry.isRead) entry else entry.copy(isRead = true)
+            }
+            var channelAttentionChanged = false
+            val updatedChannelAttention = buildMap {
+                state.channelAttention.forEach { (channelId, attention) ->
+                    val updated = if (attention.mentionCount == 0) {
+                        attention
+                    } else {
+                        channelAttentionChanged = true
+                        attention.copy(mentionCount = 0)
+                    }
+                    if (updated.hasUnread) {
+                        put(channelId, updated)
+                    } else {
+                        if (channelId in state.channelAttention) {
+                            channelAttentionChanged = true
+                        }
+                    }
+                }
+            }
+            if (
+                updatedEntries == null &&
+                state.mentionUnreadCount == 0 &&
+                !channelAttentionChanged
+            ) {
+                state
+            } else {
+                state.copy(
+                    attentionEntries = updatedEntries ?: state.attentionEntries,
+                    mentionUnreadCount = 0,
+                    channelAttention = if (channelAttentionChanged) {
+                        updatedChannelAttention
+                    } else {
+                        state.channelAttention
+                    },
+                )
+            }
         }
         scope.launch { runCatching { historyRepository.markAllAttentionRead() } }
     }
@@ -741,11 +790,17 @@ class FerventioController(
             } else {
                 state.channelAttention
             }
+            val updatedAttentionEntries = mapLegacyListIfChanged(state.attentionEntries) { item ->
+                if (item.messageId == entry.messageId && !item.isRead) {
+                    item.copy(isRead = true)
+                } else {
+                    item
+                }
+            }
             state.copy(
-                attentionEntries = state.attentionEntries.map { item ->
-                    if (item.messageId == entry.messageId) item.copy(isRead = true) else item
-                },
-                mentionUnreadCount = (state.mentionUnreadCount - if (entry.isRead) 0 else 1).coerceAtLeast(0),
+                attentionEntries = updatedAttentionEntries ?: state.attentionEntries,
+                mentionUnreadCount =
+                    (state.mentionUnreadCount - if (entry.isRead) 0 else 1).coerceAtLeast(0),
                 channelAttention = nextChannelAttention,
                 messagesByChannel = state.messagesByChannel + (resolvedChannelId to injected),
             )
