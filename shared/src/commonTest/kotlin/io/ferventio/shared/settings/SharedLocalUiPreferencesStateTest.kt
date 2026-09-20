@@ -54,6 +54,19 @@ class SharedLocalUiPreferencesStateTest {
     }
 
     @Test
+    fun repeatedTopSentMessageDoesNotWriteStoreAgain() {
+        val store = RecordingStore()
+        val state = SharedLocalUiPreferencesStateHolder(store)
+
+        state.recordSentMessage("channel-1", "same")
+        val writes = store.saveCount
+        state.recordSentMessage("channel-1", "same")
+
+        assertEquals(writes, store.saveCount)
+        assertEquals(listOf("same"), state.sentMessageHistory("channel-1"))
+    }
+
+    @Test
     fun composerDraftsAndHistoryPersistLocally() {
         val store = RecordingStore()
         val state = SharedLocalUiPreferencesStateHolder(store)

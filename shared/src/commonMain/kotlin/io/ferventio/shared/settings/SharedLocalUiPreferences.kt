@@ -11,6 +11,7 @@ const val COMPOSER_DRAFTS_BY_CHANNEL_KEY = "drafts_by_channel"
 const val SENT_MESSAGE_HISTORY_BY_CHANNEL_KEY = "sent_message_history_by_channel"
 const val MAX_COMPOSER_DRAFT_LENGTH = 500
 const val MAX_SENT_MESSAGE_HISTORY_PER_CHANNEL = 50
+private const val MAX_LOCAL_COMPOSER_CHANNELS = 100
 
 data class SharedLocalUiPreferences(
     val showQuickBan: Boolean = false,
@@ -49,9 +50,6 @@ data class SharedLocalUiPreferences(
         }
     }
 
-    private companion object {
-        const val MAX_LOCAL_COMPOSER_CHANNELS = 100
-    }
 }
 
 /** Device-local UI preferences that intentionally do not participate in backend settings sync. */
@@ -67,25 +65,19 @@ class SharedLocalUiPreferencesStateHolder(
     var preferences by mutableStateOf(store.load().normalized())
         private set
 
-    fun update(transform: (SharedLocalUiPreferences) -> SharedLocalUiPreferences): SharedLocalUiPreferences {
-        val current = preferences
-        val updated = transform(current).normalized()
-        if (updated == current) return current
-        store.save(updated)
-        preferences = updated
-        return updated
-    }
+    fun update(transform: (SharedLocalUiPreferences) -> SharedLocalUiPreferences): SharedLocalUiPreferences =
+        commit(transform(preferences).normalized())
 
     fun setShowQuickBan(value: Boolean) {
-        update { it.copy(showQuickBan = value) }
+        commit(preferences.copy(showQuickBan = value))
     }
 
     fun setShowQuickDelete(value: Boolean) {
-        update { it.copy(showQuickDelete = value) }
+        commit(preferences.copy(showQuickDelete = value))
     }
 
     fun setConfirmModerationActions(value: Boolean) {
-        update { it.copy(confirmModerationActions = value) }
+        commit(preferences.copy(confirmModerationActions = value))
     }
 
     fun draft(channelId: String): String =
@@ -95,14 +87,22 @@ class SharedLocalUiPreferencesStateHolder(
         val normalizedChannelId = channelId.trim()
         if (normalizedChannelId.isEmpty()) return
         val normalizedDraft = value.take(MAX_COMPOSER_DRAFT_LENGTH)
-        update { current ->
-            val drafts = if (normalizedDraft.isEmpty()) {
-                current.draftsByChannel - normalizedChannelId
-            } else {
-                current.draftsByChannel + (normalizedChannelId to normalizedDraft)
-            }
-            current.copy(draftsByChannel = drafts)
+        val current = preferences
+        val existing = current.draftsByChannel[normalizedChannelId].orEmpty()
+        if (existing == normalizedDraft) return
+        if (
+            normalizedDraft.isNotEmpty() &&
+            normalizedChannelId !in current.draftsByChannel &&
+            current.draftsByChannel.size >= MAX_LOCAL_COMPOSER_CHANNELS
+        ) {
+            return
         }
+        val drafts = if (normalizedDraft.isEmpty()) {
+            current.draftsByChannel - normalizedChannelId
+        } else {
+            current.draftsByChannel + (normalizedChannelId to normalizedDraft)
+        }
+        commit(current.copy(draftsByChannel = drafts))
     }
 
     fun sentMessageHistory(channelId: String): List<String> =
@@ -112,18 +112,37 @@ class SharedLocalUiPreferencesStateHolder(
         val normalizedChannelId = channelId.trim()
         val normalizedText = text.trim().take(MAX_COMPOSER_DRAFT_LENGTH)
         if (normalizedChannelId.isEmpty() || normalizedText.isEmpty()) return
-        update { current ->
-            val history = (
-                listOf(normalizedText) +
-                    current.sentMessageHistoryByChannel[normalizedChannelId].orEmpty()
-                )
-                .distinct()
-                .take(MAX_SENT_MESSAGE_HISTORY_PER_CHANNEL)
+        val current = preferences
+        if (
+            normalizedChannelId !in current.sentMessageHistoryByChannel &&
+            current.sentMessageHistoryByChannel.size >= MAX_LOCAL_COMPOSER_CHANNELS
+        ) {
+            return
+        }
+        val existing = current.sentMessageHistoryByChannel[normalizedChannelId].orEmpty()
+        if (existing.firstOrNull() == normalizedText) return
+        val history = buildList(minOf(MAX_SENT_MESSAGE_HISTORY_PER_CHANNEL, existing.size + 1)) {
+            add(normalizedText)
+            existing.forEach { message ->
+                if (message != normalizedText && size < MAX_SENT_MESSAGE_HISTORY_PER_CHANNEL) {
+                    add(message)
+                }
+            }
+        }
+        commit(
             current.copy(
                 sentMessageHistoryByChannel =
                     current.sentMessageHistoryByChannel + (normalizedChannelId to history),
-            )
-        }
+            ),
+        )
+    }
+
+    private fun commit(updated: SharedLocalUiPreferences): SharedLocalUiPreferences {
+        val current = preferences
+        if (updated == current) return current
+        store.save(updated)
+        preferences = updated
+        return updated
     }
 }
 
