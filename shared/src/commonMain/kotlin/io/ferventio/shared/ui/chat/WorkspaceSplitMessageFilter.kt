@@ -57,16 +57,22 @@ internal fun filterWorkspaceSplitMessages(
     decorations: Map<String, MessageDecoration>,
     showSystemMessages: Boolean,
 ): List<ChatMessage> {
-    if (
-        filter.expression.isEmpty() &&
-        showSystemMessages &&
-        decorations.values.none { it.ignoreDisplayMode == IgnoreDisplayMode.HIDE }
-    ) {
-        return messages
-    }
-    return messages.filter { message ->
-        if (!showSystemMessages && message.isSystem) return@filter false
+    var filtered: MutableList<ChatMessage>? = null
+    for (index in messages.indices) {
+        val message = messages[index]
         val decoration = decorations[message.id]
-        filter.matches(message, decoration) && decoration?.ignoreDisplayMode != IgnoreDisplayMode.HIDE
+        val keep = (showSystemMessages || !message.isSystem) &&
+            filter.matches(message, decoration) &&
+            decoration?.ignoreDisplayMode != IgnoreDisplayMode.HIDE
+        if (keep) {
+            filtered?.add(message)
+        } else if (filtered == null) {
+            filtered = ArrayList<ChatMessage>(messages.size - 1).apply {
+                for (prefixIndex in 0 until index) {
+                    add(messages[prefixIndex])
+                }
+            }
+        }
     }
+    return filtered ?: messages
 }
