@@ -6347,46 +6347,55 @@ class FerventioController(
             session = snapshot.session,
         )
         messageRuleEvaluator = evaluator
-        val messages = snapshot.messagesByChannel.values.flatten()
+        val messageBuckets = snapshot.messagesByChannel.values
+        val messageCount = messageBuckets.sumOf(List<ChatMessage>::size)
         val existingAttention = snapshot.attentionEntries
         messageRuleRebuildJob = scope.launch(Dispatchers.Default) {
-            val decorations = HashMap<String, MessageDecoration>(messages.size)
+            val decorations = HashMap<String, MessageDecoration>(messageCount)
             val generatedAttention = ArrayList<AttentionEntry>()
+            val evaluatedMessageIds = HashSet<String>(messageCount)
             val existingById = existingAttention.associateBy(AttentionEntry::messageId)
-            messages.forEachIndexed { index, message ->
-                if (index % RULE_REBUILD_CANCELLATION_INTERVAL == 0) {
-                    currentCoroutineContext().ensureActive()
-                }
-                if (message.isSystem) return@forEachIndexed
-                val decoration = evaluator.evaluate(message)
-                if (decoration.isHighlighted || decoration.isIgnored) decorations[message.id] = decoration
-                if (!decoration.isIgnored) {
-                    val directMention = evaluator.isDirectMention(message)
-                    val highlightMention = decoration.isHighlighted && decoration.addToMentions
-                    if ((directMention || highlightMention) && message.id !in existingById) {
-                        generatedAttention += AttentionEntry(
-                            messageId = message.id,
-                            channelId = message.channelId,
-                            channelLogin = message.channelLogin,
-                            authorId = message.userId,
-                            authorLogin = message.userLogin,
-                            authorDisplayName = message.userDisplayName,
-                            text = message.text,
-                            timestamp = message.timestamp,
-                            timestampMillis = message.timestampMillis,
-                            isRead = true,
-                            isDirectMention = directMention,
-                            isHighlight = highlightMention,
-                            highlightReasons = decoration.highlightReasons,
-                            highlightColorArgb = decoration.highlightColorArgb,
-                        )
+            var processedMessages = 0
+            messageBuckets.forEach { messages ->
+                messages.forEach { message ->
+                    if (processedMessages % RULE_REBUILD_CANCELLATION_INTERVAL == 0) {
+                        currentCoroutineContext().ensureActive()
+                    }
+                    processedMessages += 1
+                    evaluatedMessageIds += message.id
+                    if (!message.isSystem) {
+                        val decoration = evaluator.evaluate(message)
+                        if (decoration.isHighlighted || decoration.isIgnored) {
+                            decorations[message.id] = decoration
+                        }
+                        if (!decoration.isIgnored) {
+                            val directMention = evaluator.isDirectMention(message)
+                            val highlightMention = decoration.isHighlighted && decoration.addToMentions
+                            if ((directMention || highlightMention) && message.id !in existingById) {
+                                generatedAttention += AttentionEntry(
+                                    messageId = message.id,
+                                    channelId = message.channelId,
+                                    channelLogin = message.channelLogin,
+                                    authorId = message.userId,
+                                    authorLogin = message.userLogin,
+                                    authorDisplayName = message.userDisplayName,
+                                    text = message.text,
+                                    timestamp = message.timestamp,
+                                    timestampMillis = message.timestampMillis,
+                                    isRead = true,
+                                    isDirectMention = directMention,
+                                    isHighlight = highlightMention,
+                                    highlightReasons = decoration.highlightReasons,
+                                    highlightColorArgb = decoration.highlightColorArgb,
+                                )
+                            }
+                        }
                     }
                 }
             }
             if (generatedAttention.isNotEmpty()) {
                 runCatching { historyRepository.saveAttentionEntries(generatedAttention) }
             }
-            val evaluatedMessageIds = messages.asSequence().map(ChatMessage::id).toSet()
             mutableState.update { state ->
                 val combinedAttention = (generatedAttention + state.attentionEntries)
                     .distinctBy(AttentionEntry::messageId)
