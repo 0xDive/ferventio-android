@@ -6,6 +6,7 @@ import io.ferventio.app.domain.AppThemeMode
 import io.ferventio.app.domain.ChatNameStyle
 import io.ferventio.app.domain.MessageDensity
 import io.ferventio.app.domain.MentionColors
+import io.ferventio.app.domain.NotificationPreferences
 import io.ferventio.app.domain.HighlightRule
 import io.ferventio.app.domain.IgnoreRule
 import io.ferventio.app.domain.MessageRuleCodec
@@ -15,6 +16,7 @@ import io.ferventio.app.domain.SavedMessageFilter
 import android.content.Context
 import android.util.Base64
 import io.ferventio.app.BuildConfig
+import io.ferventio.shared.settings.NotificationPreferencesCodec
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -258,6 +260,36 @@ class SettingsStore(context: Context) {
     var autoModNotificationsEnabled: Boolean
         get() = preferences.getBoolean(KEY_AUTOMOD_NOTIFICATIONS_ENABLED, true)
         set(value) = preferences.edit().putBoolean(KEY_AUTOMOD_NOTIFICATIONS_ENABLED, value).apply()
+
+    var notificationPreferences: NotificationPreferences
+        get() = NotificationPreferencesCodec.decode(
+            preferences.getString(KEY_NOTIFICATION_PREFERENCES_JSON, null),
+        )
+        set(value) = preferences.edit()
+            .putString(
+                KEY_NOTIFICATION_PREFERENCES_JSON,
+                NotificationPreferencesCodec.encode(value.normalized()),
+            )
+            .apply()
+
+    fun notificationEnabled(ruleId: String, channelId: String? = null): Boolean =
+        notificationPreferences.isEnabled(
+            ruleId = ruleId,
+            channelId = channelId,
+            legacyDefault = ::legacyNotificationDefault,
+        )
+
+    fun enabledNotificationRules(channelIds: Iterable<String>): List<String> =
+        notificationPreferences.enabledRuleIds(
+            channelIds = channelIds,
+            legacyDefault = ::legacyNotificationDefault,
+        )
+
+    private fun legacyNotificationDefault(ruleId: String): Boolean = when (ruleId) {
+        "reply" -> replyNotificationsEnabled
+        "automod_hold" -> autoModNotificationsEnabled
+        else -> true
+    }
 
     var highlightRules: List<HighlightRule>
         get() = MessageRuleCodec.decodeHighlights(preferences.getString(KEY_HIGHLIGHT_RULES_JSON, null))
@@ -621,6 +653,7 @@ class SettingsStore(context: Context) {
         const val KEY_USER_CARD_MODERATION_ACTION_ORDER = "user_card_moderation_action_order"
         const val KEY_REPLY_NOTIFICATIONS_ENABLED = "reply_notifications_enabled"
         const val KEY_AUTOMOD_NOTIFICATIONS_ENABLED = "automod_notifications_enabled"
+        const val KEY_NOTIFICATION_PREFERENCES_JSON = "notification_preferences_json"
         const val KEY_HIGHLIGHT_RULES_JSON = "highlight_rules_json"
         const val KEY_IGNORE_RULES_JSON = "ignore_rules_json"
         const val KEY_MESSAGE_FILTERS_JSON = "message_filters_json"
@@ -691,6 +724,7 @@ class SettingsStore(context: Context) {
             KEY_USER_CARD_MODERATION_ACTION_ORDER,
             KEY_REPLY_NOTIFICATIONS_ENABLED,
             KEY_AUTOMOD_NOTIFICATIONS_ENABLED,
+            KEY_NOTIFICATION_PREFERENCES_JSON,
             KEY_HIGHLIGHT_RULES_JSON,
             KEY_IGNORE_RULES_JSON,
             KEY_MESSAGE_FILTERS_JSON,

@@ -93,11 +93,13 @@ class AppContainer(context: Context) {
     init {
         val registrationContext = {
             val state = controller.state.value
+            val channelIds = state.channels.map { it.id }.filter(String::isNotBlank).distinct()
             PushRegistrationContext(
                 userId = state.session?.userId,
                 userLogin = state.session?.login,
-                channelIds = state.channels.map { it.id }.filter(String::isNotBlank).distinct(),
+                channelIds = channelIds,
                 moderatorChannelIds = state.moderatedChannelIds.filter(String::isNotBlank).distinct(),
+                notificationRules = settingsStore.enabledNotificationRules(channelIds),
                 highlightPhrases = state.highlightRules
                     .filter { it.enabled && it.push && it.type in setOf(HighlightRuleType.WORD, HighlightRuleType.USERNAME) }
                     .map { it.pattern.trim() }

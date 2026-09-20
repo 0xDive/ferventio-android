@@ -9,6 +9,7 @@ import io.ferventio.app.domain.ChatNameStyle
 import io.ferventio.app.domain.CustomCommand
 import io.ferventio.app.domain.MessageDensity
 import io.ferventio.app.domain.MentionColors
+import io.ferventio.app.domain.NotificationPreferences
 import io.ferventio.app.domain.UserCardModerationLayout
 
 data class SharedAppPreferences(
@@ -35,6 +36,7 @@ data class SharedAppPreferences(
     val showComposerEmoteImages: Boolean = true,
     val replyNotificationsEnabled: Boolean = true,
     val autoModNotificationsEnabled: Boolean = true,
+    val notificationPreferences: NotificationPreferences = NotificationPreferences(),
     val recentMessagesEnabled: Boolean = false,
     val localHistoryEnabled: Boolean = true,
     val localHistoryLimit: Int = 500,
@@ -58,6 +60,7 @@ data class SharedAppPreferences(
             localHistoryLimit = localHistoryLimit.coerceIn(100, 5_000),
             localHistoryRetentionDays = localHistoryRetentionDays.coerceIn(0, 365),
             localHistoryMaxSizeMb = localHistoryMaxSizeMb.coerceIn(0, 1_024),
+            notificationPreferences = notificationPreferences.normalized(),
             userCardTimeoutPresetsSeconds = timeouts,
             userCardModerationActionOrder = UserCardModerationLayout.normalize(
                 storedOrder = userCardModerationActionOrder,

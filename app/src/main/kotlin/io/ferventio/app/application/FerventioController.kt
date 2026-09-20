@@ -1048,6 +1048,15 @@ class FerventioController(
         mutableState.update { it.copy(replyNotificationsEnabled = enabled) }
     }
 
+    fun setNotificationPreferences(value: NotificationPreferences) {
+        val normalized = value.normalized()
+        settingsStore.notificationPreferences = normalized
+        mutableState.update { state ->
+            if (state.notificationPreferences == normalized) state
+            else state.copy(notificationPreferences = normalized)
+        }
+    }
+
     fun saveCustomCommand(command: CustomCommand, oldName: String? = null): Boolean {
         val validated = CustomCommandCodec.validate(command, oldName).getOrElse { error ->
             showError(error.userMessage())
@@ -2908,6 +2917,7 @@ class FerventioController(
                 userCardShowBanAction = settingsStore.userCardShowBanAction,
                 userCardModerationActionOrder = settingsStore.userCardModerationActionOrder,
                 replyNotificationsEnabled = settingsStore.replyNotificationsEnabled,
+                notificationPreferences = settingsStore.notificationPreferences,
                 highlightRules = settingsStore.highlightRules,
                 ignoreRules = settingsStore.ignoreRules,
                 savedMessageFilters = settingsStore.savedMessageFilters,
@@ -6092,7 +6102,9 @@ class FerventioController(
                         .take(MAX_AUTOMOD_QUEUE_ITEMS)
                     state.copy(moderation = state.moderation.copy(autoModQueue = updated))
                 }
-                if (settingsStore.autoModNotificationsEnabled) onAutoModHeld(message)
+                if (settingsStore.notificationEnabled("automod_hold", message.channelId)) {
+                    onAutoModHeld(message)
+                }
             }
             is ChatEvent.AutoModUpdated -> {
                 val message = event.message
@@ -7023,6 +7035,7 @@ class FerventioController(
         userCardShowBanAction = settingsStore.userCardShowBanAction,
         userCardModerationActionOrder = settingsStore.userCardModerationActionOrder,
         replyNotificationsEnabled = settingsStore.replyNotificationsEnabled,
+        notificationPreferences = settingsStore.notificationPreferences,
         highlightRules = settingsStore.highlightRules,
         ignoreRules = settingsStore.ignoreRules,
         savedMessageFilters = settingsStore.savedMessageFilters,

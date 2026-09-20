@@ -251,7 +251,10 @@ class PushCoordinator(
     }
 
     fun showReplyNotification(message: ChatMessage) {
-        if (!settingsStore.pushEnabled || !settingsStore.replyNotificationsEnabled) return
+        if (
+            !settingsStore.pushEnabled ||
+            !settingsStore.notificationEnabled("reply", message.channelId)
+        ) return
         notificationPresenter.show(
             PushNotificationPayload(
                 type = "reply",
@@ -265,13 +268,15 @@ class PushCoordinator(
     }
 
     fun showHighlightAlert(alert: HighlightAlert) {
-        if (alert.playSound && !alert.push) {
+        val shouldPush = alert.push &&
+            settingsStore.notificationEnabled("highlight", alert.message.channelId)
+        if (alert.playSound && !shouldPush) {
             runCatching {
                 val sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
                 RingtoneManager.getRingtone(appContext, sound)?.play()
             }
         }
-        if (!alert.push) return
+        if (!shouldPush) return
         notificationPresenter.show(
             PushNotificationPayload(
                 type = "highlight",
@@ -287,7 +292,7 @@ class PushCoordinator(
     }
 
     fun showAutoModNotification(message: AutoModHeldMessage) {
-        if (!settingsStore.autoModNotificationsEnabled) return
+        if (!settingsStore.notificationEnabled("automod_hold", message.channelId)) return
         notificationPresenter.show(
             PushNotificationPayload(
                 type = "automod_hold",
@@ -317,7 +322,9 @@ class PushCoordinator(
             settingsStore.pushLastEventId = eventId
         }
         runCatching { payloadHandler(payload) }
-        notificationPresenter.show(payload)
+        if (settingsStore.notificationEnabled(payload.type, payload.channelId)) {
+            notificationPresenter.show(payload)
+        }
         mutableState.update {
             it.copy(
                 status = PushStatus.ACTIVE,

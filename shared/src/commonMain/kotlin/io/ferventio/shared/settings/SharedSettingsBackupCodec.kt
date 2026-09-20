@@ -68,6 +68,7 @@ internal data class SharedSettingsBackupSettings(
     val showComposerEmoteImages: Boolean,
     val replyNotificationsEnabled: Boolean,
     val autoModNotificationsEnabled: Boolean,
+    val notificationPreferences: JsonElement = JsonObject(emptyMap()),
     val recentMessagesEnabled: Boolean = false,
     val localHistoryEnabled: Boolean,
     val localHistoryLimit: Int,
@@ -207,6 +208,9 @@ internal object SharedSettingsBackupCodec {
                 showComposerEmoteImages = normalizedPreferences.showComposerEmoteImages,
                 replyNotificationsEnabled = normalizedPreferences.replyNotificationsEnabled,
                 autoModNotificationsEnabled = normalizedPreferences.autoModNotificationsEnabled,
+                notificationPreferences = NotificationPreferencesCodec.encodeElement(
+                    normalizedPreferences.notificationPreferences,
+                ),
                 recentMessagesEnabled = normalizedPreferences.recentMessagesEnabled,
                 localHistoryEnabled = normalizedPreferences.localHistoryEnabled,
                 localHistoryLimit = normalizedPreferences.localHistoryLimit,

@@ -1,6 +1,7 @@
 package io.ferventio.shared.push
 
 import io.ferventio.app.domain.MobileDeviceIdentity
+import io.ferventio.app.domain.NotificationEventType
 import io.ferventio.app.domain.MobileDeviceIdentityValidation
 import kotlinx.serialization.Serializable
 
@@ -41,22 +42,7 @@ data class PushRegistrationContext(
     val selectedUserLogins: List<String> = emptyList(),
 ) {
     companion object {
-        val DEFAULT_NOTIFICATION_RULES = listOf(
-            "mention",
-            "reply",
-            "automod_hold",
-            "ban",
-            "timeout",
-            "highlight",
-            "selected_user",
-            "stream_online",
-            "title_change",
-            "game_change",
-            "raid",
-            "reward",
-            "subscription",
-            "moderation_action",
-        )
+        val DEFAULT_NOTIFICATION_RULES = NotificationEventType.allRuleIds
     }
 }
 
