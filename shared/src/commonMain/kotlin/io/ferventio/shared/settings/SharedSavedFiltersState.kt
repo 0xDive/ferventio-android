@@ -23,7 +23,10 @@ class SharedSavedFiltersStateHolder(
         get() = SharedSavedFiltersSnapshot(filters = filters)
 
     fun restore(snapshot: SharedSavedFiltersSnapshot) {
-        filters = normalize(snapshot.filters)
+        val normalized = normalize(snapshot.filters)
+        if (filters != normalized) {
+            filters = normalized
+        }
         saveStatus = SharedSettingsSaveStatus.IDLE
         saveErrorMessage = null
     }
@@ -34,10 +37,10 @@ class SharedSavedFiltersStateHolder(
         if (index < 0 && filters.size >= MAX_SAVED_FILTERS) {
             throw IllegalStateException("Saved message filter limit reached")
         }
-        filters = if (index < 0) {
-            filters + normalized
-        } else {
-            filters.toMutableList().apply { this[index] = normalized }
+        filters = when {
+            index < 0 -> filters + normalized
+            filters[index] == normalized -> filters
+            else -> filters.toMutableList().apply { this[index] = normalized }
         }
         saveErrorMessage = null
         return normalized
@@ -45,7 +48,10 @@ class SharedSavedFiltersStateHolder(
 
     fun delete(filterId: String) {
         val id = requireFilterId(filterId)
-        filters = filters.filterNot { it.id == id }
+        val index = filters.indexOfFirst { it.id == id }
+        if (index >= 0) {
+            filters = filters.toMutableList().apply { removeAt(index) }
+        }
         saveErrorMessage = null
     }
 

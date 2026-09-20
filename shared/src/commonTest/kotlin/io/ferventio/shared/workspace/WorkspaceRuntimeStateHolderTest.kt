@@ -137,6 +137,21 @@ class WorkspaceRuntimeStateHolderTest {
     }
 
     @Test
+    fun repeatedTabTitleUpdateReusesPresentationMap() {
+        val holder = WorkspaceRuntimeStateHolder(
+            WorkspaceRuntimeSnapshot(
+                channels = listOf(alpha, beta),
+                channelTabTitles = mapOf("1" to "Alpha tab"),
+            ),
+        )
+        val before = holder.channelTabTitles
+
+        holder.setChannelTabTitle("1", " Alpha tab ")
+
+        assertTrue(holder.channelTabTitles === before)
+    }
+
+    @Test
     fun roleAndPinSetsAreTrimmedToWorkspaceMembership() {
         val holder = WorkspaceRuntimeStateHolder()
         holder.replaceChannels(listOf(alpha, beta, gamma))

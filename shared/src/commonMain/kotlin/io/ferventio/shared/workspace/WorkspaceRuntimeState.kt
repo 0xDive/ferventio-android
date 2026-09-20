@@ -256,6 +256,8 @@ class WorkspaceRuntimeStateHolder(
             "Cannot rename a channel that is not in the workspace"
         }
         val normalizedTitle = title?.trim()?.take(MAX_TAB_TITLE_LENGTH).orEmpty()
+        val currentTitle = channelTabTitles[normalizedId].orEmpty()
+        if (currentTitle == normalizedTitle) return
         channelTabTitles = if (normalizedTitle.isEmpty()) {
             channelTabTitles - normalizedId
         } else {
