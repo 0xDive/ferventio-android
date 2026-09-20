@@ -16,6 +16,34 @@ import kotlin.test.assertTrue
 
 class SharedUserCardProjectionTest {
     @Test
+    fun recentMessageMergeUpdatesLiveCopiesInOnePass() {
+        val cached = listOf(
+            message(id = "one").copy(text = "old"),
+            message(id = "two"),
+        )
+        val live = listOf(
+            message(id = "unrelated"),
+            message(id = "one").copy(text = "new"),
+        )
+
+        val merged = mergeUserCardRecentMessagesWithLive(cached, live)
+
+        assertEquals("new", merged.first().text)
+        assertEquals("two", merged.last().id)
+        assertFalse(merged === cached)
+    }
+
+    @Test
+    fun recentMessageMergePreservesListIdentityWhenNothingChanged() {
+        val cached = listOf(message(id = "one"), message(id = "two"))
+        val live = listOf(message(id = "unrelated"))
+
+        val merged = mergeUserCardRecentMessagesWithLive(cached, live)
+
+        assertTrue(merged === cached)
+    }
+
+    @Test
     fun projectsStrongestRoleAndLatestProfileImage() {
         val source = message(
             id = "source",
