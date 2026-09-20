@@ -11,19 +11,24 @@ import io.ferventio.app.application.AuthenticatedChatFastStartAttemptTracker
 import io.ferventio.app.application.AuthenticatedChatFastStartPolicy
 import io.ferventio.app.application.FerventioController
 import io.ferventio.app.application.InteractiveChatCoordinator
+import io.ferventio.app.domain.ChatChannel
+import io.ferventio.app.domain.HighlightRule
 import io.ferventio.app.domain.HighlightRuleType
+import io.ferventio.app.domain.NotificationPreferences
 import io.ferventio.app.emote.EmoteRepository
 import io.ferventio.app.network.FerventioBackendClient
 import io.ferventio.app.network.NetworkMonitor
 import io.ferventio.app.push.PushCoordinator
 import io.ferventio.app.push.PushRegistrationContext
 import io.ferventio.shared.push.PushNotificationPolicy
+import io.ferventio.shared.settings.SharedAppPreferences
 import io.ferventio.app.twitch.TwitchApiClient
 import io.ferventio.app.twitch.TwitchPinnedChatGqlClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -85,6 +90,8 @@ class AppContainer(context: Context) {
         },
     )
 
+    private val pushNotificationPolicy = PushNotificationPolicy()
+
     private val networkMonitor = NetworkMonitor(
         context = context,
         onAvailable = controller::onNetworkAvailable,
@@ -95,19 +102,22 @@ class AppContainer(context: Context) {
         val registrationContext = {
             val state = controller.state.value
             val channelIds = state.channels.map { it.id }.filter(String::isNotBlank).distinct()
-            val notificationPolicy = PushNotificationPolicy()
+            val notificationPreferences = SharedAppPreferences(
+                replyNotificationsEnabled = state.replyNotificationsEnabled,
+                autoModNotificationsEnabled = state.moderation.autoModNotificationsEnabled,
+                notificationPreferences = state.notificationPreferences,
+            )
             PushRegistrationContext(
                 userId = state.session?.userId,
                 userLogin = state.session?.login,
                 channelIds = channelIds,
                 moderatorChannelIds = state.moderatedChannelIds.filter(String::isNotBlank).distinct(),
-                notificationRules = settingsStore.enabledNotificationRules(channelIds),
-                notificationChannelRules = notificationPolicy.channelRuleOverrides(
-                    preferences = io.ferventio.shared.settings.SharedAppPreferences(
-                        replyNotificationsEnabled = settingsStore.replyNotificationsEnabled,
-                        autoModNotificationsEnabled = settingsStore.autoModNotificationsEnabled,
-                        notificationPreferences = settingsStore.notificationPreferences,
-                    ),
+                notificationRules = pushNotificationPolicy.enabledRules(
+                    preferences = notificationPreferences,
+                    channelIds = channelIds,
+                ),
+                notificationChannelRules = pushNotificationPolicy.channelRuleOverrides(
+                    preferences = notificationPreferences,
                     channelIds = channelIds,
                 ),
                 highlightPhrases = state.highlightRules
@@ -126,9 +136,20 @@ class AppContainer(context: Context) {
         pushCoordinator.setPayloadHandler(controller::ingestPushNotification)
         applicationScope.launch {
             controller.state
-                .map { registrationContext() }
+                .map { state ->
+                    PushRegistrationSyncKey(
+                        userId = state.session?.userId,
+                        userLogin = state.session?.login,
+                        channels = state.channels,
+                        moderatedChannelIds = state.moderatedChannelIds,
+                        notificationPreferences = state.notificationPreferences,
+                        replyNotificationsEnabled = state.replyNotificationsEnabled,
+                        autoModNotificationsEnabled = state.moderation.autoModNotificationsEnabled,
+                        highlightRules = state.highlightRules,
+                    )
+                }
                 .distinctUntilChanged()
-                .collect {
+                .collectLatest {
                     delay(750)
                     pushCoordinator.syncRegistration()
                 }
@@ -154,4 +175,15 @@ class AppContainer(context: Context) {
         }
         networkMonitor.start()
     }
+
+    private data class PushRegistrationSyncKey(
+        val userId: String?,
+        val userLogin: String?,
+        val channels: List<ChatChannel>,
+        val moderatedChannelIds: Set<String>,
+        val notificationPreferences: NotificationPreferences,
+        val replyNotificationsEnabled: Boolean,
+        val autoModNotificationsEnabled: Boolean,
+        val highlightRules: List<HighlightRule>,
+    )
 }
