@@ -74,6 +74,28 @@ class WorkspaceRuntimeStateHolderTest {
     }
 
     @Test
+    fun channelIdentityProjectionReusesStableInstancesUntilIdsChange() {
+        val holder = WorkspaceRuntimeStateHolder()
+        holder.replaceChannels(listOf(alpha, beta))
+        val ids = holder.channelIds
+        val idSet = holder.channelIdSet
+
+        assertTrue(ids === holder.channelIds)
+        assertTrue(idSet === holder.channelIdSet)
+
+        holder.addOrReplaceChannel(alpha.copy(displayName = "Alpha Live"))
+
+        assertTrue(ids === holder.channelIds)
+        assertTrue(idSet === holder.channelIdSet)
+
+        holder.moveChannel("2", 0)
+
+        assertFalse(ids === holder.channelIds)
+        assertFalse(idSet === holder.channelIdSet)
+        assertEquals(listOf("2", "1"), holder.channelIds)
+    }
+
+    @Test
     fun replacingExistingChannelDoesNotChangeItsPosition() {
         val holder = WorkspaceRuntimeStateHolder()
         holder.replaceChannels(listOf(alpha, beta))

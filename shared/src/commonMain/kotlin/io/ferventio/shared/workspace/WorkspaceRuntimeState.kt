@@ -23,8 +23,7 @@ data class WorkspaceRuntimeSnapshot(
     val pushContextRevision: Long = 0L,
     val workspaceLayout: WorkspaceLayout? = null,
 ) {
-    val channelIds: List<String>
-        get() = channels.map { it.id }
+    val channelIds: List<String> = channels.map(ChatChannel::id)
 }
 
 /** Shared platform-neutral channel/workspace state used by Compose and platform integrations. */
@@ -33,6 +32,8 @@ class WorkspaceRuntimeStateHolder(
 ) {
     var channels by mutableStateOf(emptyList<ChatChannel>())
         private set
+    private var channelIdsCache: List<String> = emptyList()
+    private var channelIdSetCache: Set<String> = emptySet()
 
     var selectedChannelId by mutableStateOf<String?>(null)
         private set
@@ -68,7 +69,10 @@ class WorkspaceRuntimeStateHolder(
         private set
 
     val channelIds: List<String>
-        get() = channels.map { it.id }
+        get() = channelIdsCache
+
+    val channelIdSet: Set<String>
+        get() = channelIdSetCache
 
     val isReadyForPushRegistration: Boolean
         get() = loadStatus == WorkspaceLoadStatus.READY
@@ -132,18 +136,24 @@ class WorkspaceRuntimeStateHolder(
     }
 
     fun replaceChannels(value: List<ChatChannel>) {
-        val previousIds = channels.mapTo(linkedSetOf()) { it.id }
+        val previousIds = channelIdSet
         val previousModerators = moderatorChannelIds
-        channels = normalizeChannels(value)
+        setChannels(normalizeChannels(value))
         reconcileMembership()
-        val currentIds = channels.mapTo(linkedSetOf()) { it.id }
+        val currentIds = channelIdSet
         if (previousIds != currentIds || previousModerators != moderatorChannelIds) bumpPushContextRevision()
     }
 
     fun addOrReplaceChannel(channel: ChatChannel) {
         requireValidChannel(channel)
         val index = channels.indexOfFirst { it.id == channel.id }
-        channels = if (index < 0) channels + channel else channels.toMutableList().apply { this[index] = channel }
+        setChannels(
+            if (index < 0) {
+                channels + channel
+            } else {
+                channels.toMutableList().apply { this[index] = channel }
+            },
+        )
         if (selectedChannelId == null) selectedChannelId = channel.id
         if (index < 0) bumpPushContextRevision()
     }
@@ -165,9 +175,11 @@ class WorkspaceRuntimeStateHolder(
             "Replacement channel id is already present in the workspace"
         }
 
-        channels = channels.toMutableList().apply {
-            this[index] = this[index].copy(id = nextId)
-        }
+        setChannels(
+            channels.toMutableList().apply {
+                this[index] = this[index].copy(id = nextId)
+            },
+        )
         if (selectedChannelId == currentId) selectedChannelId = nextId
         pinnedChannelIds = pinnedChannelIds.map { id -> if (id == currentId) nextId else id }.distinct()
         channelTabTitles = buildMap {
@@ -193,54 +205,54 @@ class WorkspaceRuntimeStateHolder(
                     },
                 )
             },
-        ).normalized(channelIds.toSet())
+        ).normalized(channelIdSet)
         bumpPushContextRevision()
         return true
     }
 
     fun removeChannel(channelId: String) {
         val normalizedId = channelId.trim()
-        if (normalizedId.isEmpty() || channels.none { it.id == normalizedId }) return
-        channels = channels.filterNot { it.id == normalizedId }
+        if (normalizedId.isEmpty() || normalizedId !in channelIdSet) return
+        setChannels(channels.filterNot { it.id == normalizedId })
         reconcileMembership()
         bumpPushContextRevision()
     }
 
     fun selectChannel(channelId: String) {
         val normalizedId = channelId.trim()
-        require(channels.any { it.id == normalizedId }) {
+        require(normalizedId in channelIdSet) {
             "Cannot select a channel that is not in the workspace"
         }
         selectedChannelId = normalizedId
     }
 
     fun moveChannel(channelId: String, targetIndex: Int) {
-        channels = ChannelOrder.move(
-            channels = channels,
-            channelId = channelId.trim(),
-            targetIndex = targetIndex,
+        setChannels(
+            ChannelOrder.move(
+                channels = channels,
+                channelId = channelId.trim(),
+                targetIndex = targetIndex,
+            ),
         )
     }
 
     fun updatePinnedChannelIds(channelIds: Iterable<String>) {
-        val available = channels.mapTo(hashSetOf()) { it.id }
-        pinnedChannelIds = normalizeIds(channelIds).filter(available::contains)
+        pinnedChannelIds = normalizeIds(channelIds).filter(channelIdSet::contains)
     }
 
     fun updateChannelTabTitles(titles: Map<String, String>) {
-        val available = channels.mapTo(hashSetOf()) { it.id }
         channelTabTitles = buildMap {
             titles.forEach { (rawChannelId, rawTitle) ->
                 val channelId = rawChannelId.trim()
                 val title = rawTitle.trim().take(MAX_TAB_TITLE_LENGTH)
-                if (channelId in available && title.isNotEmpty()) put(channelId, title)
+                if (channelId in channelIdSet && title.isNotEmpty()) put(channelId, title)
             }
         }
     }
 
     fun setChannelTabTitle(channelId: String, title: String?) {
         val normalizedId = channelId.trim()
-        require(channels.any { it.id == normalizedId }) {
+        require(normalizedId in channelIdSet) {
             "Cannot rename a channel that is not in the workspace"
         }
         val normalizedTitle = title?.trim()?.take(MAX_TAB_TITLE_LENGTH).orEmpty()
@@ -252,8 +264,7 @@ class WorkspaceRuntimeStateHolder(
     }
 
     fun updateModeratorChannelIds(channelIds: Iterable<String>) {
-        val available = channels.mapTo(hashSetOf()) { it.id }
-        val normalized = normalizeIds(channelIds).filterTo(linkedSetOf(), available::contains)
+        val normalized = normalizeIds(channelIds).filterTo(linkedSetOf(), channelIdSet::contains)
         if (moderatorChannelIds != normalized) {
             moderatorChannelIds = normalized
             bumpPushContextRevision()
@@ -261,12 +272,12 @@ class WorkspaceRuntimeStateHolder(
     }
 
     fun restoreWorkspaceLayout(layout: WorkspaceLayout) {
-        workspaceLayout = layout.normalized(channelIds.toSet())
+        workspaceLayout = layout.normalized(channelIdSet)
     }
 
     fun clear() {
         val affectedPushContext = channels.isNotEmpty() || moderatorChannelIds.isNotEmpty()
-        channels = emptyList()
+        setChannels(emptyList())
         selectedChannelId = null
         pinnedChannelIds = emptyList()
         channelTabTitles = emptyMap()
@@ -283,17 +294,26 @@ class WorkspaceRuntimeStateHolder(
     private fun selectInitialChannel(requestedChannelId: String?) {
         val normalized = requestedChannelId?.trim()?.takeIf(String::isNotEmpty)
         selectedChannelId = normalized
-            ?.takeIf { requested -> channels.any { it.id == requested } }
+            ?.takeIf(channelIdSet::contains)
             ?: channels.firstOrNull()?.id
     }
 
     private fun reconcileMembership() {
-        val available = channels.mapTo(hashSetOf()) { it.id }
+        val available = channelIdSet
         selectedChannelId = selectedChannelId?.takeIf(available::contains) ?: channels.firstOrNull()?.id
         pinnedChannelIds = pinnedChannelIds.filter(available::contains)
         channelTabTitles = channelTabTitles.filterKeys(available::contains)
         moderatorChannelIds = moderatorChannelIds.filterTo(linkedSetOf(), available::contains)
         workspaceLayout = workspaceLayout.normalized(available)
+    }
+
+    private fun setChannels(value: List<ChatChannel>) {
+        channels = value
+        val nextIds = value.map(ChatChannel::id)
+        if (nextIds != channelIdsCache) {
+            channelIdsCache = nextIds
+            channelIdSetCache = nextIds.toCollection(linkedSetOf())
+        }
     }
 
     private fun normalizeChannels(value: List<ChatChannel>): List<ChatChannel> {
