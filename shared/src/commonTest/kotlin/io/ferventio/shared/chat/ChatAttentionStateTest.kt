@@ -191,6 +191,28 @@ class ChatAttentionStateTest {
     }
 
     @Test
+    fun retainingUnchangedWorkspaceReusesAttentionCollections() {
+        val state = ChatAttentionStateHolder()
+        state.updateViewport("channel-id", visible = true, isAtLiveTail = false)
+        state.recordIncoming(message("one", "@viewer"), session, evaluator)
+        state.requestMessageNavigation("channel-id", "one")
+
+        val channelAttentionBefore = state.channelAttention
+        val entriesBefore = state.attentionEntries
+        val visibleBefore = state.visibleChannelIds
+        val liveTailBefore = state.channelsAtLiveTail
+        val navigationBefore = state.messageNavigationTargets
+
+        state.retainChannels(listOf(" channel-id "))
+
+        assertTrue(state.channelAttention === channelAttentionBefore)
+        assertTrue(state.attentionEntries === entriesBefore)
+        assertTrue(state.visibleChannelIds === visibleBefore)
+        assertTrue(state.channelsAtLiveTail === liveTailBefore)
+        assertTrue(state.messageNavigationTargets === navigationBefore)
+    }
+
+    @Test
     fun retainingWorkspaceChannelsPrunesRemovedAttentionAndNavigationTargets() {
         val state = ChatAttentionStateHolder()
         state.recordIncoming(message("one", "@viewer"), session, evaluator)

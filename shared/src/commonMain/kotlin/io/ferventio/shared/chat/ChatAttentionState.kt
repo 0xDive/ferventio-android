@@ -200,10 +200,14 @@ class ChatAttentionStateHolder {
                 if (entry.channelId == currentId) entry.copy(channelId = nextId) else entry
             }
         }
-        visibleChannelIds = visibleChannelIds
-            .mapTo(linkedSetOf()) { id -> if (id == currentId) nextId else id }
-        channelsAtLiveTail = channelsAtLiveTail
-            .mapTo(linkedSetOf()) { id -> if (id == currentId) nextId else id }
+        if (currentId in visibleChannelIds) {
+            visibleChannelIds = visibleChannelIds
+                .mapTo(linkedSetOf()) { id -> if (id == currentId) nextId else id }
+        }
+        if (currentId in channelsAtLiveTail) {
+            channelsAtLiveTail = channelsAtLiveTail
+                .mapTo(linkedSetOf()) { id -> if (id == currentId) nextId else id }
+        }
         messageNavigationTargets[currentId]?.let { messageId ->
             messageNavigationTargets = (messageNavigationTargets - currentId) + (nextId to messageId)
         }
@@ -211,12 +215,25 @@ class ChatAttentionStateHolder {
     }
 
     fun retainChannels(channelIds: Iterable<String>) {
-        val allowed = channelIds.map(String::trim).filter(String::isNotEmpty).toSet()
-        channelAttention = channelAttention.filterKeys(allowed::contains)
-        attentionEntries = attentionEntries.filter { it.channelId in allowed }
-        visibleChannelIds = visibleChannelIds.filterTo(linkedSetOf(), allowed::contains)
-        channelsAtLiveTail = channelsAtLiveTail.filterTo(linkedSetOf(), allowed::contains)
-        messageNavigationTargets = messageNavigationTargets.filterKeys(allowed::contains)
+        val allowed = channelIds.asSequence()
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .toSet()
+        if (channelAttention.keys.any { it !in allowed }) {
+            channelAttention = channelAttention.filterKeys(allowed::contains)
+        }
+        if (attentionEntries.any { it.channelId !in allowed }) {
+            attentionEntries = attentionEntries.filter { it.channelId in allowed }
+        }
+        if (visibleChannelIds.any { it !in allowed }) {
+            visibleChannelIds = visibleChannelIds.filterTo(linkedSetOf(), allowed::contains)
+        }
+        if (channelsAtLiveTail.any { it !in allowed }) {
+            channelsAtLiveTail = channelsAtLiveTail.filterTo(linkedSetOf(), allowed::contains)
+        }
+        if (messageNavigationTargets.keys.any { it !in allowed }) {
+            messageNavigationTargets = messageNavigationTargets.filterKeys(allowed::contains)
+        }
     }
 
     fun clear() {
