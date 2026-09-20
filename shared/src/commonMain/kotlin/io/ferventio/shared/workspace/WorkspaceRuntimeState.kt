@@ -237,16 +237,22 @@ class WorkspaceRuntimeStateHolder(
     }
 
     fun updatePinnedChannelIds(channelIds: Iterable<String>) {
-        pinnedChannelIds = normalizeIds(channelIds).filter(channelIdSet::contains)
+        val normalized = normalizeIds(channelIds).filter(channelIdSet::contains)
+        if (pinnedChannelIds != normalized) {
+            pinnedChannelIds = normalized
+        }
     }
 
     fun updateChannelTabTitles(titles: Map<String, String>) {
-        channelTabTitles = buildMap {
+        val normalized = buildMap {
             titles.forEach { (rawChannelId, rawTitle) ->
                 val channelId = rawChannelId.trim()
                 val title = rawTitle.trim().take(MAX_TAB_TITLE_LENGTH)
                 if (channelId in channelIdSet && title.isNotEmpty()) put(channelId, title)
             }
+        }
+        if (channelTabTitles != normalized) {
+            channelTabTitles = normalized
         }
     }
 
@@ -274,7 +280,10 @@ class WorkspaceRuntimeStateHolder(
     }
 
     fun restoreWorkspaceLayout(layout: WorkspaceLayout) {
-        workspaceLayout = layout.normalized(channelIdSet)
+        val normalized = layout.normalized(channelIdSet)
+        if (workspaceLayout != normalized) {
+            workspaceLayout = normalized
+        }
     }
 
     fun clear() {

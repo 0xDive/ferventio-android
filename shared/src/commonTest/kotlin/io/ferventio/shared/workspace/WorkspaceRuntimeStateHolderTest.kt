@@ -167,6 +167,29 @@ class WorkspaceRuntimeStateHolderTest {
     }
 
     @Test
+    fun repeatedWorkspacePresentationUpdatesReuseStateObjects() {
+        val holder = WorkspaceRuntimeStateHolder(
+            WorkspaceRuntimeSnapshot(
+                channels = listOf(alpha, beta),
+                pinnedChannelIds = listOf("1"),
+                channelTabTitles = mapOf("1" to "Alpha tab"),
+                workspaceLayout = WorkspaceLayout.default("1"),
+            ),
+        )
+        val pinnedBefore = holder.pinnedChannelIds
+        val titlesBefore = holder.channelTabTitles
+        val layoutBefore = holder.workspaceLayout
+
+        holder.updatePinnedChannelIds(listOf(" 1 ", "1"))
+        holder.updateChannelTabTitles(mapOf(" 1 " to " Alpha tab "))
+        holder.restoreWorkspaceLayout(layoutBefore)
+
+        assertTrue(holder.pinnedChannelIds === pinnedBefore)
+        assertTrue(holder.channelTabTitles === titlesBefore)
+        assertTrue(holder.workspaceLayout === layoutBefore)
+    }
+
+    @Test
     fun pushContextRevisionChangesOnlyForBackendRelevantWorkspaceChanges() {
         val holder = WorkspaceRuntimeStateHolder()
         assertEquals(0L, holder.pushContextRevision)
