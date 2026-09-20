@@ -208,7 +208,6 @@ import io.ferventio.app.domain.AppThemeMode
 import io.ferventio.app.domain.ChatNameStyle
 import io.ferventio.app.domain.MessageDensity
 import io.ferventio.app.domain.MentionColors
-import io.ferventio.app.domain.NotificationEventType
 import io.ferventio.app.domain.SettingsSyncStatus
 import io.ferventio.app.domain.ConnectionStatus
 import io.ferventio.app.domain.OutgoingMessageState
@@ -237,24 +236,6 @@ import coil3.compose.AsyncImage
 import coil3.compose.AsyncImagePainter
 import coil3.compose.rememberAsyncImagePainter
 import androidx.core.graphics.toColorInt
-
-
-private fun notificationEventTitle(event: NotificationEventType): String = when (event) {
-    NotificationEventType.MENTION -> "Упоминания"
-    NotificationEventType.REPLY -> "Ответы"
-    NotificationEventType.AUTOMOD_HOLD -> "AutoMod: сообщение на проверке"
-    NotificationEventType.BAN -> "Баны"
-    NotificationEventType.TIMEOUT -> "Таймауты"
-    NotificationEventType.HIGHLIGHT -> "Highlights"
-    NotificationEventType.SELECTED_USER -> "Выбранные пользователи"
-    NotificationEventType.STREAM_ONLINE -> "Начало стрима"
-    NotificationEventType.TITLE_CHANGE -> "Изменение названия"
-    NotificationEventType.GAME_CHANGE -> "Изменение категории"
-    NotificationEventType.RAID -> "Рейды"
-    NotificationEventType.REWARD -> "Награды за баллы канала"
-    NotificationEventType.SUBSCRIPTION -> "Подписки"
-    NotificationEventType.MODERATION_ACTION -> "Действия модерации"
-}
 
 
 private fun compactEventSubSessionId(value: String): String {
@@ -1341,195 +1322,13 @@ internal fun SettingsScreen(
                     }
 
                     SettingsPage.NOTIFICATIONS -> item {
-                        SettingsSection("Push-уведомления") {
-                            SettingsSwitchRow(
-                                title = "Все уведомления",
-                                description = "Мастер-переключатель. Индивидуальные правила событий и каналов сохраняются и применятся снова после включения.",
-                                checked = state.notificationPreferences.enabled,
-                                onCheckedChange = { enabled ->
-                                    controller.setNotificationPreferences(
-                                        state.notificationPreferences.withEnabled(enabled),
-                                    )
-                                },
-                            )
-                            LocalizedText(
-                                "События",
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            NotificationEventType.entries.forEach { event ->
-                                val legacyDefault: (String) -> Boolean = { ruleId ->
-                                    when (ruleId) {
-                                        NotificationEventType.REPLY.ruleId ->
-                                            state.replyNotificationsEnabled
-                                        NotificationEventType.AUTOMOD_HOLD.ruleId ->
-                                            state.moderation.autoModNotificationsEnabled
-                                        else -> true
-                                    }
-                                }
-                                SettingsSwitchRow(
-                                    title = notificationEventTitle(event),
-                                    description = "Глобальное правило; канал может переопределить его ниже.",
-                                    checked = state.notificationPreferences.isEnabled(
-                                        ruleId = event.ruleId,
-                                        legacyDefault = legacyDefault,
-                                    ),
-                                    onCheckedChange = { enabled ->
-                                        controller.setNotificationPreferences(
-                                            state.notificationPreferences
-                                                .withGlobalEvent(event.ruleId, enabled),
-                                        )
-                                        when (event) {
-                                            NotificationEventType.REPLY ->
-                                                controller.setReplyNotificationsEnabled(enabled)
-                                            NotificationEventType.AUTOMOD_HOLD ->
-                                                controller.setAutoModNotificationsEnabled(enabled)
-                                            else -> Unit
-                                        }
-                                    },
-                                )
-                            }
-                            if (state.channels.isNotEmpty()) {
-                                HorizontalDivider(
-                                    color = MaterialTheme.colorScheme.outlineVariant,
-                                    modifier = Modifier.padding(vertical = 8.dp),
-                                )
-                                LocalizedText(
-                                    "Настройки по каналам",
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                state.channels.forEach { channel ->
-                                    val custom =
-                                        channel.id in state.notificationPreferences.channelOverrides
-                                    SettingsSwitchRow(
-                                        title = "#${channel.displayName}: индивидуальные настройки",
-                                        description = if (custom) {
-                                            "События этого канала можно настраивать независимо."
-                                        } else {
-                                            "Используются глобальные настройки уведомлений."
-                                        },
-                                        checked = custom,
-                                        onCheckedChange = { enabled ->
-                                            controller.setNotificationPreferences(
-                                                if (enabled) {
-                                                    state.notificationPreferences
-                                                        .enableChannelOverrides(channel.id)
-                                                } else {
-                                                    state.notificationPreferences
-                                                        .clearChannelOverride(channel.id)
-                                                },
-                                            )
-                                        },
-                                    )
-                                    if (custom) {
-                                        SettingsSwitchRow(
-                                            title = "Уведомления #${channel.displayName}",
-                                            description = "Полностью выключить уведомления только для этого канала.",
-                                            checked = state.notificationPreferences.channelOverrides
-                                                .getValue(channel.id)
-                                                .enabled,
-                                            onCheckedChange = { enabled ->
-                                                controller.setNotificationPreferences(
-                                                    state.notificationPreferences
-                                                        .withChannelEnabled(channel.id, enabled),
-                                                )
-                                            },
-                                        )
-                                        NotificationEventType.entries.forEach { event ->
-                                            val legacyDefault: (String) -> Boolean = { ruleId ->
-                                                when (ruleId) {
-                                                    NotificationEventType.REPLY.ruleId ->
-                                                        state.replyNotificationsEnabled
-                                                    NotificationEventType.AUTOMOD_HOLD.ruleId ->
-                                                        state.moderation.autoModNotificationsEnabled
-                                                    else -> true
-                                                }
-                                            }
-                                            SettingsSwitchRow(
-                                                title = notificationEventTitle(event),
-                                                description = "Правило только для #${channel.displayName}.",
-                                                checked = state.notificationPreferences.isEnabled(
-                                                    ruleId = event.ruleId,
-                                                    channelId = channel.id,
-                                                    legacyDefault = legacyDefault,
-                                                ),
-                                                onCheckedChange = { enabled ->
-                                                    controller.setNotificationPreferences(
-                                                        state.notificationPreferences
-                                                            .withChannelEvent(
-                                                                channelId = channel.id,
-                                                                ruleId = event.ruleId,
-                                                                value = enabled,
-                                                            ),
-                                                    )
-                                                },
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                            LocalizedText(pushStatusLabel(pushState), color = pushStatusColor(pushState.status))
-                            LocalizedText(
-                                "Уведомления подключаются автоматически после входа в Twitch. Вводить адрес сервера или отдельно включать push не нужно.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            OutlinedButton(
-                                onClick = {
-                                    context.startActivity(
-                                        android.content.Intent(
-                                            android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS,
-                                        ).apply {
-                                            putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
-                                            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                        },
-                                    )
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Icon(Icons.Default.Notifications, contentDescription = null)
-                                Spacer(Modifier.width(6.dp))
-                                LocalizedText("Настройки уведомлений Android")
-                            }
-                            if (pushState.foregroundServiceRequired) {
-                                LocalizedText(
-                                    "FOSS-сборка получает уведомления самостоятельно через постоянное защищённое соединение. Android будет показывать служебное уведомление, пока автономный push включён.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                pushState.lastConnectedAtMillis?.let { timestamp ->
-                                    LocalizedText("Последнее подключение: ${formatPushTime(timestamp)}")
-                                }
-                                pushState.lastHeartbeatAtMillis?.let { timestamp ->
-                                    LocalizedText("Последний heartbeat: ${formatPushTime(timestamp)}")
-                                }
-                                if (pushState.reconnectAttempt > 0) {
-                                    LocalizedText("Попытка переподключения: ${pushState.reconnectAttempt}")
-                                }
-                                OutlinedButton(
-                                    onClick = {
-                                        context.startActivity(
-                                            android.content.Intent(
-                                                android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS,
-                                            ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
-                                        )
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                ) { LocalizedText("Настройки батареи") }
-                            }
-                            if (pushState.enabled) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    OutlinedButton(onClick = onReconnectPush, modifier = Modifier.weight(1f)) {
-                                        LocalizedText("Переподключить")
-                                    }
-                                    OutlinedButton(onClick = onTestPush, modifier = Modifier.weight(1f)) {
-                                        LocalizedText("Отправить тест")
-                                    }
-                                }
-                            }
-                        }
+                        NotificationSettingsContent(
+                            state = state,
+                            controller = controller,
+                            pushState = pushState,
+                            onTestPush = onTestPush,
+                            onReconnectPush = onReconnectPush,
+                        )
                     }
 
                     SettingsPage.ADVANCED -> {
