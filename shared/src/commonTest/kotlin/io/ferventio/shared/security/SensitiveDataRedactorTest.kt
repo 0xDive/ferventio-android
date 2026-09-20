@@ -30,8 +30,12 @@ class SensitiveDataRedactorTest {
 
     @Test
     fun redactsIrcOAuthAndJwtValues() {
-        val input = "PASS oauth:abcdefghijklmnopqrstuv " +
-            "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.signature123"
+        val syntheticJwt = listOf(
+            "eyJhbGciOiJIUzI1NiJ9",
+            "eyJzdWIiOiIxMjM0NTY3ODkwIn0",
+            "signature123",
+        ).joinToString(".")
+        val input = "PASS oauth:abcdefghijklmnopqrstuv " + syntheticJwt
         val output = SensitiveDataRedactor.redact(input).orEmpty()
 
         assertEquals("PASS oauth:<redacted> <redacted>", output)
