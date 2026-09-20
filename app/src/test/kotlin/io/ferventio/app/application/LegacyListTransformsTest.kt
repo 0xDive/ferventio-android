@@ -77,4 +77,25 @@ class LegacyListTransformsTest {
         assertEquals(listOf("two", "one"), moved)
         assertEquals(listOf("three", "one"), capped)
     }
+
+    @Test
+    fun keyedBoundedPrependReplacesDuplicateWithoutExtraIntermediateLists() {
+        val source = listOf(Item("one", 1), Item("two", 2))
+
+        val same = prependLegacyDistinctByKeyBounded(
+            source = source,
+            value = source.first(),
+            maxSize = 3,
+            key = Item::id,
+        )
+        val moved = prependLegacyDistinctByKeyBounded(
+            source = source,
+            value = Item("two", 20),
+            maxSize = 3,
+            key = Item::id,
+        )
+
+        assertTrue(same === source)
+        assertEquals(listOf(Item("two", 20), Item("one", 1)), moved)
+    }
 }

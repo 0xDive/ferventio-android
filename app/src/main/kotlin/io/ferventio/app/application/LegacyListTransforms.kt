@@ -66,3 +66,22 @@ internal fun prependLegacyDistinctBounded(
         }
     }
 }
+
+internal inline fun <T, K> prependLegacyDistinctByKeyBounded(
+    source: List<T>,
+    value: T,
+    maxSize: Int,
+    key: (T) -> K,
+): List<T> {
+    if (maxSize <= 0) return emptyList()
+    val valueKey = key(value)
+    if (source.firstOrNull()?.let(key) == valueKey && source.firstOrNull() == value) {
+        return source
+    }
+    return buildList(minOf(maxSize, source.size + 1)) {
+        add(value)
+        source.forEach { item ->
+            if (key(item) != valueKey && size < maxSize) add(item)
+        }
+    }
+}

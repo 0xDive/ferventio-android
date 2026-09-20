@@ -744,8 +744,12 @@ class FerventioController(
             shouldPersist = true
             val previous = state.channelAttention[channelId] ?: ChannelAttention()
             state.copy(
-                attentionEntries = (listOf(entry) + state.attentionEntries)
-                    .take(MAX_ATTENTION_ENTRIES),
+                attentionEntries = prependLegacyDistinctByKeyBounded(
+                    source = state.attentionEntries,
+                    value = entry,
+                    maxSize = MAX_ATTENTION_ENTRIES,
+                    key = AttentionEntry::messageId,
+                ),
                 mentionUnreadCount = (state.mentionUnreadCount + 1)
                     .coerceAtMost(MAX_ATTENTION_COUNT),
                 channelAttention = state.channelAttention + (
@@ -6625,8 +6629,12 @@ class FerventioController(
             val nextAttentionEntries = if (attentionEntry == null) {
                 state.attentionEntries
             } else {
-                (listOf(attentionEntry) + state.attentionEntries.filterNot { it.messageId == attentionEntry.messageId })
-                    .take(MAX_ATTENTION_ENTRIES)
+                prependLegacyDistinctByKeyBounded(
+                    source = state.attentionEntries,
+                    value = attentionEntry,
+                    maxSize = MAX_ATTENTION_ENTRIES,
+                    key = AttentionEntry::messageId,
+                )
             }
             val droppedMessageId = if (
                 optimisticIndex < 0 && existing.size >= memoryLimit && existing.isNotEmpty()
