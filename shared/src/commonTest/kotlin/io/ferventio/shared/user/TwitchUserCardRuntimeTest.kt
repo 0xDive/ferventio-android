@@ -15,6 +15,7 @@ import io.ktor.utils.io.ByteReadChannel
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class TwitchUserCardRuntimeTest {
     @Test
@@ -57,6 +58,7 @@ class TwitchUserCardRuntimeTest {
         assertEquals(1, banRequests)
 
         runtime.updatePermanentBanState(
+            authentication = authentication,
             broadcasterId = "channel-id",
             targetUserId = "user-1",
             isPermanentlyBanned = false,
@@ -66,6 +68,33 @@ class TwitchUserCardRuntimeTest {
             false,
             runtime.loadPermanentBanState(authentication, "channel-id", "user-1"),
         )
+        assertEquals(1, banRequests)
+    }
+
+    @Test
+    fun banCacheDoesNotBypassScopeChecksAfterAuthenticationChanges() = runTest {
+        var banRequests = 0
+        val runtime = runtime(
+            onTwitchRequest = {},
+            onRelationshipRequest = {},
+            onBanRequest = { banRequests += 1 },
+        )
+        val privileged = authentication(
+            scopes = setOf("moderator:read:banned_users"),
+        )
+        val unprivileged = authentication(
+            scopes = setOf("chat:read"),
+        )
+
+        assertEquals(
+            true,
+            runtime.loadPermanentBanState(privileged, "channel-id", "user-1"),
+        )
+        assertEquals(1, banRequests)
+
+        assertFailsWith<IllegalArgumentException> {
+            runtime.loadPermanentBanState(unprivileged, "channel-id", "user-1")
+        }
         assertEquals(1, banRequests)
     }
 

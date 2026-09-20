@@ -1,5 +1,6 @@
 package io.ferventio.shared.user
 
+import io.ferventio.app.domain.AuthenticationPersistenceValidation
 import io.ferventio.app.domain.PublicChannelRelationship
 import io.ferventio.app.domain.StoredAuthentication
 import io.ferventio.app.domain.TwitchUser
@@ -25,7 +26,7 @@ class TwitchUserCardRuntime internal constructor(
     private val slotsMutex = Mutex()
     private val profileSlots = mutableMapOf<String, CacheSlot<TwitchUser>>()
     private val relationshipSlots = mutableMapOf<String, CacheSlot<PublicChannelRelationship>>()
-    private val banStateSlots = mutableMapOf<String, CacheSlot<Boolean>>()
+    private val banStateSlots = mutableMapOf<BanStateKey, CacheSlot<Boolean>>()
 
     init {
         require(ttlMillis > 0L) { "User-card cache TTL must be positive" }
@@ -79,11 +80,17 @@ class TwitchUserCardRuntime internal constructor(
         broadcasterId: String,
         targetUserId: String,
     ): Boolean {
+        AuthenticationPersistenceValidation.requireValid(
+            authentication.backendCredential,
+            authentication.accessLease,
+        )
         val normalizedBroadcasterId = broadcasterId.trim()
         val normalizedTargetUserId = targetUserId.trim()
         require(normalizedBroadcasterId.isNotEmpty()) { "Broadcaster id is required" }
         require(normalizedTargetUserId.isNotEmpty()) { "Target user id is required" }
-        val slot = banStateSlot(banStateKey(normalizedBroadcasterId, normalizedTargetUserId))
+        val slot = banStateSlot(
+            banStateKey(authentication, normalizedBroadcasterId, normalizedTargetUserId),
+        )
         return slot.mutex.withLock {
             val now = nowEpochMillis()
             slot.cache?.takeIf { it.isFresh(now, ttlMillis) }?.value?.let {
@@ -100,14 +107,21 @@ class TwitchUserCardRuntime internal constructor(
     }
 
     suspend fun updatePermanentBanState(
+        authentication: StoredAuthentication,
         broadcasterId: String,
         targetUserId: String,
         isPermanentlyBanned: Boolean,
     ) {
+        AuthenticationPersistenceValidation.requireValid(
+            authentication.backendCredential,
+            authentication.accessLease,
+        )
         val normalizedBroadcasterId = broadcasterId.trim()
         val normalizedTargetUserId = targetUserId.trim()
         if (normalizedBroadcasterId.isEmpty() || normalizedTargetUserId.isEmpty()) return
-        val slot = banStateSlot(banStateKey(normalizedBroadcasterId, normalizedTargetUserId))
+        val slot = banStateSlot(
+            banStateKey(authentication, normalizedBroadcasterId, normalizedTargetUserId),
+        )
         slot.mutex.withLock {
             slot.cache = TimedValue(isPermanentlyBanned, nowEpochMillis())
         }
@@ -166,7 +180,7 @@ class TwitchUserCardRuntime internal constructor(
             relationshipSlots.getOrPut(key) { CacheSlot() }
         }
 
-    private suspend fun banStateSlot(key: String): CacheSlot<Boolean> =
+    private suspend fun banStateSlot(key: BanStateKey): CacheSlot<Boolean> =
         slotsMutex.withLock {
             banStateSlots.getOrPut(key) { CacheSlot() }
         }
@@ -184,8 +198,20 @@ class TwitchUserCardRuntime internal constructor(
             "@" +
             channelLogin.trim().removePrefix("#").lowercase()
 
-    private fun banStateKey(broadcasterId: String, targetUserId: String): String =
-        broadcasterId + ":" + targetUserId
+    private fun banStateKey(
+        authentication: StoredAuthentication,
+        broadcasterId: String,
+        targetUserId: String,
+    ): BanStateKey {
+        val session = requireNotNull(authentication.accessLease).session
+        return BanStateKey(
+            clientId = session.clientId,
+            authenticatedUserId = session.userId,
+            scopes = session.scopes,
+            broadcasterId = broadcasterId,
+            targetUserId = targetUserId,
+        )
+    }
 
     private suspend fun <T> bestEffort(block: suspend () -> T): T? =
         try {
@@ -195,6 +221,14 @@ class TwitchUserCardRuntime internal constructor(
         } catch (_: Throwable) {
             null
         }
+
+    private data class BanStateKey(
+        val clientId: String,
+        val authenticatedUserId: String,
+        val scopes: Set<String>,
+        val broadcasterId: String,
+        val targetUserId: String,
+    )
 
     private data class CacheSlot<T>(
         val mutex: Mutex = Mutex(),

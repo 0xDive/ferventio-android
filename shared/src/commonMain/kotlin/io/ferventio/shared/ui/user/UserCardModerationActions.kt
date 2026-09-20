@@ -390,6 +390,7 @@ internal fun UserCardModerationActions(
                                             targetUserId = data.user.id,
                                         )
                                         userCardRuntime.updatePermanentBanState(
+                                            authentication = currentAuthentication,
                                             broadcasterId = data.channelId,
                                             targetUserId = data.user.id,
                                             isPermanentlyBanned = true,
@@ -403,6 +404,7 @@ internal fun UserCardModerationActions(
                                             targetUserId = data.user.id,
                                         )
                                         userCardRuntime.updatePermanentBanState(
+                                            authentication = currentAuthentication,
                                             broadcasterId = data.channelId,
                                             targetUserId = data.user.id,
                                             isPermanentlyBanned = false,
