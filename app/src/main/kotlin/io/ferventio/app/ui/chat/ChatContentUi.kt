@@ -595,7 +595,24 @@ internal fun ChannelChatContent(
     val composerVisualTransformation = remember(composerRichText) {
         composerRichText?.let(::ComposerVisualTransformation) ?: VisualTransformation.None
     }
-    val profilesById = state.userProfilesById
+    val messageUserIds = remember(rawMessages) {
+        rawMessages.asSequence()
+            .map(ChatMessage::userId)
+            .filter(String::isNotBlank)
+            .toSet()
+    }
+    val latestProfilesById by rememberUpdatedState(state.userProfilesById)
+    val profilesById by remember(messageUserIds) {
+        derivedStateOf(structuralEqualityPolicy()) {
+            buildMap {
+                messageUserIds.forEach { userId ->
+                    latestProfilesById[userId]?.let { profile ->
+                        put(userId, profile)
+                    }
+                }
+            }
+        }
+    }
     val currentUserId = session?.userId
     val needsUserSuggestions = remember(input) {
         ComposerAutocomplete.currentToken(input).startsWith("@")
@@ -637,12 +654,6 @@ internal fun ChannelChatContent(
     }
 
     val twitchBadgeAssets = state.badgeAssetsByChannel[channelId].orEmpty()
-    val messageUserIds = remember(rawMessages) {
-        rawMessages.asSequence()
-            .map(ChatMessage::userId)
-            .filter(String::isNotBlank)
-            .toSet()
-    }
     val latestGlobalFfzBadgesByUser by rememberUpdatedState(state.frankerFaceZBadgesByUserId)
     val globalFfzBadgesByUser by remember(messageUserIds) {
         derivedStateOf(structuralEqualityPolicy()) {
