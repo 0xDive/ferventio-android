@@ -35,4 +35,33 @@ class LegacyListTransformsTest {
         assertTrue(updated[0] === first)
         assertEquals(3, updated[1].value)
     }
+
+    @Test
+    fun identicalTailUpsertReusesListButMiddleItemKeepsMoveToEndSemantics() {
+        val one = Item("one", 1)
+        val two = Item("two", 2)
+        val source = listOf(one, two)
+
+        val sameTail = upsertLegacyListAtEnd(source, two, maxSize = 5, key = Item::id)
+        val moved = upsertLegacyListAtEnd(source, one, maxSize = 5, key = Item::id)
+
+        assertTrue(sameTail === source)
+        assertEquals(listOf("two", "one"), moved.map(Item::id))
+    }
+
+    @Test
+    fun fullListRejectsNewItemWithoutAllocatingAndMissingDeleteIsNoOp() {
+        val source = listOf(Item("one", 1), Item("two", 2))
+
+        val overflow = upsertLegacyListAtEnd(
+            source = source,
+            value = Item("three", 3),
+            maxSize = 2,
+            key = Item::id,
+        )
+        val deleted = removeLegacyListByKey(source, "missing", Item::id)
+
+        assertTrue(overflow === source)
+        assertTrue(deleted === source)
+    }
 }

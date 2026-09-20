@@ -756,15 +756,23 @@ class FerventioController(
 
     fun upsertHighlightRule(rule: HighlightRule) {
         val normalized = rule.copy(pattern = rule.pattern.trim().take(MAX_RULE_PATTERN_LENGTH))
-        val updated = (mutableState.value.highlightRules.filterNot { it.id == normalized.id } + normalized)
-            .take(MAX_MESSAGE_RULES)
+        val current = mutableState.value.highlightRules
+        val updated = upsertLegacyListAtEnd(
+            source = current,
+            value = normalized,
+            maxSize = MAX_MESSAGE_RULES,
+            key = HighlightRule::id,
+        )
+        if (updated === current) return
         settingsStore.highlightRules = updated
         mutableState.update { it.copy(highlightRules = updated) }
         rebuildMessageRuleEvaluation()
     }
 
     fun deleteHighlightRule(ruleId: String) {
-        val updated = mutableState.value.highlightRules.filterNot { it.id == ruleId }
+        val current = mutableState.value.highlightRules
+        val updated = removeLegacyListByKey(current, ruleId, HighlightRule::id)
+        if (updated === current) return
         settingsStore.highlightRules = updated
         mutableState.update { it.copy(highlightRules = updated) }
         rebuildMessageRuleEvaluation()
@@ -772,15 +780,23 @@ class FerventioController(
 
     fun upsertIgnoreRule(rule: IgnoreRule) {
         val normalized = rule.copy(pattern = rule.pattern.trim().take(MAX_RULE_PATTERN_LENGTH))
-        val updated = (mutableState.value.ignoreRules.filterNot { it.id == normalized.id } + normalized)
-            .take(MAX_MESSAGE_RULES)
+        val current = mutableState.value.ignoreRules
+        val updated = upsertLegacyListAtEnd(
+            source = current,
+            value = normalized,
+            maxSize = MAX_MESSAGE_RULES,
+            key = IgnoreRule::id,
+        )
+        if (updated === current) return
         settingsStore.ignoreRules = updated
         mutableState.update { it.copy(ignoreRules = updated) }
         rebuildMessageRuleEvaluation()
     }
 
     fun deleteIgnoreRule(ruleId: String) {
-        val updated = mutableState.value.ignoreRules.filterNot { it.id == ruleId }
+        val current = mutableState.value.ignoreRules
+        val updated = removeLegacyListByKey(current, ruleId, IgnoreRule::id)
+        if (updated === current) return
         settingsStore.ignoreRules = updated
         mutableState.update { it.copy(ignoreRules = updated) }
         rebuildMessageRuleEvaluation()
@@ -806,10 +822,16 @@ class FerventioController(
             showError("Фильтр с таким названием уже существует")
             return false
         }
-        val updated = (current.filterNot { it.id == normalized.id } + normalized)
-            .take(MAX_SAVED_FILTERS)
-        settingsStore.savedMessageFilters = updated
-        mutableState.update { it.copy(savedMessageFilters = updated) }
+        val updated = upsertLegacyListAtEnd(
+            source = current,
+            value = normalized,
+            maxSize = MAX_SAVED_FILTERS,
+            key = SavedMessageFilter::id,
+        )
+        if (updated !== current) {
+            settingsStore.savedMessageFilters = updated
+            mutableState.update { it.copy(savedMessageFilters = updated) }
+        }
         return true
     }
 
