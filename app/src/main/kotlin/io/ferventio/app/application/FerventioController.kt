@@ -928,9 +928,12 @@ class FerventioController(
                 return false
             }
         }
-        val merged = MessageFilterCodec.merge(mutableState.value.savedMessageFilters, imported)
-        settingsStore.savedMessageFilters = merged
-        mutableState.update { it.copy(savedMessageFilters = merged) }
+        val current = mutableState.value.savedMessageFilters
+        val merged = MessageFilterCodec.merge(current, imported)
+        if (merged != current) {
+            settingsStore.savedMessageFilters = merged
+            mutableState.update { it.copy(savedMessageFilters = merged) }
+        }
         return true
     }
 
@@ -6968,13 +6971,21 @@ class FerventioController(
             val updated = transform(state.workspaceLayout).normalized(knownIds)
             val selectedFromLayout = updated.activeTab?.activeSplit?.channelId
                 ?.takeIf(knownIds::contains)
+            val nextSelectedChannelId =
+                selectedFromLayout ?: state.selectedChannelId?.takeIf(knownIds::contains)
+            if (
+                updated == state.workspaceLayout &&
+                nextSelectedChannelId == state.selectedChannelId
+            ) {
+                return@update state
+            }
             settingsStore.workspaceLayoutJson = WorkspaceLayoutCodec.encode(updated)
             selectedFromLayout
                 ?.let { selectedId -> state.channels.firstOrNull { it.id == selectedId }?.login }
                 ?.let { login -> settingsStore.selectedChannelLogin = login }
             state.copy(
                 workspaceLayout = updated,
-                selectedChannelId = selectedFromLayout ?: state.selectedChannelId?.takeIf(knownIds::contains),
+                selectedChannelId = nextSelectedChannelId,
             )
         }
     }
