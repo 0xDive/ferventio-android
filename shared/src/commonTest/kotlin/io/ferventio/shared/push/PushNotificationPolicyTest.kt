@@ -22,6 +22,28 @@ class PushNotificationPolicyTest {
     }
 
     @Test
+    fun channelOverridesMaterializeEffectiveRuleLists() {
+        val preferences = SharedAppPreferences(
+            notificationPreferences = NotificationPreferences()
+                .withGlobalEvent("reply", false)
+                .withChannelEvent("one", "reply", true)
+                .withChannelEnabled("two", false),
+        )
+
+        val rules = policy.channelRuleOverrides(
+            preferences = preferences,
+            channelIds = listOf("one", "two", "three"),
+        )
+
+        assertEquals(true, "reply" in rules.getValue("one"))
+        assertEquals(
+            listOf(PushNotificationPolicy.BACKEND_DISABLED_RULE),
+            rules.getValue("two"),
+        )
+        assertEquals(false, "three" in rules)
+    }
+
+    @Test
     fun sentinelIsNotARealNotificationEvent() {
         assertFalse(
             io.ferventio.app.domain.NotificationEventType.allRuleIds

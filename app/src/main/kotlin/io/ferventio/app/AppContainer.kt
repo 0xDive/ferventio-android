@@ -17,6 +17,7 @@ import io.ferventio.app.network.FerventioBackendClient
 import io.ferventio.app.network.NetworkMonitor
 import io.ferventio.app.push.PushCoordinator
 import io.ferventio.app.push.PushRegistrationContext
+import io.ferventio.shared.push.PushNotificationPolicy
 import io.ferventio.app.twitch.TwitchApiClient
 import io.ferventio.app.twitch.TwitchPinnedChatGqlClient
 import kotlinx.coroutines.CoroutineScope
@@ -94,12 +95,21 @@ class AppContainer(context: Context) {
         val registrationContext = {
             val state = controller.state.value
             val channelIds = state.channels.map { it.id }.filter(String::isNotBlank).distinct()
+            val notificationPolicy = PushNotificationPolicy()
             PushRegistrationContext(
                 userId = state.session?.userId,
                 userLogin = state.session?.login,
                 channelIds = channelIds,
                 moderatorChannelIds = state.moderatedChannelIds.filter(String::isNotBlank).distinct(),
                 notificationRules = settingsStore.enabledNotificationRules(channelIds),
+                notificationChannelRules = notificationPolicy.channelRuleOverrides(
+                    preferences = io.ferventio.shared.settings.SharedAppPreferences(
+                        replyNotificationsEnabled = settingsStore.replyNotificationsEnabled,
+                        autoModNotificationsEnabled = settingsStore.autoModNotificationsEnabled,
+                        notificationPreferences = settingsStore.notificationPreferences,
+                    ),
+                    channelIds = channelIds,
+                ),
                 highlightPhrases = state.highlightRules
                     .filter { it.enabled && it.push && it.type in setOf(HighlightRuleType.WORD, HighlightRuleType.USERNAME) }
                     .map { it.pattern.trim() }

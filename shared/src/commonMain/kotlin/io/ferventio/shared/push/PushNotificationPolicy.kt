@@ -28,6 +28,35 @@ class PushNotificationPolicy {
         listOf(BACKEND_DISABLED_RULE)
     }
 
+    fun channelRuleOverrides(
+        preferences: SharedAppPreferences,
+        channelIds: List<String>,
+    ): Map<String, List<String>> {
+        val knownChannelIds = channelIds
+            .asSequence()
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .toSet()
+        if (knownChannelIds.isEmpty()) return emptyMap()
+        val normalized = preferences.notificationPreferences.normalized()
+        return buildMap {
+            normalized.channelOverrides.forEach { (channelId, _) ->
+                if (channelId !in knownChannelIds) return@forEach
+                val rules = NotificationEventType.entries
+                    .filter { event ->
+                        normalized.isEnabled(
+                            ruleId = event.ruleId,
+                            channelId = channelId,
+                            legacyDefault = { rule -> legacyDefault(preferences, rule) },
+                        )
+                    }
+                    .map(NotificationEventType::ruleId)
+                    .ifEmpty { listOf(BACKEND_DISABLED_RULE) }
+                put(channelId, rules)
+            }
+        }
+    }
+
     companion object {
         const val BACKEND_DISABLED_RULE = "__disabled__"
     }

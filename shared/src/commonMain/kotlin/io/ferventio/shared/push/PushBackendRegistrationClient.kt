@@ -238,6 +238,10 @@ class ApnsPushRegistrationCoordinator(
                     preferences = preferences,
                     channelIds = workspace.channelIds,
                 ),
+                notificationChannelRules = PushNotificationPolicy().channelRuleOverrides(
+                    preferences = preferences,
+                    channelIds = workspace.channelIds,
+                ),
             ),
         )
     }
