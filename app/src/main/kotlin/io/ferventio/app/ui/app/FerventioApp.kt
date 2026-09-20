@@ -254,6 +254,17 @@ fun FerventioApp(
     val pushState by pushCoordinator.state.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val uriHandler = LocalUriHandler.current
+    val openUserProfileByLogin = remember(controller) {
+        { channelId: String, login: String ->
+            controller.openUserCardByLogin(channelId, login)
+        }
+    }
+    val sendTestPush = remember(pushCoordinator) {
+        { pushCoordinator.sendTest() }
+    }
+    val reconnectPush = remember(pushCoordinator) {
+        { pushCoordinator.reconnect() }
+    }
     val knownPermanentlyBannedUserIds = remember(state.moderation.bannedUsers) {
         state.moderation.bannedUsers
             .asSequence()
@@ -283,9 +294,7 @@ fun FerventioApp(
     }
 
     CompositionLocalProvider(
-        LocalOpenUserProfileByLogin provides { channelId, login ->
-            controller.openUserCardByLogin(channelId, login)
-        },
+        LocalOpenUserProfileByLogin provides openUserProfileByLogin,
         LocalKnownPermanentlyBannedUserIds provides knownPermanentlyBannedUserIds,
     ) {
         ProvideAppResourceStrings(state.appLanguage) {
@@ -306,8 +315,8 @@ fun FerventioApp(
                             controller = controller,
                             snackbarHostState = snackbarHostState,
                             pushState = pushState,
-                            onTestPush = pushCoordinator::sendTest,
-                            onReconnectPush = pushCoordinator::reconnect,
+                            onTestPush = sendTestPush,
+                            onReconnectPush = reconnectPush,
                             onExportSettings = onExportSettings,
                             onImportSettings = onImportSettings,
                             onExportCrashReports = onExportCrashReports,
