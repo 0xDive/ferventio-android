@@ -53,6 +53,27 @@ class SharedMessageRulesStateTest {
     }
 
     @Test
+    fun identicalRuleUpdatesReuseRuleLists() {
+        val highlight = HighlightRule(
+            id = "highlight",
+            type = HighlightRuleType.WORD,
+            pattern = "ping",
+        )
+        val state = SharedMessageRulesStateHolder(
+            SharedMessageRulesSnapshot(highlightRules = listOf(highlight)),
+        )
+        val highlightsBefore = state.highlightRules
+        val ignoresBefore = state.ignoreRules
+
+        state.restore(state.snapshot)
+        state.upsertHighlight(highlight)
+        state.deleteIgnore("missing")
+
+        assertTrue(state.highlightRules === highlightsBefore)
+        assertTrue(state.ignoreRules === ignoresBefore)
+    }
+
+    @Test
     fun restoringEditedRulesDoesNotReevaluateExistingDecorations() {
         val state = SharedMessageRulesStateHolder()
         val originalDecoration = MessageDecoration(

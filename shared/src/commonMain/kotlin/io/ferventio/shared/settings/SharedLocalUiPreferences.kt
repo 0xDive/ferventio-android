@@ -68,7 +68,9 @@ class SharedLocalUiPreferencesStateHolder(
         private set
 
     fun update(transform: (SharedLocalUiPreferences) -> SharedLocalUiPreferences): SharedLocalUiPreferences {
-        val updated = transform(preferences).normalized()
+        val current = preferences
+        val updated = transform(current).normalized()
+        if (updated == current) return current
         store.save(updated)
         preferences = updated
         return updated

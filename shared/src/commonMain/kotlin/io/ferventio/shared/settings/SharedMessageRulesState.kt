@@ -42,8 +42,12 @@ class SharedMessageRulesStateHolder(
         )
 
     fun restore(snapshot: SharedMessageRulesSnapshot) {
-        highlightRules = snapshot.highlightRules
-        ignoreRules = snapshot.ignoreRules
+        if (highlightRules != snapshot.highlightRules) {
+            highlightRules = snapshot.highlightRules
+        }
+        if (ignoreRules != snapshot.ignoreRules) {
+            ignoreRules = snapshot.ignoreRules
+        }
         saveStatus = SharedSettingsSaveStatus.IDLE
         saveErrorMessage = null
     }
@@ -51,34 +55,40 @@ class SharedMessageRulesStateHolder(
     fun upsertHighlight(rule: HighlightRule) {
         val id = requireRuleId(rule.id)
         val existingIndex = highlightRules.indexOfFirst { it.id == id }
-        highlightRules = if (existingIndex < 0) {
-            highlightRules + rule
-        } else {
-            highlightRules.toMutableList().apply { this[existingIndex] = rule }
+        highlightRules = when {
+            existingIndex < 0 -> highlightRules + rule
+            highlightRules[existingIndex] == rule -> highlightRules
+            else -> highlightRules.toMutableList().apply { this[existingIndex] = rule }
         }
         saveErrorMessage = null
     }
 
     fun deleteHighlight(ruleId: String) {
         val id = requireRuleId(ruleId)
-        highlightRules = highlightRules.filterNot { it.id == id }
+        val index = highlightRules.indexOfFirst { it.id == id }
+        if (index >= 0) {
+            highlightRules = highlightRules.toMutableList().apply { removeAt(index) }
+        }
         saveErrorMessage = null
     }
 
     fun upsertIgnore(rule: IgnoreRule) {
         val id = requireRuleId(rule.id)
         val existingIndex = ignoreRules.indexOfFirst { it.id == id }
-        ignoreRules = if (existingIndex < 0) {
-            ignoreRules + rule
-        } else {
-            ignoreRules.toMutableList().apply { this[existingIndex] = rule }
+        ignoreRules = when {
+            existingIndex < 0 -> ignoreRules + rule
+            ignoreRules[existingIndex] == rule -> ignoreRules
+            else -> ignoreRules.toMutableList().apply { this[existingIndex] = rule }
         }
         saveErrorMessage = null
     }
 
     fun deleteIgnore(ruleId: String) {
         val id = requireRuleId(ruleId)
-        ignoreRules = ignoreRules.filterNot { it.id == id }
+        val index = ignoreRules.indexOfFirst { it.id == id }
+        if (index >= 0) {
+            ignoreRules = ignoreRules.toMutableList().apply { removeAt(index) }
+        }
         saveErrorMessage = null
     }
 
