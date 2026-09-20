@@ -595,33 +595,37 @@ internal fun ChannelChatContent(
     val composerVisualTransformation = remember(composerRichText) {
         composerRichText?.let(::ComposerVisualTransformation) ?: VisualTransformation.None
     }
-    val messageUserIds = remember(rawMessages) {
-        rawMessages.asSequence()
-            .map(ChatMessage::userId)
-            .filter(String::isNotBlank)
-            .toSet()
-    }
-    val latestProfilesById by rememberUpdatedState(state.userProfilesById)
-    val profilesById by remember(messageUserIds) {
-        derivedStateOf(structuralEqualityPolicy()) {
-            buildMap {
-                messageUserIds.forEach { userId ->
-                    latestProfilesById[userId]?.let { profile ->
-                        put(userId, profile)
-                    }
-                }
-            }
-        }
-    }
     val currentUserId = session?.userId
     val needsUserSuggestions = remember(input) {
         ComposerAutocomplete.currentToken(input).startsWith("@")
     }
     val userSuggestionIndex = if (needsUserSuggestions) {
-        remember(rawMessages, profilesById, currentUserId) {
+        val autocompleteUserIds = remember(rawMessages) {
+            val startIndex = (rawMessages.size - 400).coerceAtLeast(0)
+            buildSet {
+                for (index in startIndex until rawMessages.size) {
+                    rawMessages[index].userId
+                        .takeIf(String::isNotBlank)
+                        ?.let(::add)
+                }
+            }
+        }
+        val latestProfilesById by rememberUpdatedState(state.userProfilesById)
+        val relevantProfilesById by remember(autocompleteUserIds) {
+            derivedStateOf(structuralEqualityPolicy()) {
+                buildMap {
+                    autocompleteUserIds.forEach { userId ->
+                        latestProfilesById[userId]?.let { profile ->
+                            put(userId, profile)
+                        }
+                    }
+                }
+            }
+        }
+        remember(rawMessages, relevantProfilesById, currentUserId) {
             ComposerAutocomplete.buildUserIndex(
                 messages = rawMessages,
-                profilesById = profilesById,
+                profilesById = relevantProfilesById,
                 currentUserId = currentUserId,
             )
         }
@@ -654,26 +658,8 @@ internal fun ChannelChatContent(
     }
 
     val twitchBadgeAssets = state.badgeAssetsByChannel[channelId].orEmpty()
-    val latestGlobalFfzBadgesByUser by rememberUpdatedState(state.frankerFaceZBadgesByUserId)
-    val globalFfzBadgesByUser by remember(messageUserIds) {
-        derivedStateOf(structuralEqualityPolicy()) {
-            buildMap {
-                messageUserIds.forEach { userId ->
-                    latestGlobalFfzBadgesByUser[userId]?.let { badges ->
-                        if (badges.isNotEmpty()) put(userId, badges)
-                    }
-                }
-            }
-        }
-    }
-    val channelFfzBadgesByUser = remember(
-        messageUserIds,
-        state.frankerFaceZChannelBadgesByChannel[channelId],
-    ) {
-        state.frankerFaceZChannelBadgesByChannel[channelId]
-            .orEmpty()
-            .filterKeys(messageUserIds::contains)
-    }
+    val globalFfzBadgesByUser = state.frankerFaceZBadgesByUserId
+    val channelFfzBadgesByUser = state.frankerFaceZChannelBadgesByChannel[channelId].orEmpty()
     val ffzBadgesByUser = remember(globalFfzBadgesByUser, channelFfzBadgesByUser) {
         (globalFfzBadgesByUser.keys + channelFfzBadgesByUser.keys).associateWith { userId ->
             (globalFfzBadgesByUser[userId].orEmpty() + channelFfzBadgesByUser[userId].orEmpty())
