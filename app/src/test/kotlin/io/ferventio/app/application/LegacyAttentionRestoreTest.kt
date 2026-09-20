@@ -99,5 +99,6 @@ class LegacyAttentionRestoreTest {
         timestampMillis = timestampMillis,
         isRead = isRead,
         isDirectMention = true,
+        isHighlight = false,
     )
 }

@@ -3730,7 +3730,11 @@ class FerventioController(
             }
             state.copy(
                 messagesByChannel = state.messagesByChannel + (
-                    message.channelId to (existing + message).takeLast(memoryLimit)
+                    message.channelId to appendBoundedMessage(
+                        existing = existing,
+                        message = message,
+                        limit = memoryLimit,
+                    )
                 ),
             )
         }
