@@ -418,6 +418,9 @@ class ChatRuntimeStateHolder(
         val normalizedChannelId = requireChannelId(channelId)
         val normalizedLocalMessageId = requireMessageId(localMessageId)
         val normalizedServerMessageId = requireMessageId(serverMessageId)
+        if (liveMessageIdsByChannel[normalizedChannelId]?.contains(normalizedLocalMessageId) != true) {
+            return false
+        }
         val existing = messagesByChannel[normalizedChannelId].orEmpty()
         var localIndex = -1
         var serverEchoIndex = -1
@@ -496,6 +499,9 @@ class ChatRuntimeStateHolder(
     ): Boolean {
         val normalizedChannelId = requireChannelId(channelId)
         val normalizedLocalMessageId = requireMessageId(localMessageId)
+        if (liveMessageIdsByChannel[normalizedChannelId]?.contains(normalizedLocalMessageId) != true) {
+            return false
+        }
         val existing = messagesByChannel[normalizedChannelId].orEmpty()
         val messageIndex = existing.indexOfFirst { it.id == normalizedLocalMessageId }
         if (messageIndex < 0) return false
