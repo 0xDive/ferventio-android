@@ -25,7 +25,7 @@ import kotlinx.serialization.json.jsonObject
 @Serializable
 data class SettingsBackupDocument(
     val format: String = BACKUP_FORMAT,
-    val formatVersion: Int = BACKUP_FORMAT_VERSION,
+    val formatVersion: Int = 2,
     val createdAt: String,
     val appVersion: String,
     val contentHash: String,
@@ -166,6 +166,7 @@ object SettingsBackupCodec {
             favouriteEmotes = store.favoriteEmoteKeys.sorted(),
         )
         return SettingsBackupDocument(
+            formatVersion = BACKUP_FORMAT_VERSION,
             createdAt = createdAt.toString(),
             appVersion = appVersion,
             contentHash = contentHash(content),

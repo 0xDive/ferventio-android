@@ -24,7 +24,7 @@ import kotlinx.serialization.json.jsonObject
 @Serializable
 internal data class SharedSettingsBackupDocument(
     val format: String = SharedSettingsBackupCodec.BACKUP_FORMAT,
-    val formatVersion: Int = SharedSettingsBackupCodec.BACKUP_FORMAT_VERSION,
+    val formatVersion: Int = 2,
     val createdAt: String,
     val appVersion: String,
     val contentHash: String,

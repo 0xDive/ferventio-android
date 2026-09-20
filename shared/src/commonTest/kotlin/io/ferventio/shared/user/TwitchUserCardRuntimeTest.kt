@@ -29,7 +29,7 @@ class TwitchUserCardRuntimeTest {
         val authentication = authentication()
 
         runtime.loadUser(authentication, "user-1", "viewer")
-        runtime.enrich(authentication, "user-1", "viewer", "channel-one")
+        runtime.enrich(authentication, "user-1", "viewer", "channel_one")
 
         assertEquals(1, twitchRequests)
         assertEquals(1, relationshipRequests)
@@ -107,8 +107,8 @@ class TwitchUserCardRuntimeTest {
             onRelationshipRequest = { relationshipRequests += 1 },
         )
 
-        runtime.enrich(authentication(), "user-1", "viewer", "channel-one")
-        runtime.enrich(authentication(), "user-1", "viewer", "channel-one")
+        runtime.enrich(authentication(), "user-1", "viewer", "channel_one")
+        runtime.enrich(authentication(), "user-1", "viewer", "channel_one")
 
         assertEquals(1, twitchRequests)
         assertEquals(1, relationshipRequests)
@@ -123,8 +123,8 @@ class TwitchUserCardRuntimeTest {
             onRelationshipRequest = { relationshipRequests += 1 },
         )
 
-        runtime.enrich(authentication(), "user-1", "viewer", "channel-one")
-        runtime.enrich(authentication(), "user-1", "viewer", "channel-two")
+        runtime.enrich(authentication(), "user-1", "viewer", "channel_one")
+        runtime.enrich(authentication(), "user-1", "viewer", "channel_two")
 
         assertEquals(1, twitchRequests)
         assertEquals(2, relationshipRequests)
@@ -142,9 +142,9 @@ class TwitchUserCardRuntimeTest {
             onRelationshipRequest = { relationshipRequests += 1 },
         )
 
-        runtime.enrich(authentication(), "user-1", "viewer", "channel-one")
+        runtime.enrich(authentication(), "user-1", "viewer", "channel_one")
         now += 501L
-        runtime.enrich(authentication(), "user-1", "viewer", "channel-one")
+        runtime.enrich(authentication(), "user-1", "viewer", "channel_one")
 
         assertEquals(2, twitchRequests)
         assertEquals(2, relationshipRequests)

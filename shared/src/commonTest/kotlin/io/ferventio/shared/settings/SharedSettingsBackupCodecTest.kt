@@ -64,7 +64,22 @@ class SharedSettingsBackupCodecTest {
         val decoded = SharedSettingsBackupCodec.decode(encoded)
 
         assertEquals(SharedSettingsBackupCodec.BACKUP_FORMAT, decoded.document.format)
-        assertEquals(SharedSettingsBackupCodec.BACKUP_FORMAT_VERSION, decoded.document.formatVersion)
+        assertEquals(2, decoded.document.formatVersion)
+    }
+
+    @Test
+    fun versionTwoBackupWithoutNotificationPolicyKeepsLegacyChecksum() {
+        val content = androidCompatibleContent()
+        val encoded = SharedSettingsBackupCodec.encodeForTesting(
+            document(content = content, formatVersion = 2),
+        ).replace(
+            Regex("""\s*"notificationPreferences"\s*:\s*\{\}\s*,?"""),
+            "",
+        )
+
+        val decoded = SharedSettingsBackupCodec.decode(encoded)
+
+        assertEquals(2, decoded.document.formatVersion)
     }
 
     @Test

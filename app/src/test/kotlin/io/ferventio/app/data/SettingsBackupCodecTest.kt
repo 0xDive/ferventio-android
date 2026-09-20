@@ -133,6 +133,27 @@ class SettingsBackupCodecTest {
         assertEquals(false, decoded.content.settings.recentMessagesEnabled)
     }
 
+    @Test
+    fun versionTwoBackupWithoutNotificationPolicyKeepsLegacyChecksum() {
+        val content = sampleContent()
+        val document = SettingsBackupDocument(
+            formatVersion = 2,
+            createdAt = "2026-07-25T12:00:00Z",
+            appVersion = "0.0.1-test",
+            contentHash = SettingsBackupCodec.contentHashForVersion(content, 2),
+            content = content,
+        )
+        val legacyJson = SettingsBackupCodec.encode(document)
+            .replace(
+                Regex("""\s*"notificationPreferences"\s*:\s*\{\}\s*,?"""),
+                "",
+            )
+
+        val decoded = SettingsBackupCodec.decode(legacyJson)
+
+        assertEquals(2, decoded.formatVersion)
+    }
+
     private fun sampleContent(): SettingsBackupContent = SettingsBackupContent(
         settings = BackupSettings(
             themeMode = "AMOLED",
