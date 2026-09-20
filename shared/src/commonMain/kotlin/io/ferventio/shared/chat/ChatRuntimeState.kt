@@ -250,14 +250,24 @@ class ChatRuntimeStateHolder(
         require(message.channelId.isNotBlank()) { "AutoMod channel id must not be blank" }
         require(message.messageId.isNotBlank()) { "AutoMod message id must not be blank" }
         val existingIndex = autoModQueue.indexOfFirst { it.messageId == message.messageId }
-        val updated = if (existingIndex >= 0) {
-            autoModQueue.toMutableList().apply {
-                this[existingIndex] = mergeAutoModMessage(this[existingIndex], message)
+        if (existingIndex >= 0) {
+            val current = autoModQueue[existingIndex]
+            val merged = mergeAutoModMessage(current, message)
+            if (merged == current) return
+            autoModQueue = if (merged.heldAtMillis == current.heldAtMillis) {
+                autoModQueue.toMutableList().apply {
+                    this[existingIndex] = merged
+                }
+            } else {
+                normalizeAutoModQueue(
+                    autoModQueue.toMutableList().apply {
+                        this[existingIndex] = merged
+                    },
+                )
             }
-        } else {
-            mutableListOf(message).apply { addAll(autoModQueue) }
+            return
         }
-        autoModQueue = normalizeAutoModQueue(updated)
+        autoModQueue = insertAutoModMessage(autoModQueue, message)
     }
 
     fun markAutoModDecision(
@@ -873,6 +883,36 @@ class ChatRuntimeStateHolder(
             .filter { asset -> asset.setId.isNotBlank() && asset.id.isNotBlank() }
             .associateBy(ChatBadgeAsset::key)
 
+    private fun insertAutoModMessage(
+        existing: List<AutoModHeldMessage>,
+        message: AutoModHeldMessage,
+    ): List<AutoModHeldMessage> {
+        var low = 0
+        var high = existing.size
+        while (low < high) {
+            val mid = (low + high) ushr 1
+            if (AUTOMOD_ORDER.compare(existing[mid], message) <= 0) {
+                low = mid + 1
+            } else {
+                high = mid
+            }
+        }
+        val insertionIndex = low
+        if (existing.size >= MAX_AUTOMOD_QUEUE_ITEMS && insertionIndex >= MAX_AUTOMOD_QUEUE_ITEMS) {
+            return existing
+        }
+        val targetSize = minOf(MAX_AUTOMOD_QUEUE_ITEMS, existing.size + 1)
+        return ArrayList<AutoModHeldMessage>(targetSize).apply {
+            for (index in 0 until targetSize) {
+                when {
+                    index < insertionIndex -> add(existing[index])
+                    index == insertionIndex -> add(message)
+                    else -> add(existing[index - 1])
+                }
+            }
+        }
+    }
+
     private fun normalizeAutoModQueue(value: List<AutoModHeldMessage>): List<AutoModHeldMessage> {
         val byId = linkedMapOf<String, AutoModHeldMessage>()
         value.forEach { message ->
@@ -881,10 +921,7 @@ class ChatRuntimeStateHolder(
             }
         }
         return byId.values
-            .sortedWith(
-                compareByDescending<AutoModHeldMessage> { it.heldAtMillis }
-                    .thenBy(AutoModHeldMessage::messageId),
-            )
+            .sortedWith(AUTOMOD_ORDER)
             .take(MAX_AUTOMOD_QUEUE_ITEMS)
     }
 
@@ -954,6 +991,8 @@ class ChatRuntimeStateHolder(
 
     private companion object {
         val MESSAGE_ORDER = compareBy<ChatMessage>(ChatMessage::timestampMillis, ChatMessage::id)
+        val AUTOMOD_ORDER = compareByDescending<AutoModHeldMessage> { it.heldAtMillis }
+            .thenBy(AutoModHeldMessage::messageId)
         const val MAX_MESSAGES_PER_CHANNEL = 5_000
         const val MAX_HISTORY_MESSAGES_PER_CHANNEL = 5_000
         const val MAX_AUTOMOD_QUEUE_ITEMS = 200

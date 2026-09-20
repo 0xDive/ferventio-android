@@ -328,6 +328,74 @@ class ChatRuntimeStateHolderTest {
     }
 
     @Test
+    fun identicalAutoModUpdateReusesQueueInstance() {
+        val holder = ChatRuntimeStateHolder()
+        val message = AutoModHeldMessage(
+            channelId = CHANNEL_ID,
+            channelLogin = "channel",
+            channelName = "Channel",
+            userId = "viewer-id",
+            userLogin = "viewer",
+            userName = "Viewer",
+            messageId = "automod-same",
+            text = "held",
+            heldAt = "2026-01-01T00:00:00Z",
+        )
+        holder.applyAutoMod(message)
+        val before = holder.autoModQueue
+
+        holder.applyAutoMod(message)
+
+        assertTrue(holder.autoModQueue === before)
+    }
+
+    @Test
+    fun newAutoModMessagesStayNewestFirstWithoutFullRenormalization() {
+        val holder = ChatRuntimeStateHolder()
+        holder.applyAutoMod(
+            AutoModHeldMessage(
+                channelId = CHANNEL_ID,
+                channelLogin = "channel",
+                channelName = "Channel",
+                userId = "viewer-1",
+                userLogin = "viewer1",
+                userName = "Viewer 1",
+                messageId = "one",
+                text = "one",
+                heldAt = "2026-01-01T00:01:00Z",
+            ),
+        )
+        holder.applyAutoMod(
+            AutoModHeldMessage(
+                channelId = CHANNEL_ID,
+                channelLogin = "channel",
+                channelName = "Channel",
+                userId = "viewer-2",
+                userLogin = "viewer2",
+                userName = "Viewer 2",
+                messageId = "two",
+                text = "two",
+                heldAt = "2026-01-01T00:03:00Z",
+            ),
+        )
+        holder.applyAutoMod(
+            AutoModHeldMessage(
+                channelId = CHANNEL_ID,
+                channelLogin = "channel",
+                channelName = "Channel",
+                userId = "viewer-3",
+                userLogin = "viewer3",
+                userName = "Viewer 3",
+                messageId = "three",
+                text = "three",
+                heldAt = "2026-01-01T00:02:00Z",
+            ),
+        )
+
+        assertEquals(listOf("two", "three", "one"), holder.autoModQueue.map { it.messageId })
+    }
+
+    @Test
     fun staleHeldAutoModMessagesExpireWithoutDroppingTerminalHistory() {
         val holder = ChatRuntimeStateHolder()
         holder.applyAutoMod(
