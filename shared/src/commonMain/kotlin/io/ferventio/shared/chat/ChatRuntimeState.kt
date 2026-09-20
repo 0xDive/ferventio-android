@@ -144,14 +144,14 @@ class ChatRuntimeStateHolder(
         val normalizedChannelId = requireChannelId(channelId)
         val normalizedMessage = rateLimit.message.trim().takeIf(String::isNotEmpty)
             ?: "Twitch send rate limit"
-        rateLimitsByChannel = rateLimitsByChannel + (
-            normalizedChannelId to rateLimit.copy(message = normalizedMessage)
-        )
+        val normalized = rateLimit.copy(message = normalizedMessage)
+        if (rateLimitsByChannel[normalizedChannelId] == normalized) return
+        rateLimitsByChannel = rateLimitsByChannel + (normalizedChannelId to normalized)
     }
 
     fun clearRateLimit(channelId: String) {
         val normalizedChannelId = channelId.trim()
-        if (normalizedChannelId.isEmpty()) return
+        if (normalizedChannelId.isEmpty() || normalizedChannelId !in rateLimitsByChannel) return
         rateLimitsByChannel = rateLimitsByChannel - normalizedChannelId
     }
 
@@ -169,12 +169,13 @@ class ChatRuntimeStateHolder(
                 ?.trim()
                 ?.takeIf(String::isNotEmpty),
         )
+        if (scrollPositionsByChannel[channelId] == normalized) return
         scrollPositionsByChannel = scrollPositionsByChannel + (channelId to normalized)
     }
 
     fun clearScrollPosition(channelId: String) {
         val normalized = channelId.trim()
-        if (normalized.isEmpty()) return
+        if (normalized.isEmpty() || normalized !in scrollPositionsByChannel) return
         scrollPositionsByChannel = scrollPositionsByChannel - normalized
     }
 
@@ -193,10 +194,12 @@ class ChatRuntimeStateHolder(
     fun replaceChannelBadgeAssets(channelId: String, value: Map<String, ChatBadgeAsset>) {
         val normalizedChannelId = requireChannelId(channelId)
         val normalizedAssets = normalizeBadgeAssets(value)
-        badgeAssetsByChannel = if (normalizedAssets.isEmpty()) {
-            badgeAssetsByChannel - normalizedChannelId
-        } else {
-            badgeAssetsByChannel + (normalizedChannelId to normalizedAssets)
+        val current = badgeAssetsByChannel[normalizedChannelId]
+        badgeAssetsByChannel = when {
+            normalizedAssets.isEmpty() && current == null -> badgeAssetsByChannel
+            normalizedAssets.isEmpty() -> badgeAssetsByChannel - normalizedChannelId
+            current == normalizedAssets -> badgeAssetsByChannel
+            else -> badgeAssetsByChannel + (normalizedChannelId to normalizedAssets)
         }
     }
 
@@ -206,10 +209,12 @@ class ChatRuntimeStateHolder(
     ) {
         val normalizedChannelId = requireChannelId(channelId)
         val normalizedAssets = normalizeCheermoteAssets(value)
-        cheermoteAssetsByChannel = if (normalizedAssets.isEmpty()) {
-            cheermoteAssetsByChannel - normalizedChannelId
-        } else {
-            cheermoteAssetsByChannel + (normalizedChannelId to normalizedAssets)
+        val current = cheermoteAssetsByChannel[normalizedChannelId]
+        cheermoteAssetsByChannel = when {
+            normalizedAssets.isEmpty() && current == null -> cheermoteAssetsByChannel
+            normalizedAssets.isEmpty() -> cheermoteAssetsByChannel - normalizedChannelId
+            current == normalizedAssets -> cheermoteAssetsByChannel
+            else -> cheermoteAssetsByChannel + (normalizedChannelId to normalizedAssets)
         }
     }
 
@@ -265,22 +270,21 @@ class ChatRuntimeStateHolder(
         require(status != AutoModMessageStatus.HELD) { "AutoMod local decision must be terminal" }
         val normalizedMessageId = messageId.trim()
         if (normalizedMessageId.isEmpty()) return false
-        var changed = false
-        val updated = autoModQueue.map { message ->
-            if (message.messageId != normalizedMessageId) {
-                message
-            } else {
-                changed = true
-                message.copy(
-                    status = status,
-                    decidedByUserId = moderatorId?.trim()?.takeIf(String::isNotEmpty),
-                    decidedByUserLogin = moderatorLogin?.trim()?.takeIf(String::isNotEmpty),
-                    decidedByUserName = moderatorName?.trim()?.takeIf(String::isNotEmpty),
-                )
+        val messageIndex = autoModQueue.indexOfFirst { it.messageId == normalizedMessageId }
+        if (messageIndex < 0) return false
+        val current = autoModQueue[messageIndex]
+        val updated = current.copy(
+            status = status,
+            decidedByUserId = moderatorId?.trim()?.takeIf(String::isNotEmpty),
+            decidedByUserLogin = moderatorLogin?.trim()?.takeIf(String::isNotEmpty),
+            decidedByUserName = moderatorName?.trim()?.takeIf(String::isNotEmpty),
+        )
+        if (updated != current) {
+            autoModQueue = autoModQueue.toMutableList().apply {
+                this[messageIndex] = updated
             }
         }
-        if (changed) autoModQueue = updated
-        return changed
+        return true
     }
 
     fun append(message: ChatMessage) {
@@ -361,37 +365,51 @@ class ChatRuntimeStateHolder(
         val normalizedLocalMessageId = requireMessageId(localMessageId)
         val normalizedServerMessageId = requireMessageId(serverMessageId)
         val existing = messagesByChannel[normalizedChannelId].orEmpty()
-        val local = existing.firstOrNull { it.id == normalizedLocalMessageId } ?: return false
-        val serverEcho = existing.firstOrNull {
-            it.id == normalizedServerMessageId && it.id != normalizedLocalMessageId
+        var localIndex = -1
+        var serverEchoIndex = -1
+        for (index in existing.indices) {
+            val message = existing[index]
+            if (localIndex < 0 && message.id == normalizedLocalMessageId) {
+                localIndex = index
+            }
+            if (
+                serverEchoIndex < 0 &&
+                message.id == normalizedServerMessageId &&
+                message.id != normalizedLocalMessageId
+            ) {
+                serverEchoIndex = index
+            }
+            if (localIndex >= 0 && serverEchoIndex >= 0) break
         }
-        val updated = if (serverEcho != null) {
-            existing.mapNotNull { message ->
-                when (message.id) {
-                    normalizedLocalMessageId -> null
-                    normalizedServerMessageId -> message.copy(
+        if (localIndex < 0) return false
+        val local = existing[localIndex]
+        if (serverEchoIndex >= 0) {
+            val updated = ArrayList<ChatMessage>((existing.size - 1).coerceAtLeast(0))
+            for (index in existing.indices) {
+                when (index) {
+                    localIndex -> Unit
+                    serverEchoIndex -> updated += existing[index].copy(
                         outgoingState = OutgoingMessageState.SENT,
                         outgoingError = null,
                         clientNonce = local.clientNonce,
                         serverMessageId = normalizedServerMessageId,
                     )
-                    else -> message
+                    else -> updated += existing[index]
                 }
             }
+            messagesByChannel = messagesByChannel + (normalizedChannelId to updated)
         } else {
-            existing.map { message ->
-                if (message.id == normalizedLocalMessageId) {
-                    message.copy(
-                        outgoingState = OutgoingMessageState.SENT,
-                        outgoingError = null,
-                        serverMessageId = normalizedServerMessageId,
-                    )
-                } else {
-                    message
-                }
+            val updatedLocal = local.copy(
+                outgoingState = OutgoingMessageState.SENT,
+                outgoingError = null,
+                serverMessageId = normalizedServerMessageId,
+            )
+            if (updatedLocal != local) {
+                val updated = existing.toMutableList()
+                updated[localIndex] = updatedLocal
+                messagesByChannel = messagesByChannel + (normalizedChannelId to updated)
             }
         }
-        messagesByChannel = messagesByChannel + (normalizedChannelId to updated)
         removeHistoryMessage(normalizedChannelId, normalizedServerMessageId)
         return true
     }
@@ -415,17 +433,17 @@ class ChatRuntimeStateHolder(
     ): Boolean {
         val normalizedChannelId = requireChannelId(channelId)
         val normalizedLocalMessageId = requireMessageId(localMessageId)
-        var changed = false
-        val updated = messagesByChannel[normalizedChannelId].orEmpty().map { message ->
-            if (message.id == normalizedLocalMessageId) {
-                changed = true
-                transform(message)
-            } else {
-                message
-            }
+        val existing = messagesByChannel[normalizedChannelId].orEmpty()
+        val messageIndex = existing.indexOfFirst { it.id == normalizedLocalMessageId }
+        if (messageIndex < 0) return false
+        val current = existing[messageIndex]
+        val updatedMessage = transform(current)
+        if (updatedMessage != current) {
+            val updated = existing.toMutableList()
+            updated[messageIndex] = updatedMessage
+            messagesByChannel = messagesByChannel + (normalizedChannelId to updated)
         }
-        if (changed) messagesByChannel = messagesByChannel + (normalizedChannelId to updated)
-        return changed
+        return true
     }
 
     /** Adds durable history without consuming the canonical live-message capacity. */
@@ -456,35 +474,32 @@ class ChatRuntimeStateHolder(
     ): Boolean {
         val normalizedChannelId = requireChannelId(channelId)
         val normalizedMessageId = requireMessageId(messageId)
-        var liveChanged = false
-        var historyChanged = false
-        val live = messagesByChannel[normalizedChannelId].orEmpty().map { message ->
+        val live = messagesByChannel[normalizedChannelId].orEmpty().mapMessagesIfChanged { message ->
             if (
                 message.id != normalizedMessageId ||
                 !shouldApplyModeration(message, ModerationAction.DELETE)
             ) {
                 message
             } else {
-                liveChanged = true
                 deletedMessage(message, ModerationAction.DELETE, atMillis)
             }
         }
-        val history = historyMessagesByChannel[normalizedChannelId].orEmpty().map { message ->
-            if (
-                message.id != normalizedMessageId ||
-                !shouldApplyModeration(message, ModerationAction.DELETE)
-            ) {
-                message
-            } else {
-                historyChanged = true
-                deletedMessage(message, ModerationAction.DELETE, atMillis)
+        val history = historyMessagesByChannel[normalizedChannelId].orEmpty()
+            .mapMessagesIfChanged { message ->
+                if (
+                    message.id != normalizedMessageId ||
+                    !shouldApplyModeration(message, ModerationAction.DELETE)
+                ) {
+                    message
+                } else {
+                    deletedMessage(message, ModerationAction.DELETE, atMillis)
+                }
             }
-        }
-        if (liveChanged) messagesByChannel = messagesByChannel + (normalizedChannelId to live)
-        if (historyChanged) {
+        if (live != null) messagesByChannel = messagesByChannel + (normalizedChannelId to live)
+        if (history != null) {
             historyMessagesByChannel = historyMessagesByChannel + (normalizedChannelId to history)
         }
-        return liveChanged || historyChanged
+        return live != null || history != null
     }
 
     fun markUserMessagesDeleted(
@@ -500,34 +515,31 @@ class ChatRuntimeStateHolder(
         val normalizedUserId = userId.trim().takeIf(String::isNotEmpty)
             ?: throw IllegalArgumentException("Chat user id must not be blank")
         val changedIds = hashSetOf<String>()
-        var liveChanged = false
-        var historyChanged = false
-        val live = messagesByChannel[normalizedChannelId].orEmpty().map { message ->
+        val live = messagesByChannel[normalizedChannelId].orEmpty().mapMessagesIfChanged { message ->
             if (
                 message.userId != normalizedUserId ||
                 !shouldApplyModeration(message, action)
             ) {
                 message
             } else {
-                liveChanged = true
                 changedIds += message.id
                 deletedMessage(message, action, atMillis)
             }
         }
-        val history = historyMessagesByChannel[normalizedChannelId].orEmpty().map { message ->
-            if (
-                message.userId != normalizedUserId ||
-                !shouldApplyModeration(message, action)
-            ) {
-                message
-            } else {
-                historyChanged = true
-                changedIds += message.id
-                deletedMessage(message, action, atMillis)
+        val history = historyMessagesByChannel[normalizedChannelId].orEmpty()
+            .mapMessagesIfChanged { message ->
+                if (
+                    message.userId != normalizedUserId ||
+                    !shouldApplyModeration(message, action)
+                ) {
+                    message
+                } else {
+                    changedIds += message.id
+                    deletedMessage(message, action, atMillis)
+                }
             }
-        }
-        if (liveChanged) messagesByChannel = messagesByChannel + (normalizedChannelId to live)
-        if (historyChanged) {
+        if (live != null) messagesByChannel = messagesByChannel + (normalizedChannelId to live)
+        if (history != null) {
             historyMessagesByChannel = historyMessagesByChannel + (normalizedChannelId to history)
         }
         return changedIds.size
@@ -558,14 +570,19 @@ class ChatRuntimeStateHolder(
     }
 
     fun retainChannels(channelIds: Iterable<String>) {
-        val allowed = channelIds.map { it.trim() }.filter { it.isNotEmpty() }.toSet()
-        messagesByChannel = messagesByChannel.filterKeys(allowed::contains)
-        historyMessagesByChannel = historyMessagesByChannel.filterKeys(allowed::contains)
-        scrollPositionsByChannel = scrollPositionsByChannel.filterKeys(allowed::contains)
-        badgeAssetsByChannel = badgeAssetsByChannel.filterKeys(allowed::contains)
-        cheermoteAssetsByChannel = cheermoteAssetsByChannel.filterKeys(allowed::contains)
-        autoModQueue = autoModQueue.filter { it.channelId in allowed }
-        rateLimitsByChannel = rateLimitsByChannel.filterKeys(allowed::contains)
+        val allowed = channelIds.asSequence()
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .toSet()
+        messagesByChannel = messagesByChannel.retainAllowedKeys(allowed)
+        historyMessagesByChannel = historyMessagesByChannel.retainAllowedKeys(allowed)
+        scrollPositionsByChannel = scrollPositionsByChannel.retainAllowedKeys(allowed)
+        badgeAssetsByChannel = badgeAssetsByChannel.retainAllowedKeys(allowed)
+        cheermoteAssetsByChannel = cheermoteAssetsByChannel.retainAllowedKeys(allowed)
+        if (autoModQueue.any { it.channelId !in allowed }) {
+            autoModQueue = autoModQueue.filter { it.channelId in allowed }
+        }
+        rateLimitsByChannel = rateLimitsByChannel.retainAllowedKeys(allowed)
         timelineCacheByChannel.keys.retainAll(allowed)
         val interactiveChannels = interactiveState.pollsByChannel.keys +
             interactiveState.predictionsByChannel.keys + interactiveState.mutationsByChannel.keys
@@ -776,6 +793,29 @@ class ChatRuntimeStateHolder(
         }
     }
 
+    private inline fun List<ChatMessage>.mapMessagesIfChanged(
+        transform: (ChatMessage) -> ChatMessage,
+    ): List<ChatMessage>? {
+        var updated: MutableList<ChatMessage>? = null
+        for (index in indices) {
+            val current = this[index]
+            val replacement = transform(current)
+            if (replacement !== current) {
+                val target = updated ?: toMutableList().also { updated = it }
+                target[index] = replacement
+            }
+        }
+        return updated
+    }
+
+    private fun <T> Map<String, T>.retainAllowedKeys(
+        allowed: Set<String>,
+    ): Map<String, T> = if (keys.all(allowed::contains)) {
+        this
+    } else {
+        filterKeys(allowed::contains)
+    }
+
     private fun deletedMessage(
         message: ChatMessage,
         action: ModerationAction,
@@ -845,8 +885,8 @@ class ChatRuntimeStateHolder(
     private fun normalizeCheermoteAssets(
         value: Map<String, List<CheermoteAsset>>,
     ): Map<String, List<CheermoteAsset>> = value.values
-        .flatten()
         .asSequence()
+        .flatten()
         .filter { asset ->
             asset.prefix.isNotBlank() &&
                 asset.minBits >= 0 &&

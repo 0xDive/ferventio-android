@@ -8,6 +8,7 @@ import io.ferventio.app.domain.ChatRateLimitState
 import io.ferventio.app.domain.ChatScrollPosition
 import io.ferventio.app.domain.ConnectionStatus
 import io.ferventio.app.domain.ModerationAction
+import io.ferventio.app.domain.OutgoingMessageState
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -193,6 +194,59 @@ class ChatRuntimeStateHolderTest {
 
         assertEquals(emptyList(), holder.messages("1"))
         assertEquals(listOf("b"), holder.messages("2").map { it.id })
+    }
+
+    @Test
+    fun retainChannelsReusesStateMapsWhenWorkspaceIsUnchanged() {
+        val holder = ChatRuntimeStateHolder()
+        holder.append(message("a", 1L))
+        holder.updateScrollPosition(
+            ChatScrollPosition(
+                channelId = CHANNEL_ID,
+                firstVisibleItemIndex = 0,
+                firstVisibleItemScrollOffset = 0,
+            ),
+        )
+        holder.updateRateLimit(CHANNEL_ID, ChatRateLimitState("slow down"))
+
+        val messagesBefore = holder.messagesByChannel
+        val scrollPositionsBefore = holder.scrollPositionsByChannel
+        val rateLimitsBefore = holder.rateLimitsByChannel
+
+        holder.retainChannels(listOf(" $CHANNEL_ID "))
+
+        assertTrue(holder.messagesByChannel === messagesBefore)
+        assertTrue(holder.scrollPositionsByChannel === scrollPositionsBefore)
+        assertTrue(holder.rateLimitsByChannel === rateLimitsBefore)
+    }
+
+    @Test
+    fun outgoingServerEchoReplacesLocalMessageWithoutRebuildingUnrelatedEntries() {
+        val holder = ChatRuntimeStateHolder()
+        holder.append(message("before", 1L))
+        holder.append(
+            message("local", 2L).copy(
+                outgoingState = OutgoingMessageState.SENDING,
+                clientNonce = "nonce-1",
+            ),
+        )
+        holder.append(message("server", 3L))
+        holder.append(message("after", 4L))
+
+        assertTrue(
+            holder.markOutgoingSent(
+                channelId = CHANNEL_ID,
+                localMessageId = "local",
+                serverMessageId = "server",
+            ),
+        )
+
+        val messages = holder.messages(CHANNEL_ID)
+        assertEquals(listOf("before", "server", "after"), messages.map(ChatMessage::id))
+        val server = messages[1]
+        assertEquals(OutgoingMessageState.SENT, server.outgoingState)
+        assertEquals("nonce-1", server.clientNonce)
+        assertEquals("server", server.serverMessageId)
     }
 
     @Test

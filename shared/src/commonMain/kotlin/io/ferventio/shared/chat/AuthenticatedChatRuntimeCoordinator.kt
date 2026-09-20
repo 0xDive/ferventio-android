@@ -157,20 +157,16 @@ class AuthenticatedChatRuntimeCoordinator(
                     val auxiliaryRuntimeJob = launch {
                         coroutineScope {
                             launch {
-                                coroutineScope {
-                                    launch {
-                                        refreshBadgeAssets(
-                                            authentication = authentication,
-                                            workspace = workspace,
-                                        )
-                                    }
-                                    launch {
-                                        refreshCheermoteAssets(
-                                            authentication = authentication,
-                                            workspace = workspace,
-                                        )
-                                    }
-                                }
+                                refreshBadgeAssets(
+                                    authentication = authentication,
+                                    workspace = workspace,
+                                )
+                            }
+                            launch {
+                                refreshCheermoteAssets(
+                                    authentication = authentication,
+                                    workspace = workspace,
+                                )
                             }
                             if (sessionSettings != null && recentMessagesRuntime != null) {
                                 launch {
