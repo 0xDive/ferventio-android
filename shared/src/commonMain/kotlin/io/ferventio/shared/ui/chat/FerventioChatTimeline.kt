@@ -33,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,6 +41,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.structuralEqualityPolicy
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
@@ -133,9 +135,17 @@ fun FerventioChatTimeline(
     val preferences = runtime.settings.preferences
     val localUiPreferences = runtime.localUiPreferences.preferences
     val ownUserId = runtime.authentication.state.authentication?.accessLease?.session?.userId
-    val decorations = runtime.messageRules.decorationsByMessageId
+    val messageRules = runtime.messageRules
     val savedFilters = runtime.savedFilters.filters
     val canonicalMessages = chat.messages(channel.id)
+    val decorations by remember(messageRules, canonicalMessages) {
+        derivedStateOf(structuralEqualityPolicy()) {
+            selectTimelineDecorations(
+                messages = canonicalMessages,
+                decorations = messageRules.decorationsByMessageId,
+            )
+        }
+    }
     val workspaceFilter = remember(filterQuery, savedFilters) {
         compileWorkspaceSplitMessageFilter(
             filterQuery = filterQuery,
@@ -443,6 +453,23 @@ fun FerventioChatTimeline(
             }
         }
     }
+}
+
+internal fun selectTimelineDecorations(
+    messages: List<ChatMessage>,
+    decorations: Map<String, MessageDecoration>,
+): Map<String, MessageDecoration> {
+    if (messages.isEmpty() || decorations.isEmpty()) return emptyMap()
+    var selected: MutableMap<String, MessageDecoration>? = null
+    messages.forEach { message ->
+        decorations[message.id]?.let { decoration ->
+            val target = selected ?: LinkedHashMap<String, MessageDecoration>().also {
+                selected = it
+            }
+            target[message.id] = decoration
+        }
+    }
+    return selected ?: emptyMap()
 }
 
 private fun LazyListState.isTimelineAtLiveTail(empty: Boolean): Boolean {
