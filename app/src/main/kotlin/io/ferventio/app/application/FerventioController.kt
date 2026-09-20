@@ -1627,7 +1627,9 @@ class FerventioController(
                 historyError = "Не удалось загрузить историю: ${error.userMessage()}"
                 emptyMap()
             }
-            ChatMessageTextPreparation.warm(loaded.values.flatten())
+            ChatMessageTextPreparation.warm(
+                loaded.values.asSequence().flatten().asIterable(),
+            )
             mutableState.update { state ->
                 val restored = state.channels.associate { channel ->
                     channel.id to loaded[channel.id].orEmpty().takeLast(MAX_MESSAGES_PER_CHANNEL)
