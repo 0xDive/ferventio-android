@@ -98,7 +98,9 @@ internal fun ModerationScreen(
     controller: FerventioController,
     snackbarHostState: SnackbarHostState,
 ) {
-    val moderatedChannels = state.channels.filter { it.id in state.moderatedChannelIds }
+    val moderatedChannels = remember(state.channels, state.moderatedChannelIds) {
+        state.channels.filter { it.id in state.moderatedChannelIds }
+    }
     val selectedChannelId = state.moderation.selectedChannelId
         ?.takeIf { id -> moderatedChannels.any { it.id == id } }
         ?: state.selectedChannelId?.takeIf { it in state.moderatedChannelIds }
@@ -159,13 +161,25 @@ internal fun ModerationScreen(
             }
 
             when (panel) {
-                ModerationPanel.AUTOMOD -> AutoModPanel(
-                    queue = state.moderation.autoModQueue.filter { it.channelId == selectedChannelId },
-                    notificationsEnabled = state.moderation.autoModNotificationsEnabled,
+                ModerationPanel.AUTOMOD -> {
+                    val autoModPartition = remember(
+                        state.moderation.autoModQueue,
+                        selectedChannelId,
+                    ) {
+                        partitionAutoModQueue(
+                            queue = state.moderation.autoModQueue,
+                            channelId = selectedChannelId,
+                        )
+                    }
+                    AutoModPanel(
+                        held = autoModPartition.held,
+                        recent = autoModPartition.recent,
+                        notificationsEnabled = state.moderation.autoModNotificationsEnabled,
                     onNotificationsChanged = controller::setAutoModNotificationsEnabled,
                     onDecision = controller::decideAutoModMessage,
-                    modifier = Modifier.weight(1f),
-                )
+                        modifier = Modifier.weight(1f),
+                    )
+                }
 
                 ModerationPanel.MODES -> ChatModesPanel(
                     channelId = selectedChannelId,
@@ -465,7 +479,8 @@ private fun ModerationChannelPicker(
 
 @Composable
 private fun AutoModPanel(
-    queue: List<AutoModHeldMessage>,
+    held: List<AutoModHeldMessage>,
+    recent: List<AutoModHeldMessage>,
     notificationsEnabled: Boolean,
     onNotificationsChanged: (Boolean) -> Unit,
     onDecision: (String, Boolean) -> Unit,
@@ -479,8 +494,6 @@ private fun AutoModPanel(
             onCheckedChange = onNotificationsChanged,
         )
         HorizontalDivider()
-        val held = queue.filter { it.status == AutoModMessageStatus.HELD }
-        val recent = queue.filter { it.status != AutoModMessageStatus.HELD }
         LazyColumn(
             state = rememberLazyListState(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -506,7 +519,7 @@ private fun AutoModPanel(
             }
             if (recent.isNotEmpty()) {
                 item { SectionTitle("Недавние решения") }
-                items(recent.take(30), key = { "recent:${it.messageId}:${it.status}" }) { message ->
+                items(recent, key = { "recent:${it.messageId}:${it.status}" }) { message ->
                     AutoModMessageCard(message = message, onApprove = null, onDeny = null)
                 }
             }
@@ -778,12 +791,7 @@ private fun PeoplePanel(
             }
             ModerationPeopleTab.CHATTERS -> {
                 val grouped = remember(effectiveChatters) {
-                    CHATTER_GROUP_ORDER.mapNotNull { group ->
-                        effectiveChatters
-                            .filter { user -> user.group == group }
-                            .takeIf(List<ModerationUser>::isNotEmpty)
-                            ?.let { users -> group to users }
-                    }
+                    groupModerationChatters(effectiveChatters)
                 }
                 val groupTopology = remember(grouped) { grouped.map { (group, _) -> group } }
                 LaunchedEffect(channelId, selectedTab, groupTopology) {
@@ -1058,6 +1066,49 @@ private fun peopleTabTitle(tab: ModerationPeopleTab): String = when (tab) {
     ModerationPeopleTab.MODERATORS -> "Моды"
     ModerationPeopleTab.VIPS -> "VIP"
     ModerationPeopleTab.BANNED -> "Баны"
+}
+
+internal data class AutoModQueuePartition(
+    val held: List<AutoModHeldMessage>,
+    val recent: List<AutoModHeldMessage>,
+)
+
+internal fun partitionAutoModQueue(
+    queue: List<AutoModHeldMessage>,
+    channelId: String?,
+    recentLimit: Int = 30,
+): AutoModQueuePartition {
+    if (channelId.isNullOrBlank() || queue.isEmpty()) {
+        return AutoModQueuePartition(emptyList(), emptyList())
+    }
+    val held = ArrayList<AutoModHeldMessage>()
+    val recent = ArrayList<AutoModHeldMessage>(recentLimit.coerceAtLeast(0))
+    queue.forEach { message ->
+        if (message.channelId != channelId) return@forEach
+        if (message.status == AutoModMessageStatus.HELD) {
+            held += message
+        } else if (recent.size < recentLimit) {
+            recent += message
+        }
+    }
+    return AutoModQueuePartition(held, recent)
+}
+
+internal fun groupModerationChatters(
+    users: List<ModerationUser>,
+): List<Pair<ModerationUserGroup, List<ModerationUser>>> {
+    if (users.isEmpty()) return emptyList()
+    val buckets = Array(ModerationUserGroup.entries.size) {
+        mutableListOf<ModerationUser>()
+    }
+    users.forEach { user ->
+        buckets[user.group.ordinal] += user
+    }
+    return CHATTER_GROUP_ORDER.mapNotNull { group ->
+        buckets[group.ordinal]
+            .takeIf(List<ModerationUser>::isNotEmpty)
+            ?.let { group to it }
+    }
 }
 
 private val CHATTER_GROUP_ORDER = listOf(
