@@ -151,8 +151,32 @@ internal class TwitchEventSubBootstrapCoordinator(
     ): List<TwitchEventSubBootstrapFailure> {
         val channelById = bootstrap.channels.associateBy(ChatChannel::id)
         val failures = mutableListOf<TwitchEventSubBootstrapFailure>()
+        val remaining = bootstrap.remainingSubscriptions
+        if (remaining.isEmpty()) return failures
 
-        for (batch in bootstrap.remainingSubscriptions.chunked(REMAINING_SUBSCRIPTION_CONCURRENCY)) {
+        // Preserve the pre-optimization fail-fast contract for a stale/invalid token. If auth is
+        // broken, every supplemental request would fail the same way; probing one request before
+        // starting a batch avoids needless traffic and keeps reauthentication deterministic.
+        val probe = remaining.first()
+        val probeError = createCatching(authentication, sessionId, probe)
+        if (probeError != null) {
+            failures += probeError.toFailure(
+                channel = channelById.getValue(probe.broadcasterId),
+                type = probe.type,
+            )
+            if (
+                probeError.isTwitchAuthenticationFailure() ||
+                TwitchEventSubConnectionPolicy.isWebSocketTransportLimit(probeError)
+            ) {
+                return failures
+            }
+        }
+
+        for (
+            batch in remaining
+                .drop(1)
+                .chunked(REMAINING_SUBSCRIPTION_CONCURRENCY)
+        ) {
             val batchResults = coroutineScope {
                 batch.map { spec ->
                     async {
