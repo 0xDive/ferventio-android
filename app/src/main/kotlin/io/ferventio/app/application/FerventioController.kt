@@ -6236,20 +6236,13 @@ class FerventioController(
                 }
             }
             is ChatEvent.UserMessagesCleared -> {
+                val atMillis = System.currentTimeMillis()
                 mutableState.update { state ->
-                    val updated = state.messagesByChannel[event.channelId].orEmpty().map { message ->
-                        if (message.userId == event.userId) {
-                            message.copy(
-                                flags = message.flags.copy(isDeleted = true),
-                                moderation = ModerationState(
-                                    action = ModerationAction.TIMEOUT,
-                                    atMillis = System.currentTimeMillis(),
-                                ),
-                            )
-                        } else {
-                            message
-                        }
-                    }
+                    val updated = markLegacyUserMessagesDeleted(
+                        messages = state.messagesByChannel[event.channelId].orEmpty(),
+                        userId = event.userId,
+                        atMillis = atMillis,
+                    ) ?: return@update state
                     state.copy(messagesByChannel = state.messagesByChannel + (event.channelId to updated))
                 }
                 scope.launch {
@@ -6686,20 +6679,13 @@ class FerventioController(
     }
 
     private fun markMessageDeleted(channelId: String, messageId: String) {
+        val atMillis = System.currentTimeMillis()
         mutableState.update { state ->
-            val updated = state.messagesByChannel[channelId].orEmpty().map { message ->
-                if (message.id == messageId) {
-                    message.copy(
-                        flags = message.flags.copy(isDeleted = true),
-                        moderation = ModerationState(
-                            action = ModerationAction.DELETE,
-                            atMillis = System.currentTimeMillis(),
-                        ),
-                    )
-                } else {
-                    message
-                }
-            }
+            val updated = markLegacyMessageDeleted(
+                messages = state.messagesByChannel[channelId].orEmpty(),
+                messageId = messageId,
+                atMillis = atMillis,
+            ) ?: return@update state
             state.copy(messagesByChannel = state.messagesByChannel + (channelId to updated))
         }
         scope.launch { runCatching { historyRepository.markMessageDeleted(channelId, messageId) } }
