@@ -64,6 +64,21 @@ class ChatRuntimeStateHolderTest {
     }
 
     @Test
+    fun repeatedIdenticalHistoryPageReusesMergedTimelineProjection() {
+        val holder = ChatRuntimeStateHolder()
+        val history = message("history", 1L)
+        holder.prependHistory(CHANNEL_ID, listOf(history))
+        holder.append(message("live", 2L))
+        val first = holder.messages(CHANNEL_ID)
+
+        holder.prependHistory(CHANNEL_ID, listOf(history))
+        val second = holder.messages(CHANNEL_ID)
+
+        assertTrue(second === first)
+        assertEquals(listOf("history", "live"), second.map(ChatMessage::id))
+    }
+
+    @Test
     fun replaceAndHistoryNormalizeOrderingAndDuplicateIds() {
         val holder = ChatRuntimeStateHolder()
         holder.replaceChannelMessages(

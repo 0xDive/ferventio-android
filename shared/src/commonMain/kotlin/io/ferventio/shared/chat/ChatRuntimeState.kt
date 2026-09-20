@@ -484,10 +484,12 @@ class ChatRuntimeStateHolder(
             incoming = messages,
             liveIds = liveIds,
         )
-        historyMessagesByChannel = if (merged.messages.isEmpty()) {
-            historyMessagesByChannel - normalizedChannelId
-        } else {
-            historyMessagesByChannel + (normalizedChannelId to merged.messages)
+        if (merged.messages != existing) {
+            historyMessagesByChannel = if (merged.messages.isEmpty()) {
+                historyMessagesByChannel - normalizedChannelId
+            } else {
+                historyMessagesByChannel + (normalizedChannelId to merged.messages)
+            }
         }
         return merged.acceptedCount
     }
