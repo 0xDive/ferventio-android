@@ -4291,27 +4291,26 @@ class FerventioController(
         }
         rebuildMessageRuleEvaluation()
         startTokenValidation()
-        val moderated = runCatching {
+        val moderatedResult = runCatching {
             api.getModeratedChannelIds(session.clientId, lease.accessToken, session.userId)
-        }.getOrDefault(emptySet()) + session.userId
+        }
+        val moderated = moderatedResult.getOrDefault(emptySet()) + session.userId
         currentCoroutineContext().ensureActive()
         if (performanceScenarioActive) return
-        mutableState.update { state ->
-            state.copy(
-                moderatedChannelIds = moderated,
-                moderation = state.moderation.copy(
-                    selectedChannelId = state.moderation.selectedChannelId
-                        ?.takeIf(moderated::contains)
-                        ?: state.selectedChannelId?.takeIf(moderated::contains),
-                ),
-            )
-        }
+        applyModeratedChannels(moderated)
         currentCoroutineContext().ensureActive()
         if (performanceScenarioActive) return
         restoreChannelsAndConnect(session, lease.accessToken)
         if (performanceScenarioActive) return
         restoreAttentionEntries()
-        refreshModeratedChannels(session)
+        if (moderatedResult.isSuccess) {
+            applyModeratedChannels(moderated)
+            mutableState.value.selectedChannelId?.let(::refreshPinnedMessage)
+        } else {
+            // Preserve the old recovery behavior when the bootstrap lookup failed, without
+            // duplicating a successful Helix moderation/channels request on every login.
+            refreshModeratedChannels(session)
+        }
         queueUserProfileHydration(session.userId)
         if (settingsStore.settingsSyncEnabled) scheduleSettingsSync(immediate = true)
     }
@@ -4967,7 +4966,7 @@ class FerventioController(
                 errorMessage = "Не удалось восстановить сообщения: ${error.userMessage()}"
                 emptyMap()
             }
-            ChatMessageTextPreparation.warm(messages.values.flatten())
+            messages.values.forEach(ChatMessageTextPreparation::warm)
             val positions = runCatching {
                 historyRepository.loadScrollPositions(channelIds)
             }.getOrElse { error ->
@@ -4982,10 +4981,14 @@ class FerventioController(
         }.getOrElse { emptyList() }
         val cachedByLogin = cachedChannels.associateBy { it.login.lowercase() }
         val selectedLogin = settingsStore.selectedChannelLogin?.lowercase()
+        var cachedHistorySnapshot:
+            Triple<Map<String, List<ChatMessage>>, Map<String, ChatScrollPosition>, String?>? = null
 
         if (cachedChannels.isNotEmpty()) {
             mutableState.update { it.copy(isHistoryLoading = settingsStore.localHistoryEnabled) }
-            val (cachedMessages, cachedPositions, cachedError) = loadHistorySnapshot(cachedChannels)
+            val historySnapshot = loadHistorySnapshot(cachedChannels)
+            cachedHistorySnapshot = historySnapshot
+            val (cachedMessages, cachedPositions, cachedError) = historySnapshot
             val cachedSelected = selectedLogin
                 ?.let(cachedByLogin::get)
                 ?: cachedChannels.firstOrNull()
@@ -5055,7 +5058,12 @@ class FerventioController(
                 }
             }
 
-        val (savedMessages, savedScrollPositions, historyError) = loadHistorySnapshot(channels)
+        val cachedIds = cachedChannels.map(ChatChannel::id)
+        val refreshedIds = channels.map(ChatChannel::id)
+        val historySnapshot = cachedHistorySnapshot
+            ?.takeIf { cachedIds == refreshedIds }
+            ?: loadHistorySnapshot(channels)
+        val (savedMessages, savedScrollPositions, historyError) = historySnapshot
         val selected = selectedLogin
             ?.let { login -> channels.firstOrNull { it.login.equals(login, ignoreCase = true) } }
             ?: channels.firstOrNull()
@@ -5077,8 +5085,12 @@ class FerventioController(
         }
         normalizeChannelPreferences(channels, selected?.id)
         refreshTwitchChatAssets(session, accessToken, channels)
-        savedMessages.values.flatten().forEach { message ->
-            if (message.author.profileImageUrl.isNullOrBlank()) queueUserProfileHydration(message.userId)
+        savedMessages.values.forEach { messages ->
+            messages.forEach { message ->
+                if (message.author.profileImageUrl.isNullOrBlank()) {
+                    queueUserProfileHydration(message.userId)
+                }
+            }
         }
         connectEventSub(session, accessToken)
         selected?.let { channel -> scheduleRecentMessagesLoad(listOf(channel)) }
@@ -6516,17 +6528,30 @@ class FerventioController(
                 }
             }
             val moderated = result.getOrNull()?.plus(session.userId) ?: return@launch
-            mutableState.update { state ->
-                val currentModerationChannel = state.moderation.selectedChannelId
-                    ?.takeIf(moderated::contains)
-                    ?: state.selectedChannelId?.takeIf(moderated::contains)
-                    ?: state.channels.firstOrNull { it.id in moderated }?.id
+            applyModeratedChannels(moderated)
+            mutableState.value.selectedChannelId?.let(::refreshPinnedMessage)
+        }
+    }
+
+    private fun applyModeratedChannels(moderated: Set<String>) {
+        mutableState.update { state ->
+            val currentModerationChannel = state.moderation.selectedChannelId
+                ?.takeIf(moderated::contains)
+                ?: state.selectedChannelId?.takeIf(moderated::contains)
+                ?: state.channels.firstOrNull { it.id in moderated }?.id
+            if (
+                state.moderatedChannelIds == moderated &&
+                state.moderation.selectedChannelId == currentModerationChannel
+            ) {
+                state
+            } else {
                 state.copy(
                     moderatedChannelIds = moderated,
-                    moderation = state.moderation.copy(selectedChannelId = currentModerationChannel),
+                    moderation = state.moderation.copy(
+                        selectedChannelId = currentModerationChannel,
+                    ),
                 )
             }
-            mutableState.value.selectedChannelId?.let(::refreshPinnedMessage)
         }
     }
 
