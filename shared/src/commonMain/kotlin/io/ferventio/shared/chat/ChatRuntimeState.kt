@@ -45,6 +45,7 @@ class ChatRuntimeStateHolder(
     var scrollPositionsByChannel by mutableStateOf(emptyMap<String, ChatScrollPosition>())
         private set
     private var historyMessagesByChannel by mutableStateOf(emptyMap<String, List<ChatMessage>>())
+    private val timelineCacheByChannel = mutableMapOf<String, TimelineCacheEntry>()
     var globalBadgeAssets by mutableStateOf(emptyMap<String, ChatBadgeAsset>())
         private set
     var badgeAssetsByChannel by mutableStateOf(emptyMap<String, Map<String, ChatBadgeAsset>>())
@@ -115,10 +116,22 @@ class ChatRuntimeStateHolder(
     /** Returns the durable history overlay merged with the canonical 5,000-message live window. */
     fun messages(channelId: String): List<ChatMessage> {
         val normalizedChannelId = channelId.trim()
-        return mergeTimelineMessages(
-            history = historyMessagesByChannel[normalizedChannelId].orEmpty(),
-            live = messagesByChannel[normalizedChannelId].orEmpty(),
+        val history = historyMessagesByChannel[normalizedChannelId].orEmpty()
+        val live = messagesByChannel[normalizedChannelId].orEmpty()
+        val cached = timelineCacheByChannel[normalizedChannelId]
+        if (cached != null && cached.history === history && cached.live === live) {
+            return cached.merged
+        }
+        val merged = mergeTimelineMessages(
+            history = history,
+            live = live,
         )
+        timelineCacheByChannel[normalizedChannelId] = TimelineCacheEntry(
+            history = history,
+            live = live,
+            merged = merged,
+        )
+        return merged
     }
 
     fun scrollPosition(channelId: String): ChatScrollPosition? =
@@ -273,12 +286,24 @@ class ChatRuntimeStateHolder(
     fun append(message: ChatMessage) {
         requireMessage(message)
         val existing = messagesByChannel[message.channelId].orEmpty()
-        val serverEchoIndex = existing.indexOfFirst { pending ->
-            pending.id != message.id &&
-                pending.serverMessageId != null &&
-                pending.serverMessageId == message.id
+        var serverEchoIndex = -1
+        var existingIndex = -1
+        for (index in existing.indices) {
+            val candidate = existing[index]
+            if (existingIndex < 0 && candidate.id == message.id) {
+                existingIndex = index
+            }
+            if (
+                serverEchoIndex < 0 &&
+                candidate.id != message.id &&
+                candidate.serverMessageId != null &&
+                candidate.serverMessageId == message.id
+            ) {
+                serverEchoIndex = index
+            }
+            if (serverEchoIndex >= 0 && existingIndex >= 0) break
         }
-        val existingIndex = existing.indexOfFirst { it.id == message.id }
+
         val updated = when {
             serverEchoIndex >= 0 -> {
                 val pending = existing[serverEchoIndex]
@@ -290,13 +315,32 @@ class ChatRuntimeStateHolder(
                     )
                 }
             }
+            existingIndex >= 0 && existing[existingIndex] == message -> existing
             existingIndex >= 0 -> existing.toMutableList().apply {
                 this[existingIndex] = message
             }
-            else -> (existing + message).takeLast(MAX_MESSAGES_PER_CHANNEL).toMutableList()
+            else -> appendToBoundedLiveWindow(existing, message)
         }
-        messagesByChannel = messagesByChannel + (message.channelId to updated)
+        if (updated !== existing) {
+            messagesByChannel = messagesByChannel + (message.channelId to updated)
+        }
         removeHistoryMessage(message.channelId, message.id)
+    }
+
+    private fun appendToBoundedLiveWindow(
+        existing: List<ChatMessage>,
+        message: ChatMessage,
+    ): List<ChatMessage> {
+        val retainedExisting = (MAX_MESSAGES_PER_CHANNEL - 1).coerceAtLeast(0)
+        val startIndex = (existing.size - retainedExisting).coerceAtLeast(0)
+        return ArrayList<ChatMessage>(
+            minOf(MAX_MESSAGES_PER_CHANNEL, existing.size + 1),
+        ).apply {
+            for (index in startIndex until existing.size) {
+                add(existing[index])
+            }
+            add(message)
+        }
     }
 
     fun markOutgoingSending(channelId: String, localMessageId: String): Boolean =
@@ -509,6 +553,7 @@ class ChatRuntimeStateHolder(
         cheermoteAssetsByChannel = cheermoteAssetsByChannel - normalized
         autoModQueue = autoModQueue.filterNot { it.channelId == normalized }
         rateLimitsByChannel = rateLimitsByChannel - normalized
+        timelineCacheByChannel.remove(normalized)
         applyInteractive(InteractiveChatOverlayEvent.ClearChannel(normalized))
     }
 
@@ -521,6 +566,7 @@ class ChatRuntimeStateHolder(
         cheermoteAssetsByChannel = cheermoteAssetsByChannel.filterKeys(allowed::contains)
         autoModQueue = autoModQueue.filter { it.channelId in allowed }
         rateLimitsByChannel = rateLimitsByChannel.filterKeys(allowed::contains)
+        timelineCacheByChannel.keys.retainAll(allowed)
         val interactiveChannels = interactiveState.pollsByChannel.keys +
             interactiveState.predictionsByChannel.keys + interactiveState.mutationsByChannel.keys
         interactiveChannels.filterNot(allowed::contains).forEach { channelId ->
@@ -585,6 +631,7 @@ class ChatRuntimeStateHolder(
         interactiveState = InteractiveChatOverlayState()
         autoModQueue = emptyList()
         rateLimitsByChannel = emptyMap()
+        timelineCacheByChannel.clear()
         eventSubSessionId = null
         eventSubTransportLimitReached = false
         authenticationRequired = false
@@ -824,6 +871,12 @@ class ChatRuntimeStateHolder(
     private fun requireChannelId(value: String): String =
         value.trim().takeIf { it.isNotEmpty() }
             ?: throw IllegalArgumentException("Chat channel id must not be blank")
+
+    private data class TimelineCacheEntry(
+        val history: List<ChatMessage>,
+        val live: List<ChatMessage>,
+        val merged: List<ChatMessage>,
+    )
 
     private data class HistoryMergeResult(
         val messages: List<ChatMessage>,
