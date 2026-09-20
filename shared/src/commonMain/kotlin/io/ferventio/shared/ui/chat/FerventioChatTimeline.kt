@@ -608,15 +608,26 @@ private fun ChatMessageRow(
 
     val chat = LocalFerventioRuntimeState.current.chat
     val deletedPlaceholder = stringResource(Res.string.chat_message_deleted)
-    val presentation = projectChatMessage(
-        message = message,
-        deletedPlaceholder = deletedPlaceholder,
-        thirdPartyEmotes = thirdPartyEmotes,
-        cheermoteAssetsByPrefix = cheermoteAssets,
-        animatedMediaSupported = supportsAnimatedChatMedia && preferences.animateEmotes,
-        showDeletedMessageContent = preferences.showDeletedMessageContent,
-    )
-    val renderSegments = groupChatMessageSegments(presentation.segments)
+    val presentation = remember(
+        message,
+        deletedPlaceholder,
+        thirdPartyEmotes,
+        cheermoteAssets,
+        preferences.animateEmotes,
+        preferences.showDeletedMessageContent,
+    ) {
+        projectChatMessage(
+            message = message,
+            deletedPlaceholder = deletedPlaceholder,
+            thirdPartyEmotes = thirdPartyEmotes,
+            cheermoteAssetsByPrefix = cheermoteAssets,
+            animatedMediaSupported = supportsAnimatedChatMedia && preferences.animateEmotes,
+            showDeletedMessageContent = preferences.showDeletedMessageContent,
+        )
+    }
+    val renderSegments = remember(presentation.segments) {
+        groupChatMessageSegments(presentation.segments)
+    }
     val uriHandler = LocalUriHandler.current
     val linkColor = MaterialTheme.colorScheme.primary
     val mentionColor = MaterialTheme.colorScheme.tertiary

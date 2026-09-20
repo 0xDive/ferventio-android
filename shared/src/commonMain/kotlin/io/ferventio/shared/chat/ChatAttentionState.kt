@@ -51,6 +51,7 @@ class ChatAttentionStateHolder {
     fun requestMessageNavigation(channelId: String, messageId: String) {
         val normalizedChannelId = requireChannelId(channelId)
         val normalizedMessageId = requireMessageId(messageId)
+        if (messageNavigationTargets[normalizedChannelId] == normalizedMessageId) return
         messageNavigationTargets = messageNavigationTargets + (normalizedChannelId to normalizedMessageId)
     }
 
@@ -68,17 +69,30 @@ class ChatAttentionStateHolder {
         isAtLiveTail: Boolean,
     ) {
         val normalizedChannelId = requireChannelId(channelId)
-        visibleChannelIds = if (visible) {
-            visibleChannelIds + normalizedChannelId
-        } else {
-            visibleChannelIds - normalizedChannelId
+        val shouldBeAtLiveTail = visible && isAtLiveTail
+        val wasVisible = normalizedChannelId in visibleChannelIds
+        val wasAtLiveTail = normalizedChannelId in channelsAtLiveTail
+
+        if (wasVisible != visible) {
+            visibleChannelIds = if (visible) {
+                visibleChannelIds + normalizedChannelId
+            } else {
+                visibleChannelIds - normalizedChannelId
+            }
         }
-        channelsAtLiveTail = if (visible && isAtLiveTail) {
-            channelsAtLiveTail + normalizedChannelId
-        } else {
-            channelsAtLiveTail - normalizedChannelId
+        if (wasAtLiveTail != shouldBeAtLiveTail) {
+            channelsAtLiveTail = if (shouldBeAtLiveTail) {
+                channelsAtLiveTail + normalizedChannelId
+            } else {
+                channelsAtLiveTail - normalizedChannelId
+            }
         }
-        if (visible && isAtLiveTail) markChannelRead(normalizedChannelId)
+
+        // Any unread attention entry implies channelAttention for the same channel, so avoid
+        // scanning the bounded attention list on every unchanged viewport sample.
+        if (shouldBeAtLiveTail && normalizedChannelId in channelAttention) {
+            markChannelRead(normalizedChannelId)
+        }
     }
 
     /** Convenience overload retained for callers that own only the evaluator. */
@@ -133,9 +147,7 @@ class ChatAttentionStateHolder {
                 highlightReasons = decoration.highlightReasons,
                 highlightColorArgb = decoration.highlightColorArgb,
             )
-            attentionEntries = (attentionEntries.filterNot { it.messageId == entry.messageId } + entry)
-                .sortedWith(compareBy(AttentionEntry::timestampMillis, AttentionEntry::messageId))
-                .takeLast(MAX_ATTENTION_ENTRIES)
+            attentionEntries = upsertAttentionEntry(attentionEntries, entry)
         }
 
         if (isSystemMessage || isVisibleLive || isOwnMessage) return
@@ -213,6 +225,45 @@ class ChatAttentionStateHolder {
         visibleChannelIds = emptySet()
         channelsAtLiveTail = emptySet()
         messageNavigationTargets = emptyMap()
+    }
+
+    private fun upsertAttentionEntry(
+        existing: List<AttentionEntry>,
+        entry: AttentionEntry,
+    ): List<AttentionEntry> {
+        val updated = ArrayList<AttentionEntry>(minOf(MAX_ATTENTION_ENTRIES + 1, existing.size + 1))
+        existing.forEach { current ->
+            if (current.messageId != entry.messageId) updated += current
+        }
+
+        var low = 0
+        var high = updated.size
+        while (low < high) {
+            val mid = (low + high) ushr 1
+            val current = updated[mid]
+            val comparison = compareAttention(current, entry)
+            if (comparison <= 0) low = mid + 1 else high = mid
+        }
+        updated.add(low, entry)
+
+        if (updated.size <= MAX_ATTENTION_ENTRIES) return updated
+        return ArrayList<AttentionEntry>(MAX_ATTENTION_ENTRIES).apply {
+            for (index in updated.size - MAX_ATTENTION_ENTRIES until updated.size) {
+                add(updated[index])
+            }
+        }
+    }
+
+    private fun compareAttention(
+        left: AttentionEntry,
+        right: AttentionEntry,
+    ): Int {
+        val timestampComparison = left.timestampMillis.compareTo(right.timestampMillis)
+        return if (timestampComparison != 0) {
+            timestampComparison
+        } else {
+            left.messageId.compareTo(right.messageId)
+        }
     }
 
     private fun requireChannelId(value: String): String =

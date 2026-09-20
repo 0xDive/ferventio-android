@@ -126,6 +126,45 @@ class ChatAttentionStateTest {
     }
 
     @Test
+    fun repeatedViewportSamplesDoNotReallocateStableSets() {
+        val state = ChatAttentionStateHolder()
+        state.updateViewport("channel-id", visible = true, isAtLiveTail = true)
+        val visible = state.visibleChannelIds
+        val liveTail = state.channelsAtLiveTail
+
+        state.updateViewport("channel-id", visible = true, isAtLiveTail = true)
+
+        assertTrue(state.visibleChannelIds === visible)
+        assertTrue(state.channelsAtLiveTail === liveTail)
+    }
+
+    @Test
+    fun attentionEntriesStayOrderedAndDeduplicateByMessageId() {
+        val state = ChatAttentionStateHolder()
+        val late = message("late", "@viewer").copy(timestampMillis = 3_000L)
+        val early = message("early", "@viewer").copy(timestampMillis = 1_000L)
+        val middle = message("middle", "@viewer").copy(timestampMillis = 2_000L)
+
+        state.recordIncoming(late, session, evaluator)
+        state.recordIncoming(early, session, evaluator)
+        state.recordIncoming(middle, session, evaluator)
+        state.recordIncoming(
+            middle.copy(text = "@viewer updated"),
+            session,
+            evaluator,
+        )
+
+        assertEquals(
+            listOf("early", "middle", "late"),
+            state.attentionEntries.map { it.messageId },
+        )
+        assertEquals(
+            "@viewer updated",
+            state.attentionEntries.single { it.messageId == "middle" }.text,
+        )
+    }
+
+    @Test
     fun returningToLiveTailMarksChannelAndAttentionEntriesRead() {
         val state = ChatAttentionStateHolder()
         state.recordIncoming(message("mention", "@viewer"), session, evaluator)
