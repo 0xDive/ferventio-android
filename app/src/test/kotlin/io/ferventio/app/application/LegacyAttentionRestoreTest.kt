@@ -18,6 +18,45 @@ class LegacyAttentionRestoreTest {
     }
 
     @Test
+    fun attentionSummaryAggregatesUnreadInOnePass() {
+        val entries = listOf(
+            entry(
+                messageId = "later",
+                channelId = "1",
+                channelLogin = "alpha",
+                timestampMillis = 20L,
+            ),
+            entry(
+                messageId = "early",
+                channelId = "1",
+                channelLogin = "alpha",
+                timestampMillis = 10L,
+            ),
+            entry(
+                messageId = "capped",
+                channelId = "1",
+                channelLogin = "alpha",
+                timestampMillis = 30L,
+            ),
+            entry(
+                messageId = "read",
+                channelId = "2",
+                channelLogin = "beta",
+                timestampMillis = 5L,
+                isRead = true,
+            ),
+        )
+
+        val summary = summarizeLegacyAttention(entries, maxCount = 2)
+
+        assertEquals(3, summary.unreadCount)
+        assertEquals(2, summary.channelAttention.getValue("1").unreadCount)
+        assertEquals(2, summary.channelAttention.getValue("1").mentionCount)
+        assertEquals("early", summary.channelAttention.getValue("1").firstUnreadMessageId)
+        assertTrue("2" !in summary.channelAttention)
+    }
+
+    @Test
     fun legacyLoginRemapCopiesOnlyChangedEntry() {
         val unchanged = entry(
             messageId = "keep",
@@ -46,6 +85,8 @@ class LegacyAttentionRestoreTest {
         messageId: String = "message",
         channelId: String,
         channelLogin: String,
+        timestampMillis: Long = 1L,
+        isRead: Boolean = false,
     ) = AttentionEntry(
         messageId = messageId,
         channelId = channelId,
@@ -55,8 +96,8 @@ class LegacyAttentionRestoreTest {
         authorDisplayName = "Author",
         text = "hello",
         timestamp = "2026-09-20T00:00:00Z",
-        timestampMillis = 1L,
-        isRead = false,
+        timestampMillis = timestampMillis,
+        isRead = isRead,
         isDirectMention = true,
     )
 }

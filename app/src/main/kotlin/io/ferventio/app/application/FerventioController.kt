@@ -6303,34 +6303,31 @@ class FerventioController(
             entries = stored,
             channels = mutableState.value.channels,
         )
+        val restoredSummary = summarizeLegacyAttention(
+            entries = remapped,
+            maxCount = MAX_ATTENTION_COUNT,
+        )
         mutableState.update { state ->
-            val restoredAttention = remapped.filterNot(AttentionEntry::isRead)
-                .groupBy(AttentionEntry::channelId)
-                .mapValues { (_, entries) ->
-                    ChannelAttention(
-                        unreadCount = entries.size.coerceAtMost(MAX_ATTENTION_COUNT),
-                        mentionCount = entries.size.coerceAtMost(MAX_ATTENTION_COUNT),
-                        firstUnreadMessageId = entries.minByOrNull(AttentionEntry::timestampMillis)?.messageId,
+            val mergedChannelAttention = restoredSummary.channelAttention.entries
+                .fold(state.channelAttention) { accumulated, item ->
+                    val previous = accumulated[item.key]
+                    val restored = item.value
+                    accumulated + (
+                        item.key to if (previous == null) {
+                            restored
+                        } else {
+                            previous.copy(
+                                unreadCount = maxOf(previous.unreadCount, restored.unreadCount),
+                                mentionCount = maxOf(previous.mentionCount, restored.mentionCount),
+                                firstUnreadMessageId =
+                                    previous.firstUnreadMessageId ?: restored.firstUnreadMessageId,
+                            )
+                        }
                     )
                 }
-            val mergedChannelAttention = restoredAttention.entries.fold(state.channelAttention) { accumulated, item ->
-                val previous = accumulated[item.key]
-                val restored = item.value
-                accumulated + (
-                    item.key to if (previous == null) {
-                        restored
-                    } else {
-                        previous.copy(
-                            unreadCount = maxOf(previous.unreadCount, restored.unreadCount),
-                            mentionCount = maxOf(previous.mentionCount, restored.mentionCount),
-                            firstUnreadMessageId = previous.firstUnreadMessageId ?: restored.firstUnreadMessageId,
-                        )
-                    }
-                )
-            }
             state.copy(
                 attentionEntries = remapped,
-                mentionUnreadCount = remapped.count { !it.isRead },
+                mentionUnreadCount = restoredSummary.unreadCount,
                 channelAttention = mergedChannelAttention,
             )
         }
