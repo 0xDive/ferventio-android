@@ -3369,28 +3369,33 @@ class FerventioController(
             }.onSuccess {
                 val status = if (approve) AutoModMessageStatus.APPROVED else AutoModMessageStatus.DENIED
                 mutableState.update { state ->
+                    val updatedQueue = mapLegacyListIfChanged(state.moderation.autoModQueue) { item ->
+                        if (item.messageId == messageId && item.status != status) {
+                            item.copy(status = status)
+                        } else {
+                            item
+                        }
+                    } ?: return@update state
                     state.copy(
-                        moderation = state.moderation.copy(
-                            autoModQueue = state.moderation.autoModQueue.map { item ->
-                                if (item.messageId == messageId) item.copy(status = status) else item
-                            },
-                        ),
+                        moderation = state.moderation.copy(autoModQueue = updatedQueue),
                     )
                 }
                 showNotice(if (approve) "Сообщение AutoMod разрешено" else "Сообщение AutoMod отклонено")
             }.onFailure { error ->
                 if (error is TwitchApiException && error.statusCode == 404) {
                     mutableState.update { state ->
+                        val updatedQueue = mapLegacyListIfChanged(state.moderation.autoModQueue) { item ->
+                            if (
+                                item.messageId == messageId &&
+                                item.status != AutoModMessageStatus.EXPIRED
+                            ) {
+                                item.copy(status = AutoModMessageStatus.EXPIRED)
+                            } else {
+                                item
+                            }
+                        } ?: return@update state
                         state.copy(
-                            moderation = state.moderation.copy(
-                                autoModQueue = state.moderation.autoModQueue.map { item ->
-                                    if (item.messageId == messageId) {
-                                        item.copy(status = AutoModMessageStatus.EXPIRED)
-                                    } else {
-                                        item
-                                    }
-                                },
-                            ),
+                            moderation = state.moderation.copy(autoModQueue = updatedQueue),
                         )
                     }
                     showNotice("Сообщение AutoMod уже обработано или время решения истекло")
