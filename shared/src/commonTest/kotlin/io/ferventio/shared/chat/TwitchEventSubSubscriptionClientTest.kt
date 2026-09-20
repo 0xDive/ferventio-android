@@ -116,7 +116,7 @@ class TwitchEventSubSubscriptionClientTest {
         assertEquals(2, requests.size)
         assertEquals(HttpMethod.Get, requests[0].method)
         assertEquals("enabled", requests[0].url.parameters["status"])
-        assertEquals("100", requests[0].url.parameters["first"])
+        assertEquals(null, requests[0].url.parameters["first"])
         assertEquals("next-page", requests[1].url.parameters["after"])
         requests.forEach { request ->
             assertEquals("Bearer access-token", request.headers[HttpHeaders.Authorization])
