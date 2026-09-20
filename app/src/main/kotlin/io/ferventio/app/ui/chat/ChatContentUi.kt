@@ -370,16 +370,24 @@ internal fun ChannelChatContent(
     val input = state.draftsByChannel[channelId].orEmpty()
     val canWrite = state.isAuthenticated
     val canModerateChannel = channelId in state.moderatedChannelIds
-    val quickModerationStrings = QuickModerationUiStrings(
-        banButton = resourceStrings.string(R.string.ferventio_quick_ban_button),
-        deleteButton = resourceStrings.string(R.string.ferventio_quick_delete_button),
-        banTitle = resourceStrings.string(R.string.ferventio_quick_ban_confirm_title),
-        banBody = resourceStrings.string(R.string.ferventio_quick_ban_confirm_body),
-        deleteTitle = resourceStrings.string(R.string.ferventio_quick_delete_confirm_title),
-        deleteBody = resourceStrings.string(R.string.ferventio_quick_delete_confirm_body),
-        cancel = resourceStrings.string(R.string.ferventio_quick_action_cancel),
-    )
-    val interactiveCapabilities = state.session?.interactiveChatCapabilities(channelId) ?: InteractiveChatCapabilities()
+    val channel = remember(state.channels, channelId) {
+        state.channels.firstOrNull { it.id == channelId }
+    }
+    val session = state.session
+    val quickModerationStrings = remember(resourceStrings) {
+        QuickModerationUiStrings(
+            banButton = resourceStrings.string(R.string.ferventio_quick_ban_button),
+            deleteButton = resourceStrings.string(R.string.ferventio_quick_delete_button),
+            banTitle = resourceStrings.string(R.string.ferventio_quick_ban_confirm_title),
+            banBody = resourceStrings.string(R.string.ferventio_quick_ban_confirm_body),
+            deleteTitle = resourceStrings.string(R.string.ferventio_quick_delete_confirm_title),
+            deleteBody = resourceStrings.string(R.string.ferventio_quick_delete_confirm_body),
+            cancel = resourceStrings.string(R.string.ferventio_quick_action_cancel),
+        )
+    }
+    val interactiveCapabilities = remember(session, channelId) {
+        session?.interactiveChatCapabilities(channelId) ?: InteractiveChatCapabilities()
+    }
     var replyTarget by remember(instanceKey) { mutableStateOf<ChatMessage?>(null) }
     var replyThreadTarget by remember(instanceKey) { mutableStateOf<ChatMessage?>(null) }
     var messageActionsTarget by remember(instanceKey) { mutableStateOf<ChatMessage?>(null) }
@@ -510,7 +518,9 @@ internal fun ChannelChatContent(
     }
     val latestMessageId = messages.lastOrNull()?.id
     val latestAutoModMessageId = heldAutoModMessages.lastOrNull()?.messageId
-    val liveContentKey = "${latestMessageId.orEmpty()}|${latestAutoModMessageId.orEmpty()}"
+    val liveContentKey = remember(latestMessageId, latestAutoModMessageId) {
+        "${latestMessageId.orEmpty()}|${latestAutoModMessageId.orEmpty()}"
+    }
     var lastObservedLiveContentKey by remember(instanceKey) { mutableStateOf(liveContentKey) }
     val latestVisibleMessages by rememberUpdatedState(visibleMessages)
     val latestAutoScrollEnabled = rememberUpdatedState(state.autoScrollEnabled)
@@ -569,7 +579,7 @@ internal fun ChannelChatContent(
         composerRichText?.let(::ComposerVisualTransformation) ?: VisualTransformation.None
     }
     val profilesById = state.userProfilesById
-    val currentUserId = state.session?.userId
+    val currentUserId = session?.userId
     val needsUserSuggestions = remember(input) {
         ComposerAutocomplete.currentToken(input).startsWith("@")
     }
@@ -643,7 +653,10 @@ internal fun ChannelChatContent(
             onRefreshPinnedMessage(channelId)
         }
     }
-    LaunchedEffect(suggestions.map(ComposerSuggestion::key)) {
+    val suggestionKeys = remember(suggestions) {
+        suggestions.map(ComposerSuggestion::key)
+    }
+    LaunchedEffect(suggestionKeys) {
         autocompleteIndex = autocompleteIndex.coerceIn(0, suggestions.lastIndex.coerceAtLeast(0))
     }
 
@@ -721,8 +734,6 @@ internal fun ChannelChatContent(
             else -> Unit
         }
         if (openNukePreview(message)) return@submit
-        val channel = state.channels.firstOrNull { it.id == channelId }
-        val session = state.session
         val replyUser = replyTarget?.let { target ->
             CustomCommandUser(
                 id = target.userId,
@@ -1156,7 +1167,7 @@ internal fun ChannelChatContent(
                                 ?: ImmutableBadgeAssetList.Empty,
                             onOpenUser = openUserFromRow,
                             onOpenEmote = openEmoteFromRow,
-                            ownUserId = state.session?.userId,
+                            ownUserId = currentUserId,
                             highlighted = highlightedMessageId == message.id,
                             decoration = messageDecorations[message.id] ?: MessageDecoration(),
                             onNavigateToMessage = navigateToMessage,
@@ -1412,7 +1423,7 @@ internal fun ChannelChatContent(
         if (showEmotePicker) {
             TwitchStyleEmotePickerPanel(
                 channelId = channelId,
-                channelName = state.channels.firstOrNull { it.id == channelId }?.displayName ?: "Канал",
+                channelName = channel?.displayName ?: "Канал",
                 catalog = catalog,
                 recentEmoteKeys = state.recentEmoteKeys,
                 favoriteEmoteKeys = state.favoriteEmoteKeys,
