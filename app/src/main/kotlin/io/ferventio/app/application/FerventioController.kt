@@ -4577,12 +4577,111 @@ class FerventioController(
                 snapshot = snapshot,
                 enabledProviders = enabledProviders,
             ) { _, _ ->
-                emoteLiveRefreshJob?.cancel()
-                emoteLiveRefreshJob = scope.launch {
-                    delay(700)
-                    if (mutableState.value.isAnonymous) refreshAnonymousChatAssets()
+                scheduleLiveEmoteCatalogRefresh()
+            }
+        }
+    }
+
+    private fun scheduleLiveEmoteCatalogRefresh() {
+        emoteLiveRefreshJob?.cancel()
+        lateinit var refreshJob: Job
+        refreshJob = scope.launch {
+            try {
+                delay(700L)
+                refreshLiveEmoteCatalogs()
+            } finally {
+                if (emoteLiveRefreshJob === refreshJob) {
+                    emoteLiveRefreshJob = null
                 }
             }
+        }
+        emoteLiveRefreshJob = refreshJob
+    }
+
+    private suspend fun refreshLiveEmoteCatalogs() {
+        val initial = mutableState.value
+        val channels = initial.channels
+        if (channels.isEmpty()) return
+
+        val session = initial.session
+        val accessToken = credentials?.accessToken
+        val authenticated = session != null && accessToken != null
+        val providerContext = if (authenticated) {
+            val authenticatedSession = requireNotNull(session)
+            EmoteProviderContext(
+                twitchClientId = authenticatedSession.clientId,
+                twitchAccessToken = requireNotNull(accessToken),
+                twitchUserId = authenticatedSession.userId,
+            )
+        } else {
+            EmoteProviderContext("", "", "")
+        }
+        val enabledProviders = buildSet {
+            if (settingsStore.betterTtvEnabled) add(EmoteRepository.BETTER_TTV)
+            if (settingsStore.frankerFaceZEnabled) add(EmoteRepository.FRANKER_FACE_Z)
+            if (settingsStore.sevenTvEnabled) add(EmoteRepository.SEVEN_TV)
+        }
+        val snapshot = emoteRepository.refresh(
+            context = providerContext,
+            channels = channels,
+            enabledProviders = enabledProviders,
+            includeTwitch = authenticated,
+        )
+
+        val activeChannelIds = mutableState.value.channels.map(ChatChannel::id).toSet()
+        val activeChannels = channels.filter { channel -> channel.id in activeChannelIds }
+        mutableState.update { state ->
+            val next = state.copy(
+                emoteCatalogByChannel = snapshot.catalogByChannel.filterKeys(activeChannelIds::contains),
+                emoteLiveProviders = snapshot.liveProviders,
+                emoteCatalogErrorMessage = snapshot.errorMessage,
+                betterTtvEmotesByChannel = if (state.betterTtvEnabled) {
+                    activeChannels.associate { channel ->
+                        channel.id to snapshot.emotes(EmoteRepository.BETTER_TTV, channel.id)
+                    }
+                } else {
+                    emptyMap()
+                },
+                frankerFaceZEmotesByChannel = if (state.frankerFaceZEnabled) {
+                    activeChannels.associate { channel ->
+                        channel.id to snapshot.emotes(EmoteRepository.FRANKER_FACE_Z, channel.id)
+                    }
+                } else {
+                    emptyMap()
+                },
+                sevenTvEmotesByChannel = if (state.sevenTvEnabled) {
+                    activeChannels.associate { channel ->
+                        channel.id to snapshot.emotes(EmoteRepository.SEVEN_TV, channel.id)
+                    }
+                } else {
+                    emptyMap()
+                },
+            )
+            val changedChannels = changedThirdPartyCatalogChannels(
+                before = state,
+                after = next,
+                candidateChannelIds = activeChannelIds,
+            )
+            next.copy(
+                messagesByChannel = reprocessThirdPartyEmotes(next, changedChannels),
+            )
+        }
+
+        if (authenticated) {
+            refreshSelectedTwitchChannelEmotes()
+        }
+        val liveChannels = if (authenticated) {
+            activeChannels
+        } else {
+            activeChannels.filterNot { it.id.startsWith(ANONYMOUS_CHANNEL_ID_PREFIX) }
+        }
+        emoteRepository.startLiveUpdates(
+            scope = scope,
+            channels = liveChannels,
+            snapshot = snapshot,
+            enabledProviders = enabledProviders,
+        ) { _, _ ->
+            scheduleLiveEmoteCatalogRefresh()
         }
     }
 
@@ -5265,37 +5364,40 @@ class FerventioController(
             }
             val perChannelDeferred = async {
                 coroutineScope {
+                    val channelSemaphore = Semaphore(CHAT_ASSET_CHANNEL_CONCURRENCY)
                     channels.map { channel ->
                         async {
-                            val badgesDeferred = async {
-                                runCatching {
-                                    api.getChannelChatBadges(
-                                        clientId = session.clientId,
-                                        token = accessToken,
-                                        broadcasterId = channel.id,
-                                    )
-                                }.getOrDefault(emptyMap())
+                            channelSemaphore.withPermit {
+                                val badgesDeferred = async {
+                                    runCatching {
+                                        api.getChannelChatBadges(
+                                            clientId = session.clientId,
+                                            token = accessToken,
+                                            broadcasterId = channel.id,
+                                        )
+                                    }.getOrDefault(emptyMap())
+                                }
+                                val cheermotesDeferred = async {
+                                    runCatching {
+                                        api.getCheermotes(
+                                            clientId = session.clientId,
+                                            token = accessToken,
+                                            broadcasterId = channel.id,
+                                        )
+                                    }.getOrDefault(emptyMap())
+                                }
+                                val ffzChannelBadgesDeferred = async {
+                                    if (!settingsStore.showBadges) emptyMap()
+                                    else runCatching {
+                                        api.getFrankerFaceZChannelBadgesByUserId(channel.id)
+                                    }.getOrDefault(emptyMap())
+                                }
+                                channel.id to Triple(
+                                    badgesDeferred.await(),
+                                    cheermotesDeferred.await(),
+                                    ffzChannelBadgesDeferred.await(),
+                                )
                             }
-                            val cheermotesDeferred = async {
-                                runCatching {
-                                    api.getCheermotes(
-                                        clientId = session.clientId,
-                                        token = accessToken,
-                                        broadcasterId = channel.id,
-                                    )
-                                }.getOrDefault(emptyMap())
-                            }
-                            val ffzChannelBadgesDeferred = async {
-                                if (!settingsStore.showBadges) emptyMap()
-                                else runCatching {
-                                    api.getFrankerFaceZChannelBadgesByUserId(channel.id)
-                                }.getOrDefault(emptyMap())
-                            }
-                            channel.id to Triple(
-                                badgesDeferred.await(),
-                                cheermotesDeferred.await(),
-                                ffzChannelBadgesDeferred.await(),
-                            )
                         }
                     }.awaitAll().toMap()
                 }
@@ -5359,11 +5461,7 @@ class FerventioController(
                 snapshot = snapshot,
                 enabledProviders = enabledProviders,
             ) { _, _ ->
-                emoteLiveRefreshJob?.cancel()
-                emoteLiveRefreshJob = scope.launch {
-                    delay(700)
-                    refreshChatAssetsForCurrentSession()
-                }
+                scheduleLiveEmoteCatalogRefresh()
             }
         }
     }
@@ -7003,6 +7101,7 @@ class FerventioController(
         const val TOKEN_LEASE_RETRY_SECONDS = 15L
         const val ANONYMOUS_CHANNEL_ID_PREFIX = "irc:"
         const val EVENTSUB_SETUP_CONCURRENCY = 4
+        const val CHAT_ASSET_CHANNEL_CONCURRENCY = 3
         const val EVENT_QUEUE_CAPACITY = 512
         const val EVENTSUB_ACTIVITY_PUBLISH_INTERVAL_MILLIS = 1_000L
         const val SCROLL_SAVE_DEBOUNCE_MILLIS = 250L

@@ -5,6 +5,7 @@ import io.ferventio.app.domain.EmoteProviderCatalog
 import io.ferventio.app.domain.EmoteScope
 import io.ferventio.app.domain.ThirdPartyEmoteAsset
 import io.ferventio.app.twitch.TwitchApiClient
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -130,6 +131,35 @@ class EmoteRepositoryTest {
     }
 
     @Test
+    fun channelRefreshUsesBoundedParallelism() = runBlocking {
+        val provider = FakeProvider(
+            id = "fake",
+            channelDelayMillis = 50L,
+        )
+        val repository = EmoteRepository(
+            api = TwitchApiClient(),
+            providers = listOf(provider),
+        )
+        val channels = (1..8).map { index ->
+            ChatChannel(
+                id = "channel-$index",
+                login = "streamer$index",
+                displayName = "Streamer $index",
+            )
+        }
+
+        repository.refresh(
+            context = context,
+            channels = channels,
+            enabledProviders = setOf("fake"),
+            includeTwitch = false,
+        )
+
+        assertEquals(EmoteRepository.CHANNEL_REFRESH_CONCURRENCY, provider.peakChannelLoads)
+        assertEquals(8, provider.channelLoadCount)
+    }
+
+    @Test
     fun pickerUsesSameConflictPrecedenceAsChatParser() = runBlocking {
         val sevenTv = FakeProvider(
             id = EmoteRepository.SEVEN_TV,
@@ -188,11 +218,15 @@ class EmoteRepositoryTest {
         override val textResolvable: Boolean = true,
         private val global: Map<String, ThirdPartyEmoteAsset> = emptyMap(),
         private val channel: Map<String, ThirdPartyEmoteAsset> = emptyMap(),
+        private val channelDelayMillis: Long = 0L,
     ) : EmoteProvider {
         var wasLoaded: Boolean = false
             private set
         var channelLoadCount: Int = 0
             private set
+        var peakChannelLoads: Int = 0
+            private set
+        private var activeChannelLoads: Int = 0
 
         override suspend fun loadGlobal(context: EmoteProviderContext): EmoteProviderCatalog {
             wasLoaded = true
@@ -205,7 +239,14 @@ class EmoteRepositoryTest {
         ): EmoteProviderCatalog {
             wasLoaded = true
             channelLoadCount += 1
-            return EmoteProviderCatalog(emotes = this.channel)
+            activeChannelLoads += 1
+            peakChannelLoads = maxOf(peakChannelLoads, activeChannelLoads)
+            return try {
+                if (channelDelayMillis > 0L) delay(channelDelayMillis)
+                EmoteProviderCatalog(emotes = this.channel)
+            } finally {
+                activeChannelLoads -= 1
+            }
         }
     }
 }
