@@ -14,7 +14,12 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -33,6 +38,7 @@ internal fun NotificationSettingsContent(
     onReconnectPush: () -> Unit,
 ) {
     val context = LocalContext.current
+    var expandedChannelId by rememberSaveable { mutableStateOf<String?>(null) }
     val legacyDefault: (String) -> Boolean = { ruleId ->
         when (ruleId) {
             NotificationEventType.REPLY.ruleId -> state.replyNotificationsEnabled
@@ -104,9 +110,27 @@ internal fun NotificationSettingsContent(
                                 state.notificationPreferences.clearChannelOverride(channel.id)
                             },
                         )
+                        expandedChannelId = if (enabled) {
+                            channel.id
+                        } else {
+                            expandedChannelId.takeUnless { it == channel.id }
+                        }
                     },
                 )
                 if (custom) {
+                    val expanded = expandedChannelId == channel.id
+                    TextButton(
+                        onClick = {
+                            expandedChannelId = if (expanded) null else channel.id
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        LocalizedText(
+                            if (expanded) "Скрыть настройки" else "Настроить события",
+                        )
+                    }
+                }
+                if (custom && expandedChannelId == channel.id) {
                     SettingsSwitchRow(
                         title = "Уведомления #${channel.displayName}",
                         description = "Полностью выключить уведомления только для этого канала.",

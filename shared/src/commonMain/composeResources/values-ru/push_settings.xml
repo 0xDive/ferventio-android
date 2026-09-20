@@ -14,6 +14,8 @@
     <string name="notifications_global_events">События</string>
     <string name="notifications_per_channel">Настройки по каналам</string>
     <string name="notifications_custom_channel">Индивидуальные настройки</string>
+    <string name="notifications_configure_channel">Настроить события</string>
+    <string name="notifications_hide_channel">Скрыть настройки</string>
     <string name="notifications_channel_master">Уведомления этого канала</string>
     <string name="notification_event_mention">Упоминания</string>
     <string name="notification_event_reply">Ответы</string>

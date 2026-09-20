@@ -988,6 +988,8 @@ private fun NotificationsSettingsPage(
     onOpenNotificationSettings: () -> Unit,
     update: ((SharedAppPreferences) -> SharedAppPreferences) -> Unit,
 ) {
+    var expandedChannelId by remember { mutableStateOf<String?>(null) }
+
     fun legacyDefault(ruleId: String): Boolean = when (ruleId) {
         NotificationEventType.REPLY.ruleId -> preferences.replyNotificationsEnabled
         NotificationEventType.AUTOMOD_HOLD.ruleId -> preferences.autoModNotificationsEnabled
@@ -1086,11 +1088,34 @@ private fun NotificationsSettingsPage(
                                     },
                                 )
                             }
+                            expandedChannelId = if (enabled) {
+                                channel.id
+                            } else {
+                                expandedChannelId.takeUnless { it == channel.id }
+                            }
                         },
                     )
                 }
 
                 if (custom) {
+                    val expanded = expandedChannelId == channel.id
+                    TextButton(
+                        onClick = {
+                            expandedChannelId = if (expanded) null else channel.id
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            if (expanded) {
+                                stringResource(Res.string.notifications_hide_channel)
+                            } else {
+                                stringResource(Res.string.notifications_configure_channel)
+                            },
+                        )
+                    }
+                }
+
+                if (custom && expandedChannelId == channel.id) {
                     SettingsSwitchRow(
                         label = stringResource(Res.string.notifications_channel_master),
                         checked = preferences.notificationPreferences.channelOverrides
