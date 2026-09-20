@@ -637,8 +637,32 @@ internal fun ChannelChatContent(
     }
 
     val twitchBadgeAssets = state.badgeAssetsByChannel[channelId].orEmpty()
-    val globalFfzBadgesByUser = state.frankerFaceZBadgesByUserId
-    val channelFfzBadgesByUser = state.frankerFaceZChannelBadgesByChannel[channelId].orEmpty()
+    val messageUserIds = remember(rawMessages) {
+        rawMessages.asSequence()
+            .map(ChatMessage::userId)
+            .filter(String::isNotBlank)
+            .toSet()
+    }
+    val latestGlobalFfzBadgesByUser by rememberUpdatedState(state.frankerFaceZBadgesByUserId)
+    val globalFfzBadgesByUser by remember(messageUserIds) {
+        derivedStateOf(structuralEqualityPolicy()) {
+            buildMap {
+                messageUserIds.forEach { userId ->
+                    latestGlobalFfzBadgesByUser[userId]?.let { badges ->
+                        if (badges.isNotEmpty()) put(userId, badges)
+                    }
+                }
+            }
+        }
+    }
+    val channelFfzBadgesByUser = remember(
+        messageUserIds,
+        state.frankerFaceZChannelBadgesByChannel[channelId],
+    ) {
+        state.frankerFaceZChannelBadgesByChannel[channelId]
+            .orEmpty()
+            .filterKeys(messageUserIds::contains)
+    }
     val ffzBadgesByUser = remember(globalFfzBadgesByUser, channelFfzBadgesByUser) {
         (globalFfzBadgesByUser.keys + channelFfzBadgesByUser.keys).associateWith { userId ->
             (globalFfzBadgesByUser[userId].orEmpty() + channelFfzBadgesByUser[userId].orEmpty())
