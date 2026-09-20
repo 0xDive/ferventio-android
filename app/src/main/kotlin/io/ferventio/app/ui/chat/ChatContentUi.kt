@@ -266,6 +266,43 @@ import androidx.core.graphics.toColorInt
 import android.widget.Toast
 
 
+internal fun filterLegacyChatMessages(
+    messages: List<ChatMessage>,
+    showSystemMessages: Boolean,
+    filterExpression: String,
+    decorations: Map<String, MessageDecoration>,
+    matchesCompiled: (ChatMessage) -> Boolean,
+): List<ChatMessage> {
+    val needsSystemFiltering = !showSystemMessages
+    if (filterExpression.isEmpty() && decorations.isEmpty() && !needsSystemFiltering) {
+        return messages
+    }
+    var filtered: MutableList<ChatMessage>? = null
+    for (index in messages.indices) {
+        val message = messages[index]
+        val decoration = decorations[message.id]
+        val matchesFilter = when {
+            filterExpression.isEmpty() -> true
+            filterExpression == HIGHLIGHTS_FILTER_QUERY -> decoration?.filteredSplit == true
+            else -> matchesCompiled(message)
+        }
+        val keep =
+            (!needsSystemFiltering || message.type !in SYSTEM_MESSAGE_TYPES) &&
+                matchesFilter &&
+                decoration?.ignoreDisplayMode != IgnoreDisplayMode.HIDE
+        if (keep) {
+            filtered?.add(message)
+        } else if (filtered == null) {
+            filtered = ArrayList<ChatMessage>(messages.size - 1).apply {
+                for (prefixIndex in 0 until index) {
+                    add(messages[prefixIndex])
+                }
+            }
+        }
+    }
+    return filtered ?: messages
+}
+
 @Composable
 internal fun ChannelChatContent(
     state: FerventioUiState,
@@ -372,21 +409,13 @@ internal fun ChannelChatContent(
         needsDecorationFiltering,
         filteringDecorations,
     ) {
-        val needsSystemFiltering = !state.showSystemMessages
-        if (filterExpression.isEmpty() && !needsDecorationFiltering && !needsSystemFiltering) {
-            rawMessages
-        } else {
-            rawMessages.filter { message ->
-                if (needsSystemFiltering && message.type in SYSTEM_MESSAGE_TYPES) return@filter false
-                val decoration = filteringDecorations[message.id]
-                val matchesFilter = when {
-                    filterExpression.isEmpty() -> true
-                    filterExpression == HIGHLIGHTS_FILTER_QUERY -> decoration?.filteredSplit == true
-                    else -> compiledSplitFilter?.matches(message) == true
-                }
-                matchesFilter && decoration?.ignoreDisplayMode != IgnoreDisplayMode.HIDE
-            }
-        }
+        filterLegacyChatMessages(
+            messages = rawMessages,
+            showSystemMessages = state.showSystemMessages,
+            filterExpression = filterExpression,
+            decorations = filteringDecorations,
+            matchesCompiled = { message -> compiledSplitFilter?.matches(message) == true },
+        )
     }
     val repeatPresentation = remember(messages, effectiveRepeatCollapseEnabled) {
         ChatRepeatPresentationProjector.build(
