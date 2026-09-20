@@ -168,14 +168,14 @@ class ChatAttentionStateHolder {
         if (normalizedChannelId in channelAttention) {
             channelAttention = channelAttention - normalizedChannelId
         }
-        if (attentionEntries.any { it.channelId == normalizedChannelId && !it.isRead }) {
-            attentionEntries = attentionEntries.map { entry ->
-                if (entry.channelId == normalizedChannelId && !entry.isRead) {
-                    entry.copy(isRead = true)
-                } else {
-                    entry
-                }
+        attentionEntries.mapAttentionEntriesIfChanged { entry ->
+            if (entry.channelId == normalizedChannelId && !entry.isRead) {
+                entry.copy(isRead = true)
+            } else {
+                entry
             }
+        }?.let { updated ->
+            attentionEntries = updated
         }
     }
 
@@ -195,10 +195,10 @@ class ChatAttentionStateHolder {
         channelAttention[currentId]?.let { value ->
             channelAttention = (channelAttention - currentId) + (nextId to value)
         }
-        if (attentionEntries.any { entry -> entry.channelId == currentId }) {
-            attentionEntries = attentionEntries.map { entry ->
-                if (entry.channelId == currentId) entry.copy(channelId = nextId) else entry
-            }
+        attentionEntries.mapAttentionEntriesIfChanged { entry ->
+            if (entry.channelId == currentId) entry.copy(channelId = nextId) else entry
+        }?.let { updated ->
+            attentionEntries = updated
         }
         if (currentId in visibleChannelIds) {
             visibleChannelIds = visibleChannelIds
@@ -242,6 +242,21 @@ class ChatAttentionStateHolder {
         visibleChannelIds = emptySet()
         channelsAtLiveTail = emptySet()
         messageNavigationTargets = emptyMap()
+    }
+
+    private inline fun List<AttentionEntry>.mapAttentionEntriesIfChanged(
+        transform: (AttentionEntry) -> AttentionEntry,
+    ): List<AttentionEntry>? {
+        var updated: MutableList<AttentionEntry>? = null
+        for (index in indices) {
+            val current = this[index]
+            val replacement = transform(current)
+            if (replacement !== current) {
+                val target = updated ?: toMutableList().also { updated = it }
+                target[index] = replacement
+            }
+        }
+        return updated
     }
 
     private fun upsertAttentionEntry(

@@ -179,6 +179,18 @@ class ChatAttentionStateTest {
     }
 
     @Test
+    fun markingAlreadyReadChannelReusesAttentionEntryList() {
+        val state = ChatAttentionStateHolder()
+        state.recordIncoming(message("mention", "@viewer"), session, evaluator)
+        state.markChannelRead("channel-id")
+        val entriesBefore = state.attentionEntries
+
+        state.markChannelRead("channel-id")
+
+        assertTrue(state.attentionEntries === entriesBefore)
+    }
+
+    @Test
     fun navigationTargetIsConsumedOnlyByMatchingChannelAndMessage() {
         val state = ChatAttentionStateHolder()
         state.requestMessageNavigation("channel-id", "message-id")
