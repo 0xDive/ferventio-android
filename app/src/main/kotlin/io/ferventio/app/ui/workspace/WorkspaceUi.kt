@@ -550,8 +550,9 @@ private fun ChatsWorkspaceScreen(
                     action.id == "navigation:reconnect" -> controller.reconnectEventSub()
                     action.id.startsWith("channel:") -> {
                         val channelId = action.id.substringAfter("channel:")
-                        if (activeSplitId != null && (currentTab?.splits?.size ?: 0) > 1) {
-                            controller.setChatSplitChannel(activeSplitId, channelId)
+                        val currentActiveSplitId = currentTab?.activeSplitId
+                        if (currentActiveSplitId != null && (currentTab.splits.size > 1)) {
+                            controller.setChatSplitChannel(currentActiveSplitId, channelId)
                         } else {
                             controller.selectChannel(channelId)
                         }
