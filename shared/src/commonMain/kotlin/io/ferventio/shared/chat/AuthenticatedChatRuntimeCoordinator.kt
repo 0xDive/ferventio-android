@@ -12,14 +12,17 @@ import io.ferventio.shared.settings.SharedAppSettingsStateHolder
 import io.ferventio.shared.settings.SharedMessageRulesStateHolder
 import io.ferventio.shared.workspace.WorkspaceRuntimeSnapshot
 import kotlin.Throws
+import kotlin.time.Clock
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
@@ -181,6 +184,16 @@ class AuthenticatedChatRuntimeCoordinator(
                                         }
                                 }
                             }
+                            launch {
+                                while (isActive) {
+                                    delay(AUTOMOD_STALE_SWEEP_INTERVAL_MILLIS)
+                                    state.expireStaleAutoModHolds(
+                                        olderThanEpochMillis =
+                                            Clock.System.now().toEpochMilliseconds() -
+                                                AUTOMOD_STALE_HOLD_GRACE_MILLIS,
+                                    )
+                                }
+                            }
                         }
                     }
                     try {
@@ -306,6 +319,8 @@ class AuthenticatedChatRuntimeCoordinator(
 }
 
 private const val METADATA_REFRESH_CONCURRENCY = 4
+private const val AUTOMOD_STALE_SWEEP_INTERVAL_MILLIS = 30_000L
+private const val AUTOMOD_STALE_HOLD_GRACE_MILLIS = 10 * 60 * 1_000L
 
 internal fun shouldEmitAutoModAlert(settings: SharedAppSettingsStateHolder?): Boolean =
     settings?.preferences?.autoModNotificationsEnabled != false

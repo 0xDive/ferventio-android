@@ -287,6 +287,31 @@ class ChatRuntimeStateHolder(
         return true
     }
 
+    /**
+     * Safety net for a lost or delayed automod.message.update. Explicit Twitch terminal updates
+     * remain authoritative; this only prevents a stale HELD card from staying actionable forever.
+     */
+    fun expireStaleAutoModHolds(olderThanEpochMillis: Long): Int {
+        if (autoModQueue.isEmpty()) return 0
+        var updated: MutableList<AutoModHeldMessage>? = null
+        var expiredCount = 0
+        for (index in autoModQueue.indices) {
+            val current = autoModQueue[index]
+            val heldAtMillis = current.heldAtMillis
+            if (
+                current.status == AutoModMessageStatus.HELD &&
+                heldAtMillis > 0L &&
+                heldAtMillis <= olderThanEpochMillis
+            ) {
+                val target = updated ?: autoModQueue.toMutableList().also { updated = it }
+                target[index] = current.copy(status = AutoModMessageStatus.EXPIRED)
+                expiredCount += 1
+            }
+        }
+        updated?.let { autoModQueue = it }
+        return expiredCount
+    }
+
     fun append(message: ChatMessage) {
         requireMessage(message)
         val existing = messagesByChannel[message.channelId].orEmpty()

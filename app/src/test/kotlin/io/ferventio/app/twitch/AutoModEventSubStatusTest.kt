@@ -16,7 +16,7 @@ class AutoModEventSubStatusTest {
 
         assertTrue(update.event is ChatEvent.AutoModUpdated)
         assertEquals(
-            AutoModMessageStatus.DENIED,
+            AutoModMessageStatus.EXPIRED,
             (update.event as ChatEvent.AutoModUpdated).message.status,
         )
 

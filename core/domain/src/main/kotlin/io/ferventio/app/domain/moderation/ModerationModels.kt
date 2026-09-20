@@ -7,6 +7,7 @@ enum class AutoModMessageStatus {
     HELD,
     APPROVED,
     DENIED,
+    EXPIRED,
 }
 
 data class AutoModBoundary(

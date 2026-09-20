@@ -285,6 +285,51 @@ class ChatRuntimeStateHolderTest {
     }
 
     @Test
+    fun staleHeldAutoModMessagesExpireWithoutDroppingTerminalHistory() {
+        val holder = ChatRuntimeStateHolder()
+        holder.applyAutoMod(
+            AutoModHeldMessage(
+                channelId = CHANNEL_ID,
+                channelLogin = "channel",
+                channelName = "Channel",
+                userId = "viewer-id",
+                userLogin = "viewer",
+                userName = "Viewer",
+                messageId = "stale",
+                text = "stale",
+                heldAt = "2026-01-01T00:00:00Z",
+            ),
+        )
+        holder.applyAutoMod(
+            AutoModHeldMessage(
+                channelId = CHANNEL_ID,
+                channelLogin = "channel",
+                channelName = "Channel",
+                userId = "viewer-id",
+                userLogin = "viewer",
+                userName = "Viewer",
+                messageId = "fresh",
+                text = "fresh",
+                heldAt = "2026-01-01T00:20:00Z",
+            ),
+        )
+
+        val expired = holder.expireStaleAutoModHolds(
+            olderThanEpochMillis = 1_767_225_900_000L,
+        )
+
+        assertEquals(1, expired)
+        assertEquals(
+            listOf("fresh"),
+            holder.autoModHeldMessages(CHANNEL_ID).map(AutoModHeldMessage::messageId),
+        )
+        assertEquals(
+            AutoModMessageStatus.EXPIRED,
+            holder.autoModQueue.first { it.messageId == "stale" }.status,
+        )
+    }
+
+    @Test
     fun rateLimitStateIsTransientAndFollowsChannelLifecycle() {
         val holder = ChatRuntimeStateHolder()
         holder.updateRateLimit(

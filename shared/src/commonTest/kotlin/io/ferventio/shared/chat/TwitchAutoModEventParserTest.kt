@@ -54,6 +54,34 @@ class TwitchAutoModEventParserTest {
     }
 
     @Test
+    fun expiredUpdateMapsToDistinctTerminalStatus() {
+        val event = json.parseToJsonElement(
+            """
+            {
+              "broadcaster_user_id":"channel-id",
+              "user_id":"viewer-id",
+              "user_login":"viewer",
+              "message_id":"message-expired",
+              "message":{"text":"expired"},
+              "status":"expired"
+            }
+            """.trimIndent(),
+        ).jsonObject
+
+        val parsed = assertIs<TwitchAutoModEvent.Updated>(
+            TwitchAutoModEventParser.parse(
+                TwitchEventSubProtocolEnvelope(
+                    type = "notification",
+                    subscriptionType = "automod.message.update",
+                    eventPayload = event,
+                ),
+            ),
+        )
+
+        assertEquals(AutoModMessageStatus.EXPIRED, parsed.message.status)
+    }
+
+    @Test
     fun terminalUpdateMapsApprovedAndModeratorIdentity() {
         val event = json.parseToJsonElement(
             """

@@ -35,8 +35,9 @@ internal object TwitchAutoModEventParser {
         } else {
             when (event.string("status")?.lowercase()) {
                 "approved" -> AutoModMessageStatus.APPROVED
-                "denied", "expired" -> AutoModMessageStatus.DENIED
-                else -> AutoModMessageStatus.HELD
+                "denied" -> AutoModMessageStatus.DENIED
+                "expired" -> AutoModMessageStatus.EXPIRED
+                else -> return null
             }
         }
         val message = parseEvent(

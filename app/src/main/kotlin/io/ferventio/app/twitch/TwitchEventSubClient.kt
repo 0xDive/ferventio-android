@@ -530,8 +530,9 @@ object EventSubParser {
         "automod.message.update" -> {
             val status = when (event.string("status")?.lowercase()) {
                 "approved" -> AutoModMessageStatus.APPROVED
-                "denied", "expired" -> AutoModMessageStatus.DENIED
-                else -> AutoModMessageStatus.HELD
+                "denied" -> AutoModMessageStatus.DENIED
+                "expired" -> AutoModMessageStatus.EXPIRED
+                else -> return null
             }
             val message = parseAutoModMessage(
                 event = event,
