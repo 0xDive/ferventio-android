@@ -28,7 +28,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,7 +47,6 @@ import io.ferventio.app.domain.ModerationChatSettings
 import io.ferventio.app.domain.ModerationPeopleTab
 import io.ferventio.app.domain.ModerationUser
 import io.ferventio.app.domain.ModerationUserGroup
-import io.ferventio.shared.chat.TwitchChatManagementClient
 import io.ferventio.shared.generated.resources.Res
 import io.ferventio.shared.generated.resources.chat_modes_apply
 import io.ferventio.shared.generated.resources.chat_modes_clear
@@ -98,7 +96,7 @@ internal fun SharedChatUsersSheet(
     val authenticatedUserId = authentication?.accessLease?.session?.userId
     val isOwner = authenticatedUserId == channel.id
     val canUseHelix = canQueryHelix || isOwner
-    val client = remember { TwitchChatManagementClient() }
+    val client = runtime.chatManagement
     val messages = runtime.chat.messages(channel.id)
     val localUsers = remember(messages) { localChatUsers(messages) }
     val availableTabs = remember(isOwner) { chatUsersAvailableTabs(isOwner) }
@@ -115,9 +113,6 @@ internal fun SharedChatUsersSheet(
         mutableStateOf<io.ferventio.app.domain.UserCardData?>(null)
     }
 
-    DisposableEffect(client) {
-        onDispose { client.close() }
-    }
     LaunchedEffect(
         channel.id,
         authentication,
@@ -372,7 +367,7 @@ internal fun SharedChatModesSheet(
 ) {
     val runtime = LocalFerventioRuntimeState.current
     val authentication = runtime.authentication.state.authentication
-    val client = remember { TwitchChatManagementClient() }
+    val client = runtime.chatManagement
     val scope = rememberCoroutineScope()
     var settings by remember(channel.id) { mutableStateOf<ModerationChatSettings?>(null) }
     var loading by remember(channel.id) { mutableStateOf(true) }
@@ -382,9 +377,6 @@ internal fun SharedChatModesSheet(
     var followerMinutes by remember(channel.id) { mutableStateOf("0") }
     var confirmClear by remember(channel.id) { mutableStateOf(false) }
 
-    DisposableEffect(client) {
-        onDispose { client.close() }
-    }
     LaunchedEffect(channel.id, authentication) {
         loading = true
         errorMessage = null

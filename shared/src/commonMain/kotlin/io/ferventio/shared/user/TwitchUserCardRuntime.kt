@@ -31,6 +31,16 @@ class TwitchUserCardRuntime internal constructor(
         require(ttlMillis > 0L) { "User-card cache TTL must be positive" }
     }
 
+    suspend fun loadUser(
+        authentication: StoredAuthentication,
+        userId: String,
+        userLogin: String,
+    ): TwitchUser = loadUserCached(
+        authentication = authentication,
+        userId = userId,
+        userLogin = userLogin,
+    )
+
     suspend fun enrich(
         authentication: StoredAuthentication,
         userId: String,

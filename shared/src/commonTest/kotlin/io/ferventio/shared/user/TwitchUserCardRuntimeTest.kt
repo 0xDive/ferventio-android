@@ -18,6 +18,23 @@ import kotlin.test.assertEquals
 
 class TwitchUserCardRuntimeTest {
     @Test
+    fun accountProfileAndUserCardShareProfileCache() = runTest {
+        var twitchRequests = 0
+        var relationshipRequests = 0
+        val runtime = runtime(
+            onTwitchRequest = { twitchRequests += 1 },
+            onRelationshipRequest = { relationshipRequests += 1 },
+        )
+        val authentication = authentication()
+
+        runtime.loadUser(authentication, "user-1", "viewer")
+        runtime.enrich(authentication, "user-1", "viewer", "channel-one")
+
+        assertEquals(1, twitchRequests)
+        assertEquals(1, relationshipRequests)
+    }
+
+    @Test
     fun permanentBanLookupIsCachedAndMutationOverridesCache() = runTest {
         var banRequests = 0
         val runtime = runtime(
