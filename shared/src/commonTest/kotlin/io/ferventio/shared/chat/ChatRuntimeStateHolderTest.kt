@@ -250,6 +250,34 @@ class ChatRuntimeStateHolderTest {
     }
 
     @Test
+    fun outgoingAckRemovesMatchingHistoryEchoWithoutLeavingDuplicateTimelineRows() {
+        val holder = ChatRuntimeStateHolder()
+        holder.prependHistory(
+            CHANNEL_ID,
+            listOf(message("server", 1L)),
+        )
+        holder.append(
+            message("local", 2L).copy(
+                outgoingState = OutgoingMessageState.SENDING,
+                clientNonce = "nonce-history",
+            ),
+        )
+
+        assertTrue(
+            holder.markOutgoingSent(
+                channelId = CHANNEL_ID,
+                localMessageId = "local",
+                serverMessageId = "server",
+            ),
+        )
+
+        val messages = holder.messages(CHANNEL_ID)
+        assertEquals(listOf("local"), messages.map(ChatMessage::id))
+        assertEquals("server", messages.single().serverMessageId)
+        assertEquals(OutgoingMessageState.SENT, messages.single().outgoingState)
+    }
+
+    @Test
     fun autoModQueueMergesTerminalUpdatesAndFollowsChannelLifecycle() {
         val holder = ChatRuntimeStateHolder()
         holder.applyAutoMod(

@@ -809,11 +809,13 @@ class ChatRuntimeStateHolder(
     private fun removeHistoryMessage(channelId: String, messageId: String) {
         val normalizedChannelId = channelId.trim()
         val existing = historyMessagesByChannel[normalizedChannelId].orEmpty()
-        if (existing.none { it.id == messageId }) return
-        val updated = existing.filterNot { it.id == messageId }
-        historyMessagesByChannel = if (updated.isEmpty()) {
+        val messageIndex = existing.indexOfFirst { it.id == messageId }
+        if (messageIndex < 0) return
+        historyMessagesByChannel = if (existing.size == 1) {
             historyMessagesByChannel - normalizedChannelId
         } else {
+            val updated = existing.toMutableList()
+            updated.removeAt(messageIndex)
             historyMessagesByChannel + (normalizedChannelId to updated)
         }
     }
