@@ -1,7 +1,6 @@
 package io.ferventio.shared.ui.user
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -9,7 +8,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import io.ferventio.app.domain.UserCardData
 import io.ferventio.shared.runtime.LocalFerventioRuntimeState
-import io.ferventio.shared.user.TwitchUserCardClient
 import io.ferventio.shared.user.UserCardRemoteEnrichment
 import io.ferventio.shared.user.withRemoteEnrichment
 
@@ -28,23 +26,21 @@ internal fun rememberRemoteUserCardData(
             .firstOrNull { channel -> channel.id == localData.channelId }
             ?.login
             .orEmpty()
-    val client = remember { TwitchUserCardClient() }
+    val userCardRuntime = runtime.userCards
     var remote by remember(localData.channelId, localData.user.id, localData.user.login) {
         mutableStateOf<UserCardRemoteEnrichment?>(null)
     }
 
-    DisposableEffect(client) {
-        onDispose { client.close() }
-    }
     LaunchedEffect(
         authentication,
         localData.user.id,
         localData.user.login,
         channelLogin,
+        userCardRuntime,
     ) {
         remote = null
         if (authentication != null && channelLogin.isNotBlank()) {
-            remote = client.enrich(
+            remote = userCardRuntime.enrich(
                 authentication = authentication,
                 userId = localData.user.id,
                 userLogin = localData.user.login,
