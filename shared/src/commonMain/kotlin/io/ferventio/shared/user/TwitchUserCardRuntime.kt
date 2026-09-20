@@ -25,6 +25,7 @@ class TwitchUserCardRuntime internal constructor(
     private val slotsMutex = Mutex()
     private val profileSlots = mutableMapOf<String, CacheSlot<TwitchUser>>()
     private val relationshipSlots = mutableMapOf<String, CacheSlot<PublicChannelRelationship>>()
+    private val banStateSlots = mutableMapOf<String, CacheSlot<Boolean>>()
 
     init {
         require(ttlMillis > 0L) { "User-card cache TTL must be positive" }
@@ -63,10 +64,50 @@ class TwitchUserCardRuntime internal constructor(
         )
     }
 
+    suspend fun loadPermanentBanState(
+        authentication: StoredAuthentication,
+        broadcasterId: String,
+        targetUserId: String,
+    ): Boolean {
+        val normalizedBroadcasterId = broadcasterId.trim()
+        val normalizedTargetUserId = targetUserId.trim()
+        require(normalizedBroadcasterId.isNotEmpty()) { "Broadcaster id is required" }
+        require(normalizedTargetUserId.isNotEmpty()) { "Target user id is required" }
+        val slot = banStateSlot(banStateKey(normalizedBroadcasterId, normalizedTargetUserId))
+        return slot.mutex.withLock {
+            val now = nowEpochMillis()
+            slot.cache?.takeIf { it.isFresh(now, ttlMillis) }?.value?.let {
+                return@withLock it
+            }
+            client.loadPermanentBanState(
+                authentication = authentication,
+                broadcasterId = normalizedBroadcasterId,
+                targetUserId = normalizedTargetUserId,
+            ).also { banned ->
+                slot.cache = TimedValue(banned, nowEpochMillis())
+            }
+        }
+    }
+
+    suspend fun updatePermanentBanState(
+        broadcasterId: String,
+        targetUserId: String,
+        isPermanentlyBanned: Boolean,
+    ) {
+        val normalizedBroadcasterId = broadcasterId.trim()
+        val normalizedTargetUserId = targetUserId.trim()
+        if (normalizedBroadcasterId.isEmpty() || normalizedTargetUserId.isEmpty()) return
+        val slot = banStateSlot(banStateKey(normalizedBroadcasterId, normalizedTargetUserId))
+        slot.mutex.withLock {
+            slot.cache = TimedValue(isPermanentlyBanned, nowEpochMillis())
+        }
+    }
+
     internal suspend fun clear() {
         slotsMutex.withLock {
             profileSlots.clear()
             relationshipSlots.clear()
+            banStateSlots.clear()
         }
     }
 
@@ -115,6 +156,11 @@ class TwitchUserCardRuntime internal constructor(
             relationshipSlots.getOrPut(key) { CacheSlot() }
         }
 
+    private suspend fun banStateSlot(key: String): CacheSlot<Boolean> =
+        slotsMutex.withLock {
+            banStateSlots.getOrPut(key) { CacheSlot() }
+        }
+
     private fun profileKey(userId: String, userLogin: String): String {
         val normalizedId = userId.trim()
         if (normalizedId.isNotEmpty()) return "id:$normalizedId"
@@ -127,6 +173,9 @@ class TwitchUserCardRuntime internal constructor(
         userLogin.trim().removePrefix("@").lowercase() +
             "@" +
             channelLogin.trim().removePrefix("#").lowercase()
+
+    private fun banStateKey(broadcasterId: String, targetUserId: String): String =
+        broadcasterId + ":" + targetUserId
 
     private suspend fun <T> bestEffort(block: suspend () -> T): T? =
         try {

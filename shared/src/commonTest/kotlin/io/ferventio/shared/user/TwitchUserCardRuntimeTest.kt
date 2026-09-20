@@ -18,6 +18,41 @@ import kotlin.test.assertEquals
 
 class TwitchUserCardRuntimeTest {
     @Test
+    fun permanentBanLookupIsCachedAndMutationOverridesCache() = runTest {
+        var banRequests = 0
+        val runtime = runtime(
+            onTwitchRequest = {},
+            onRelationshipRequest = {},
+            onBanRequest = { banRequests += 1 },
+        )
+        val authentication = authentication(
+            scopes = setOf("moderator:read:banned_users"),
+        )
+
+        assertEquals(
+            true,
+            runtime.loadPermanentBanState(authentication, "channel-id", "user-1"),
+        )
+        assertEquals(
+            true,
+            runtime.loadPermanentBanState(authentication, "channel-id", "user-1"),
+        )
+        assertEquals(1, banRequests)
+
+        runtime.updatePermanentBanState(
+            broadcasterId = "channel-id",
+            targetUserId = "user-1",
+            isPermanentlyBanned = false,
+        )
+
+        assertEquals(
+            false,
+            runtime.loadPermanentBanState(authentication, "channel-id", "user-1"),
+        )
+        assertEquals(1, banRequests)
+    }
+
+    @Test
     fun repeatedCardOpenReusesProfileAndRelationshipWithinTtl() = runTest {
         var twitchRequests = 0
         var relationshipRequests = 0
@@ -74,10 +109,20 @@ class TwitchUserCardRuntimeTest {
         nowEpochMillis: () -> Long = { 1_000L },
         onTwitchRequest: () -> Unit,
         onRelationshipRequest: () -> Unit,
+        onBanRequest: () -> Unit = {},
     ): TwitchUserCardRuntime {
         val engine = MockEngine { request ->
-            when (request.url.host) {
-                "api.twitch.tv" -> {
+            when {
+                request.url.host == "api.twitch.tv" &&
+                    request.url.encodedPath == "/helix/moderation/banned" -> {
+                    onBanRequest()
+                    respond(
+                        content = ByteReadChannel(BANNED_USER_JSON),
+                        status = HttpStatusCode.OK,
+                        headers = jsonHeaders(),
+                    )
+                }
+                request.url.host == "api.twitch.tv" -> {
                     onTwitchRequest()
                     respond(
                         content = ByteReadChannel(TWITCH_USER_JSON),
@@ -105,7 +150,9 @@ class TwitchUserCardRuntimeTest {
         )
     }
 
-    private fun authentication() = StoredAuthentication(
+    private fun authentication(
+        scopes: Set<String> = setOf("chat:read"),
+    ) = StoredAuthentication(
         backendCredential = BackendSessionCredential(
             serverUrl = "https://example.test",
             token = "backend-token",
@@ -121,7 +168,7 @@ class TwitchUserCardRuntimeTest {
                 clientId = "client",
                 userId = "signed-in-user",
                 login = "signed_in",
-                scopes = setOf("chat:read"),
+                scopes = scopes,
                 expiresInSeconds = 7_000L,
             ),
         ),
@@ -144,6 +191,20 @@ class TwitchUserCardRuntimeTest {
                   "created_at": "2020-01-02T03:04:05Z"
                 }
               ]
+            }
+        """.trimIndent()
+
+        val BANNED_USER_JSON = """
+            {
+              "data": [
+                {
+                  "user_id": "user-1",
+                  "user_login": "viewer",
+                  "user_name": "Viewer",
+                  "expires_at": null
+                }
+              ],
+              "pagination": {}
             }
         """.trimIndent()
 
