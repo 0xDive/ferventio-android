@@ -186,9 +186,7 @@ fun FerventioChatTimeline(
         sourceMessages
     }
     val heldAutoModMessages = remember(autoModHeldMessages) {
-        autoModHeldMessages
-            .filter { message -> message.status == AutoModMessageStatus.HELD }
-            .sortedWith(compareBy(AutoModHeldMessage::heldAtMillis, AutoModHeldMessage::messageId))
+        normalizeHeldAutoModTimelineMessages(autoModHeldMessages)
     }
     val timelineItemCount = messages.size + heldAutoModMessages.size
     val lastTimelineIndex = (timelineItemCount - 1).coerceAtLeast(0)
@@ -455,6 +453,52 @@ fun FerventioChatTimeline(
                 }
             }
         }
+    }
+}
+
+internal fun normalizeHeldAutoModTimelineMessages(
+    messages: List<AutoModHeldMessage>,
+): List<AutoModHeldMessage> {
+    if (messages.size < 2) {
+        return if (messages.firstOrNull()?.status == AutoModMessageStatus.HELD || messages.isEmpty()) {
+            messages
+        } else {
+            emptyList()
+        }
+    }
+    var previous: AutoModHeldMessage? = null
+    var requiresNormalization = false
+    messages.forEach { message ->
+        if (message.status != AutoModMessageStatus.HELD) {
+            requiresNormalization = true
+            return@forEach
+        }
+        val prior = previous
+        if (
+            prior != null &&
+            compareHeldAutoModTimelineMessages(prior, message) > 0
+        ) {
+            requiresNormalization = true
+        }
+        previous = message
+    }
+    if (!requiresNormalization) return messages
+    return messages
+        .asSequence()
+        .filter { it.status == AutoModMessageStatus.HELD }
+        .sortedWith(Comparator(::compareHeldAutoModTimelineMessages))
+        .toList()
+}
+
+private fun compareHeldAutoModTimelineMessages(
+    left: AutoModHeldMessage,
+    right: AutoModHeldMessage,
+): Int {
+    val heldAtComparison = left.heldAtMillis.compareTo(right.heldAtMillis)
+    return if (heldAtComparison != 0) {
+        heldAtComparison
+    } else {
+        left.messageId.compareTo(right.messageId)
     }
 }
 
