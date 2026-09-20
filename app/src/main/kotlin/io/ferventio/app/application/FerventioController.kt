@@ -6761,11 +6761,11 @@ class FerventioController(
         val result = state.messagesByChannel.toMutableMap()
         channelIds.forEach { channelId ->
             val messages = state.messagesByChannel[channelId] ?: return@forEach
-            val updated = messages.map { message -> enrichThirdPartyEmotes(message, state) }
-            if (updated != messages) {
-                result[channelId] = updated
-                changed = true
-            }
+            val updated = mapLegacyListIfChanged(messages) { message ->
+                enrichThirdPartyEmotes(message, state)
+            } ?: return@forEach
+            result[channelId] = updated
+            changed = true
         }
         return if (changed) result else state.messagesByChannel
     }
