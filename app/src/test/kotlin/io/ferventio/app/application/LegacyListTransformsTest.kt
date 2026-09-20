@@ -95,7 +95,15 @@ class LegacyListTransformsTest {
             key = Item::id,
         )
 
+        val cappedSame = prependLegacyDistinctByKeyBounded(
+            source = source,
+            value = source.first(),
+            maxSize = 1,
+            key = Item::id,
+        )
+
         assertTrue(same === source)
         assertEquals(listOf(Item("two", 20), Item("one", 1)), moved)
+        assertEquals(listOf(Item("one", 1)), cappedSame)
     }
 }

@@ -631,8 +631,9 @@ class FerventioController(
     }
 
     fun markChannelRead(channelId: String) {
-        val canMarkRead = ChannelReadPolicy.canMarkRead(channelId, mutableState.value.visibleChannelIds)
-        if (!canMarkRead) return
+        val current = mutableState.value
+        val canMarkRead = ChannelReadPolicy.canMarkRead(channelId, current.visibleChannelIds)
+        if (!canMarkRead || channelId !in current.channelAttention) return
         mutableState.update { state ->
             var unreadForChannel = 0
             val updatedEntries = mapLegacyListIfChanged(state.attentionEntries) { entry ->
@@ -663,6 +664,13 @@ class FerventioController(
     }
 
     fun markAllMentionsRead() {
+        val current = mutableState.value
+        if (
+            current.mentionUnreadCount == 0 &&
+            current.channelAttention.values.none { attention -> attention.mentionCount > 0 }
+        ) {
+            return
+        }
         mutableState.update { state ->
             val updatedEntries = mapLegacyListIfChanged(state.attentionEntries) { entry ->
                 if (entry.isRead) entry else entry.copy(isRead = true)

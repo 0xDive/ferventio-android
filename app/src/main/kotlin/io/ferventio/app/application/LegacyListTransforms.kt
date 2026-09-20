@@ -75,7 +75,13 @@ internal inline fun <T, K> prependLegacyDistinctByKeyBounded(
 ): List<T> {
     if (maxSize <= 0) return emptyList()
     val valueKey = key(value)
-    if (source.firstOrNull()?.let(key) == valueKey && source.firstOrNull() == value) {
+    val first = source.firstOrNull()
+    if (
+        first != null &&
+        key(first) == valueKey &&
+        first == value &&
+        source.size <= maxSize
+    ) {
         return source
     }
     return buildList(minOf(maxSize, source.size + 1)) {

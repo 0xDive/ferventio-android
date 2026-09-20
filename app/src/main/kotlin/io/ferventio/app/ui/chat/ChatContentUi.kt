@@ -595,6 +595,7 @@ internal fun ChannelChatContent(
     val composerVisualTransformation = remember(composerRichText) {
         composerRichText?.let(::ComposerVisualTransformation) ?: VisualTransformation.None
     }
+    val profilesById = state.userProfilesById
     val currentUserId = session?.userId
     val needsUserSuggestions = remember(input) {
         ComposerAutocomplete.currentToken(input).startsWith("@")
