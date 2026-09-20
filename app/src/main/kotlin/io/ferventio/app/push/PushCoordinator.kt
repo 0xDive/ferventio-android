@@ -32,6 +32,7 @@ class PushCoordinator(
     private val appContext = context.applicationContext
     private val provider = PlatformPushProviderFactory.create(appContext)
     private val notificationPresenter = NotificationPresenter(appContext)
+    private val backendRegistrationGate = PushRegistrationUpsertGate()
     private val json = Json { ignoreUnknownKeys = true }
     private var registrationContextProvider: () -> PushRegistrationContext = { PushRegistrationContext() }
     private var payloadHandler: (PushNotificationPayload) -> Unit = {}
@@ -137,7 +138,9 @@ class PushCoordinator(
                 withContext(Dispatchers.Main) {
                     provider.register(activity, null)
                 }
-            }.onFailure { error -> fail(error.userMessage()) }
+            }.onFailure { error ->
+                if (settingsStore.pushEnabled) fail(error.userMessage())
+            }
         }
     }
 
@@ -229,8 +232,16 @@ class PushCoordinator(
                         selectedUserLogins = context.selectedUserLogins,
                     )
                 }
-                client.register(serverUrl, request)
+                backendRegistrationGate.submit(serverUrl, request) {
+                    if (!settingsStore.pushEnabled) {
+                        false
+                    } else {
+                        client.register(serverUrl, request)
+                        true
+                    }
+                }
             }.onSuccess {
+                if (!settingsStore.pushEnabled) return@onSuccess
                 mutableState.update {
                     it.copy(
                         enabled = true,
@@ -248,7 +259,9 @@ class PushCoordinator(
                     )
                 }
                 provider.activate()
-            }.onFailure { error -> fail(error.userMessage()) }
+            }.onFailure { error ->
+                if (settingsStore.pushEnabled) fail(error.userMessage())
+            }
         }
     }
 
@@ -469,9 +482,14 @@ class PushCoordinator(
         installationId: String,
         deviceSecret: String,
     ) {
-        if (serverUrl.isBlank()) return
         scope.launch {
-            runCatching { client.unregister(serverUrl, installationId, deviceSecret) }
+            runCatching {
+                backendRegistrationGate.clear {
+                    if (serverUrl.isNotBlank()) {
+                        client.unregister(serverUrl, installationId, deviceSecret)
+                    }
+                }
+            }
         }
     }
 
