@@ -150,7 +150,6 @@ class TwitchEventSubSubscriptionClient(
         repeat(MAX_LIST_PAGES) {
             val response = client.get(EVENTSUB_SUBSCRIPTIONS_URL) {
                 twitchHeaders(accessLease)
-                parameter("first", PAGE_SIZE)
                 normalizedStatus?.let { parameter("status", it) }
                 cursor?.let { parameter("after", it) }
             }
@@ -244,7 +243,6 @@ class TwitchEventSubSubscriptionClient(
             "https://api.twitch.tv/helix/eventsub/subscriptions"
         const val ENABLED_STATUS = "enabled"
         const val WEBSOCKET_METHOD = "websocket"
-        const val PAGE_SIZE = 100
         const val MAX_LIST_PAGES = 25
         const val NOT_FOUND_STATUS_CODE = 404
     }
