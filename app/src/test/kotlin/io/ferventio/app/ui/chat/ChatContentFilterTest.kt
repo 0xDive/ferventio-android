@@ -1,5 +1,7 @@
 package io.ferventio.app.ui
 
+import io.ferventio.app.domain.AutoModHeldMessage
+import io.ferventio.app.domain.AutoModMessageStatus
 import io.ferventio.app.domain.ChatAuthor
 import io.ferventio.app.domain.ChatMessage
 import io.ferventio.app.domain.IgnoreDisplayMode
@@ -9,6 +11,21 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class ChatContentFilterTest {
+    @Test
+    fun autoModProjectionKeepsOnlyHeldMessagesForCurrentChannelInTimeOrder() {
+        val result = selectLegacyHeldAutoModMessages(
+            queue = listOf(
+                autoMod("later", "channel", "2026-09-20T10:02:00Z", AutoModMessageStatus.HELD),
+                autoMod("other", "other", "2026-09-20T10:00:00Z", AutoModMessageStatus.HELD),
+                autoMod("done", "channel", "2026-09-20T10:01:00Z", AutoModMessageStatus.EXPIRED),
+                autoMod("early", "channel", "2026-09-20T10:00:00Z", AutoModMessageStatus.HELD),
+            ),
+            channelId = "channel",
+        )
+
+        assertEquals(listOf("early", "later"), result.map(AutoModHeldMessage::messageId))
+    }
+
     @Test
     fun decorationProjectionDropsOtherChannelMessageIds() {
         val current = listOf(message("one"), message("two"))
@@ -75,6 +92,24 @@ class ChatContentFilterTest {
         assertEquals(listOf("one", "three"), result.map(ChatMessage::id))
         assertTrue(result !== messages)
     }
+
+    private fun autoMod(
+        id: String,
+        channelId: String,
+        heldAt: String,
+        status: AutoModMessageStatus,
+    ) = AutoModHeldMessage(
+        channelId = channelId,
+        channelLogin = channelId,
+        channelName = channelId,
+        userId = "user-$id",
+        userLogin = "user_$id",
+        userName = "User $id",
+        messageId = id,
+        text = id,
+        heldAt = heldAt,
+        status = status,
+    )
 
     private fun message(id: String) = ChatMessage(
         id = id,

@@ -267,6 +267,17 @@ import androidx.core.graphics.toColorInt
 import android.widget.Toast
 
 
+internal fun selectLegacyHeldAutoModMessages(
+    queue: List<AutoModHeldMessage>,
+    channelId: String,
+): List<AutoModHeldMessage> = queue
+    .asSequence()
+    .filter { message ->
+        message.channelId == channelId && message.status == AutoModMessageStatus.HELD
+    }
+    .sortedBy(AutoModHeldMessage::heldAtMillis)
+    .toList()
+
 internal fun selectLegacyChatDecorations(
     messages: List<ChatMessage>,
     decorations: Map<String, MessageDecoration>,
@@ -458,12 +469,14 @@ internal fun ChannelChatContent(
         )
     }
     val visibleMessages = repeatPresentation.messages
-    val heldAutoModMessages = remember(state.moderation.autoModQueue, channelId) {
-        state.moderation.autoModQueue
-            .asSequence()
-            .filter { it.channelId == channelId && it.status == AutoModMessageStatus.HELD }
-            .sortedBy(AutoModHeldMessage::heldAtMillis)
-            .toList()
+    val latestAutoModQueue by rememberUpdatedState(state.moderation.autoModQueue)
+    val heldAutoModMessages by remember(channelId) {
+        derivedStateOf(structuralEqualityPolicy()) {
+            selectLegacyHeldAutoModMessages(
+                queue = latestAutoModQueue,
+                channelId = channelId,
+            )
+        }
     }
     val totalContentCount = visibleMessages.size + heldAutoModMessages.size
     val hasChatContent = totalContentCount > 0
