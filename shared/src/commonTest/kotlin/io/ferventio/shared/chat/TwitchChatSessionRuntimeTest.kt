@@ -18,6 +18,34 @@ import kotlin.test.assertTrue
 
 class TwitchChatSessionRuntimeTest {
     @Test
+    fun sessionOpenedTracksCurrentTransportAndCloseClearsIt() {
+        val state = ChatRuntimeStateHolder()
+        val runtime = runtime(state)
+
+        runtime.onSessionOpened(" session-current ")
+
+        assertEquals("session-current", state.eventSubSessionId)
+        runtime.close()
+        assertEquals(null, state.eventSubSessionId)
+    }
+
+    @Test
+    fun transportLimitErrorSetsStructuredRecoveryState() {
+        val state = ChatRuntimeStateHolder()
+        val runtime = runtime(state)
+
+        runtime.onSocketError(
+            TwitchEventSubSubscriptionException(
+                statusCode = 429,
+                twitchMessage = "number of websocket transports limit exceeded",
+            ),
+        )
+
+        assertTrue(state.eventSubTransportLimitReached)
+        assertTrue(state.connectionErrorMessage.orEmpty().contains("429"))
+    }
+
+    @Test
     fun primaryEnvelopeIsAppendedToSharedChatState() {
         val state = ChatRuntimeStateHolder()
         val runtime = runtime(state)

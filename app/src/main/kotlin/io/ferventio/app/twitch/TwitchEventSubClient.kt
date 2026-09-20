@@ -59,6 +59,7 @@ class TwitchEventSubClient(
     private val onInteractiveEvent: (InteractiveChatOverlayEvent) -> Unit = {},
     private val clockMillis: () -> Long = System::currentTimeMillis,
     private val jitterFraction: () -> Double = { Random.nextDouble() },
+    private val onSessionOpened: (sessionId: String) -> Unit = {},
 ) : Closeable {
     private val clientDelegate = lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
         HttpClient(OkHttp) {
@@ -111,6 +112,7 @@ class TwitchEventSubClient(
 
                     val sessionId = welcome.sessionId
                         ?: error("Twitch не прислал идентификатор EventSub-сессии")
+                    onSessionOpened(sessionId)
                     val keepaliveTimeoutSeconds = welcome.keepaliveTimeoutSeconds
                         ?.coerceIn(MIN_KEEPALIVE_SECONDS, MAX_KEEPALIVE_SECONDS)
                         ?: DEFAULT_KEEPALIVE_SECONDS

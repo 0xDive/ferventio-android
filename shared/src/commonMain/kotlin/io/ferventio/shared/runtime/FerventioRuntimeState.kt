@@ -9,6 +9,7 @@ import io.ferventio.shared.auth.MobileAuthenticationStateHolder
 import io.ferventio.shared.chat.ChatAttentionStateHolder
 import io.ferventio.shared.chat.ChatRuntimeStateHolder
 import io.ferventio.shared.chat.TwitchChatMessageRuntime
+import io.ferventio.shared.chat.TwitchEventSubTransportMaintenanceRuntime
 import io.ferventio.shared.chat.TwitchInteractiveRuntime
 import io.ferventio.shared.history.RuntimeBoundChatHistoryStore
 import io.ferventio.shared.moderation.TwitchModerationRuntime
@@ -43,6 +44,9 @@ class FerventioRuntimeState(
     val moderation: TwitchModerationRuntime by lazy { TwitchModerationRuntime(chat) }
     val interactive: TwitchInteractiveRuntime by lazy { TwitchInteractiveRuntime(chat) }
     val chatMessages: TwitchChatMessageRuntime by lazy { TwitchChatMessageRuntime(chat) }
+    val eventSubMaintenance: TwitchEventSubTransportMaintenanceRuntime by lazy {
+        TwitchEventSubTransportMaintenanceRuntime()
+    }
     val userSafety: TwitchUserSafetyRuntime by lazy { TwitchUserSafetyRuntime(chat) }
 
     constructor(

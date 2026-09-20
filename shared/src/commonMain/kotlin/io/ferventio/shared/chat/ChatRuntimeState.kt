@@ -59,6 +59,10 @@ class ChatRuntimeStateHolder(
         private set
     var rateLimitsByChannel by mutableStateOf(emptyMap<String, ChatRateLimitState>())
         private set
+    var eventSubSessionId by mutableStateOf<String?>(null)
+        private set
+    var eventSubTransportLimitReached by mutableStateOf(false)
+        private set
     var connectionStatus by mutableStateOf(ConnectionStatus.DISCONNECTED)
         private set
     var connectionDetail by mutableStateOf<String?>(null)
@@ -524,6 +528,23 @@ class ChatRuntimeStateHolder(
         }
     }
 
+    fun updateEventSubSessionId(sessionId: String?) {
+        eventSubSessionId = sessionId?.trim()?.takeIf(String::isNotEmpty)
+    }
+
+    fun clearEventSubSessionId(expectedSessionId: String? = null) {
+        val expected = expectedSessionId?.trim()?.takeIf(String::isNotEmpty)
+        if (expected == null || eventSubSessionId == expected) {
+            eventSubSessionId = null
+        }
+    }
+
+    fun markEventSubTransportLimitReached(errorMessage: String? = null) {
+        eventSubTransportLimitReached = true
+        connectionErrorMessage = errorMessage?.trim()?.takeIf(String::isNotEmpty)
+            ?: connectionErrorMessage
+    }
+
     fun updateConnection(
         status: ConnectionStatus,
         detail: String? = null,
@@ -533,6 +554,9 @@ class ChatRuntimeStateHolder(
         require(attempt >= 0) { "Connection attempt must not be negative" }
         if (authenticationRequired && status != ConnectionStatus.FAILED) return
         connectionStatus = status
+        if (status == ConnectionStatus.CONNECTED) {
+            eventSubTransportLimitReached = false
+        }
         connectionDetail = detail?.trim()?.takeIf { it.isNotEmpty() }
         connectionAttempt = attempt
         connectionErrorMessage = errorMessage?.trim()?.takeIf { it.isNotEmpty() }
@@ -561,6 +585,8 @@ class ChatRuntimeStateHolder(
         interactiveState = InteractiveChatOverlayState()
         autoModQueue = emptyList()
         rateLimitsByChannel = emptyMap()
+        eventSubSessionId = null
+        eventSubTransportLimitReached = false
         authenticationRequired = false
         updateConnection(ConnectionStatus.DISCONNECTED)
     }

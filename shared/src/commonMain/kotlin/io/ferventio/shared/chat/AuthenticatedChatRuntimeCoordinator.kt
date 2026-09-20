@@ -140,6 +140,7 @@ class AuthenticatedChatRuntimeCoordinator(
             client = TwitchEventSubSocketClient(
                 onStatusChanged = runtime::onConnectionUpdate,
                 onSessionReady = runtime::onSessionReady,
+                onSessionOpened = runtime::onSessionOpened,
                 onEnvelope = { envelope -> runtime.onEnvelope(envelope) },
                 onMalformedEnvelope = { _ -> },
                 onError = runtime::onSocketError,

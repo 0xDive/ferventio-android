@@ -38,6 +38,9 @@ import io.ferventio.app.network.BackendSettingsPutResult
 import io.ferventio.app.network.BackendSettingsSnapshot
 import io.ferventio.app.push.PushNotificationPayload
 import io.ferventio.app.security.SafeLog
+import io.ferventio.shared.chat.TwitchEventSubTransportCleanupResult
+import io.ferventio.shared.chat.TwitchEventSubTransportMaintenanceRuntime
+import io.ferventio.shared.chat.TwitchEventSubTransportRecoverySnapshot
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -108,6 +111,9 @@ class FerventioController(
     private var accessLeaseFallbackActive: Boolean = false
     private var eventSubClient: TwitchEventSubClient? = null
     private var eventSubJob: Job? = null
+    private val eventSubMaintenanceRuntime = TwitchEventSubTransportMaintenanceRuntime()
+    @Volatile
+    private var activeEventSubSessionId: String? = null
     private val pinnedMessageRefreshJobs = ConcurrentHashMap<String, Job>()
     private val pinnedMessageRequestGenerations = ConcurrentHashMap<String, AtomicLong>()
     private val recentMessagesJobs = ConcurrentHashMap<String, Job>()
@@ -3352,6 +3358,34 @@ class FerventioController(
         reconnectCurrentTransport(force = true, reason = "Ручное переподключение")
     }
 
+    fun currentEventSubSessionIdForDiagnostics(): String? = activeEventSubSessionId
+
+    suspend fun inspectEventSubTransportSessions(): TwitchEventSubTransportRecoverySnapshot =
+        eventSubMaintenanceRuntime.load(requireStoredAuthenticationForEventSubMaintenance())
+
+    suspend fun clearStaleEventSubTransportSessions(): TwitchEventSubTransportCleanupResult {
+        val authentication = requireStoredAuthenticationForEventSubMaintenance()
+        val result = eventSubMaintenanceRuntime.clearOtherSessions(
+            authentication = authentication,
+            protectedSessionId = activeEventSubSessionId,
+        )
+        reconnectEventSub()
+        return result
+    }
+
+    private fun requireStoredAuthenticationForEventSubMaintenance(): StoredAuthentication {
+        val credential = requireNotNull(backendCredential) {
+            "Серверная сессия недоступна"
+        }
+        val lease = requireNotNull(credentials) {
+            "Twitch access lease недоступен"
+        }
+        return StoredAuthentication(
+            backendCredential = credential,
+            accessLease = lease,
+        )
+    }
+
     fun onAppForegrounded() {
         if (performanceScenarioActive) return
         if (credentials != null || tokenStore.load() != null) {
@@ -5440,6 +5474,11 @@ class FerventioController(
                             }
                         }
                     },
+                    onSessionOpened = { sessionId ->
+                        if (generation == eventSubGeneration.get()) {
+                            activeEventSubSessionId = sessionId
+                        }
+                    },
                 )
                 eventSubClient = client
                 try {
@@ -5449,6 +5488,7 @@ class FerventioController(
                     if (generation == eventSubGeneration.get()) {
                         eventSubClient = null
                         eventSubJob = null
+                        activeEventSubSessionId = null
                     }
                 }
             }
@@ -5852,6 +5892,7 @@ class FerventioController(
         val client = eventSubClient
         eventSubJob = null
         eventSubClient = null
+        activeEventSubSessionId = null
         client?.close()
         job?.cancel()
     }

@@ -23,4 +23,23 @@
     <string name="diagnostics_report_description">The copied report contains only statuses and counters. It never includes channel IDs, chat messages, authentication tokens or raw errors.</string>
     <string name="diagnostics_copy">Copy diagnostics</string>
     <string name="diagnostics_copied">Diagnostics copied.</string>
+    <string name="diagnostics_transport_limit">WebSocket transport limit</string>
+    <string name="diagnostics_transport_limit_reached">Reached</string>
+    <string name="diagnostics_eventsub_session">Current WebSocket session</string>
+    <string name="diagnostics_eventsub_sessions">Active WebSocket sessions</string>
+    <string name="diagnostics_eventsub_subscriptions">Enabled subscriptions</string>
+    <string name="diagnostics_eventsub_inspect">Inspect EventSub sessions</string>
+    <string name="diagnostics_eventsub_refresh">Refresh EventSub sessions</string>
+    <string name="diagnostics_eventsub_cleanup">Free stale EventSub slots</string>
+    <string name="diagnostics_eventsub_cleanup_confirm_title">Free EventSub WebSocket slots?</string>
+    <string name="diagnostics_eventsub_cleanup_confirm_body">Ferventio will delete enabled EventSub subscriptions on other WebSocket sessions for this Twitch account and Client ID. Other running Ferventio instances may lose EventSub until they reconnect.</string>
+    <string name="diagnostics_eventsub_cleanup_confirm_all_body">The current WebSocket has no enabled subscriptions. Ferventio will delete all enabled WebSocket EventSub subscriptions for this Twitch account and Client ID. Other running Ferventio instances may be disconnected.</string>
+    <string name="diagnostics_eventsub_cleanup_confirm">Free slots</string>
+    <string name="diagnostics_eventsub_cleanup_cancel">Cancel</string>
+    <string name="diagnostics_eventsub_cleanup_result">Deleted %1$d subscriptions from %2$d WebSocket sessions.</string>
+    <string name="diagnostics_eventsub_session_current">current</string>
+    <string name="diagnostics_eventsub_session_other">other</string>
+    <string name="diagnostics_eventsub_session_row">%1$s · %2$d subscriptions</string>
+    <string name="diagnostics_eventsub_loading">Loading EventSub sessions…</string>
+    <string name="diagnostics_eventsub_error">EventSub maintenance failed: %1$s</string>
 </resources>
