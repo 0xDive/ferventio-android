@@ -121,6 +121,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.structuralEqualityPolicy
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -424,11 +425,14 @@ internal fun ChannelChatContent(
     }
     val hasActiveIgnoreRules = remember(state.ignoreRules) { state.ignoreRules.any(IgnoreRule::enabled) }
     val needsDecorationFiltering = filterExpression == HIGHLIGHTS_FILTER_QUERY || hasActiveIgnoreRules
-    val messageDecorations = remember(rawMessages, state.messageDecorationsById) {
-        selectLegacyChatDecorations(
-            messages = rawMessages,
-            decorations = state.messageDecorationsById,
-        )
+    val latestMessageDecorations by rememberUpdatedState(state.messageDecorationsById)
+    val messageDecorations by remember(rawMessages) {
+        derivedStateOf(structuralEqualityPolicy()) {
+            selectLegacyChatDecorations(
+                messages = rawMessages,
+                decorations = latestMessageDecorations,
+            )
+        }
     }
     val filteringDecorations = if (needsDecorationFiltering) messageDecorations else EMPTY_MESSAGE_DECORATIONS
     val messages = remember(
