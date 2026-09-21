@@ -40,11 +40,10 @@ object ChatRepeatPresentationProjector {
     ): ChatRepeatPresentation {
         if (canonicalMessages.isEmpty()) return ChatRepeatPresentation.Empty
 
-        val visibleMessages = if (plan.visibleMessageIds.isEmpty()) {
-            canonicalMessages
-        } else {
-            canonicalMessages.filter { message -> message.id in plan.visibleMessageIds }
-        }
+        val visibleMessages = projectVisibleMessages(
+            canonicalMessages = canonicalMessages,
+            visibleMessageIds = plan.visibleMessageIds,
+        )
 
         return ChatRepeatPresentation(
             messages = visibleMessages,
@@ -58,10 +57,39 @@ object ChatRepeatPresentationProjector {
         config: ChatRepeatCollapseConfig = ChatRepeatCollapseConfig(),
     ): ChatRepeatPresentation {
         if (canonicalMessages.isEmpty()) return ChatRepeatPresentation.Empty
+        if (!config.enabled) {
+            return ChatRepeatPresentation(
+                messages = canonicalMessages,
+                anchorByMessageId = emptyMap(),
+                summariesByAnchorId = emptyMap(),
+            )
+        }
         val plan = ChatRepeatCollapser.build(
             messages = canonicalMessages,
             config = config,
         )
         return project(canonicalMessages, plan)
+    }
+
+    private fun projectVisibleMessages(
+        canonicalMessages: List<ChatMessage>,
+        visibleMessageIds: Set<String>,
+    ): List<ChatMessage> {
+        if (visibleMessageIds.isEmpty()) return canonicalMessages
+
+        var filtered: MutableList<ChatMessage>? = null
+        for (index in canonicalMessages.indices) {
+            val message = canonicalMessages[index]
+            if (message.id in visibleMessageIds) {
+                filtered?.add(message)
+            } else if (filtered == null) {
+                filtered = ArrayList<ChatMessage>(canonicalMessages.size - 1).apply {
+                    for (prefixIndex in 0 until index) {
+                        add(canonicalMessages[prefixIndex])
+                    }
+                }
+            }
+        }
+        return filtered ?: canonicalMessages
     }
 }
