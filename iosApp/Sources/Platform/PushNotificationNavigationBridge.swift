@@ -2,6 +2,7 @@ import FerventioShared
 import Foundation
 
 struct PushNotificationNavigationPayload: Sendable {
+    let type: String?
     let channelID: String?
     let channelLogin: String?
     let messageID: String?
@@ -11,6 +12,7 @@ struct PushNotificationNavigationPayload: Sendable {
         guard let payload = Self.dictionary(userInfo["ferventio"]) else {
             return nil
         }
+        type = Self.nonEmptyString(payload["type"])
         channelID = Self.nonEmptyString(payload["channelId"])
         channelLogin = Self.nonEmptyString(payload["channelLogin"])
         messageID = Self.nonEmptyString(payload["messageId"])

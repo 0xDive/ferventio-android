@@ -4,6 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 class ChatRepeatPresentationTest {
     @Test
@@ -22,6 +23,36 @@ class ChatRepeatPresentationTest {
         assertEquals(0, presentation.visibleIndexFor("2"))
         assertSame(presentation.messages[0], presentation.visibleMessageFor("3"))
         assertEquals(3, presentation.summaryFor("2")?.count)
+    }
+
+    @Test
+    fun `disabled collapse reuses canonical message list without building plan`() {
+        val messages = listOf(
+            message("1", "same", 1_000),
+            message("2", "same", 1_100),
+            message("3", "same", 1_200),
+        )
+
+        val presentation = ChatRepeatPresentationProjector.build(
+            canonicalMessages = messages,
+            config = ChatRepeatCollapseConfig(enabled = false),
+        )
+
+        assertSame(messages, presentation.messages)
+        assertTrue(presentation.anchorByMessageId.isEmpty())
+        assertTrue(presentation.summariesByAnchorId.isEmpty())
+    }
+
+    @Test
+    fun `enabled collapse with no matching run reuses canonical list`() {
+        val messages = listOf(
+            message("1", "first", 1_000),
+            message("2", "second", 1_100),
+        )
+
+        val presentation = ChatRepeatPresentationProjector.build(messages)
+
+        assertSame(messages, presentation.messages)
     }
 
     @Test
@@ -47,7 +78,7 @@ class ChatRepeatPresentationTest {
             plan = ChatRepeatCollapsePlan.Empty,
         )
 
-        assertEquals(messages, presentation.messages)
+        assertSame(messages, presentation.messages)
         assertEquals(0, presentation.visibleIndexFor("1"))
     }
 

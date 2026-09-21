@@ -1,6 +1,7 @@
 package io.ferventio.shared.workspace
 
 import io.ferventio.app.domain.AppThemeMode
+import io.ferventio.shared.settings.SharedSettingsBackupCodec
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -12,7 +13,7 @@ class WorkspaceSettingsBackupImportPreparationTest {
             workspaceSettingsBackupTestPayload(),
         )
 
-        assertEquals(2, prepared.preview.formatVersion)
+        assertEquals(SharedSettingsBackupCodec.BACKUP_FORMAT_VERSION, prepared.preview.formatVersion)
         assertEquals("2026-08-18T00:00:00Z", prepared.preview.createdAt)
         assertEquals("0.0.5", prepared.preview.appVersion)
         assertEquals(2, prepared.preview.channelCount)

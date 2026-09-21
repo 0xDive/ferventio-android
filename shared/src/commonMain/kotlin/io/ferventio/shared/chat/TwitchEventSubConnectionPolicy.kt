@@ -12,7 +12,7 @@ object TwitchEventSubConnectionPolicy {
     const val MAX_KEEPALIVE_SECONDS = 600
     const val KEEPALIVE_GRACE_SECONDS = 10
     const val MAX_AUTOMATIC_RECONNECT_ATTEMPTS = 5
-    const val MAX_TRANSPORT_LIMIT_RECONNECT_ATTEMPTS = 8
+    const val MAX_TRANSPORT_LIMIT_RECONNECT_ATTEMPTS = 2
     const val AUTHORIZATION_REVOKED = "authorization_revoked"
 
     private const val TRANSPORT_LIMIT_MIN_RETRY_DELAY_MILLIS = 5_000L

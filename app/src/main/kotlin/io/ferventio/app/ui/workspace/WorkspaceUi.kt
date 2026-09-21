@@ -256,18 +256,28 @@ private fun ChatsWorkspaceScreen(
         drawerScope.launch { drawerState.open() }
     }
     val activeTab = state.workspaceLayout.activeTab
-    val activeSplitId = activeTab?.activeSplitId
-    val activeChannelId = activeTab
-        ?.splits
-        ?.firstOrNull { split -> split.id == activeSplitId }
-        ?.channelId
-        ?: state.selectedChannelId
-    val activeChannel = state.channels.firstOrNull { channel -> channel.id == activeChannelId }
-    val selectedChannel = state.selectedChannel
-    val selectedTitle = activeChannel?.let { channel ->
-        state.channelTabTitles[channel.id]?.takeIf(String::isNotBlank) ?: channel.displayName
-    } ?: "Чаты"
-    val selectedAttention = activeChannelId?.let(state.channelAttention::get)
+    val activeChannelId = remember(activeTab, state.selectedChannelId) {
+        val activeSplitId = activeTab?.activeSplitId
+        activeTab
+            ?.splits
+            ?.firstOrNull { split -> split.id == activeSplitId }
+            ?.channelId
+            ?: state.selectedChannelId
+    }
+    val activeChannel = remember(state.channels, activeChannelId) {
+        state.channels.firstOrNull { channel -> channel.id == activeChannelId }
+    }
+    val selectedChannel = remember(state.channels, state.selectedChannelId) {
+        state.channels.firstOrNull { channel -> channel.id == state.selectedChannelId }
+    }
+    val selectedTitle = remember(activeChannel, state.channelTabTitles) {
+        activeChannel?.let { channel ->
+            state.channelTabTitles[channel.id]?.takeIf(String::isNotBlank) ?: channel.displayName
+        } ?: "Чаты"
+    }
+    val selectedAttention = remember(activeChannelId, state.channelAttention) {
+        activeChannelId?.let(state.channelAttention::get)
+    }
 
     BackHandler(enabled = drawerState.isOpen) {
         drawerScope.launch { drawerState.close() }
@@ -540,8 +550,9 @@ private fun ChatsWorkspaceScreen(
                     action.id == "navigation:reconnect" -> controller.reconnectEventSub()
                     action.id.startsWith("channel:") -> {
                         val channelId = action.id.substringAfter("channel:")
-                        if (activeSplitId != null && (currentTab?.splits?.size ?: 0) > 1) {
-                            controller.setChatSplitChannel(activeSplitId, channelId)
+                        val currentActiveSplitId = currentTab?.activeSplitId
+                        if (currentActiveSplitId != null && (currentTab.splits.size > 1)) {
+                            controller.setChatSplitChannel(currentActiveSplitId, channelId)
                         } else {
                             controller.selectChannel(channelId)
                         }

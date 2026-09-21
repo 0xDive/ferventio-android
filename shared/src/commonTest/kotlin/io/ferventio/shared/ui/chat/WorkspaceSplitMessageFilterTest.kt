@@ -67,10 +67,29 @@ class WorkspaceSplitMessageFilterTest {
     }
 
     @Test
-    fun blankQueryKeepsNormalMessages() {
+    fun unrelatedHiddenDecorationDoesNotForceTimelineListAllocation() {
         val visible = message("visible", "hello")
+        val messages = listOf(visible)
+
         val result = filterWorkspaceSplitMessages(
-            messages = listOf(visible),
+            messages = messages,
+            filterQuery = "",
+            savedFilters = emptyList(),
+            decorations = mapOf(
+                "other-message" to MessageDecoration(ignoreDisplayMode = IgnoreDisplayMode.HIDE),
+            ),
+            showSystemMessages = true,
+        )
+
+        assertTrue(result === messages)
+    }
+
+    @Test
+    fun blankQueryKeepsNormalMessagesWithoutAllocatingAnotherList() {
+        val visible = message("visible", "hello")
+        val messages = listOf(visible)
+        val result = filterWorkspaceSplitMessages(
+            messages = messages,
             filterQuery = "",
             savedFilters = emptyList(),
             decorations = emptyMap(),
@@ -78,6 +97,7 @@ class WorkspaceSplitMessageFilterTest {
         )
 
         assertEquals(listOf(visible), result)
+        assertTrue(result === messages)
     }
 
     private fun message(

@@ -74,6 +74,28 @@ class WorkspaceRuntimeStateHolderTest {
     }
 
     @Test
+    fun channelIdentityProjectionReusesStableInstancesUntilIdsChange() {
+        val holder = WorkspaceRuntimeStateHolder()
+        holder.replaceChannels(listOf(alpha, beta))
+        val ids = holder.channelIds
+        val idSet = holder.channelIdSet
+
+        assertTrue(ids === holder.channelIds)
+        assertTrue(idSet === holder.channelIdSet)
+
+        holder.addOrReplaceChannel(alpha.copy(displayName = "Alpha Live"))
+
+        assertTrue(ids === holder.channelIds)
+        assertTrue(idSet === holder.channelIdSet)
+
+        holder.moveChannel("2", 0)
+
+        assertFalse(ids === holder.channelIds)
+        assertFalse(idSet === holder.channelIdSet)
+        assertEquals(listOf("2", "1"), holder.channelIds)
+    }
+
+    @Test
     fun replacingExistingChannelDoesNotChangeItsPosition() {
         val holder = WorkspaceRuntimeStateHolder()
         holder.replaceChannels(listOf(alpha, beta))
@@ -115,6 +137,21 @@ class WorkspaceRuntimeStateHolderTest {
     }
 
     @Test
+    fun repeatedTabTitleUpdateReusesPresentationMap() {
+        val holder = WorkspaceRuntimeStateHolder(
+            WorkspaceRuntimeSnapshot(
+                channels = listOf(alpha, beta),
+                channelTabTitles = mapOf("1" to "Alpha tab"),
+            ),
+        )
+        val before = holder.channelTabTitles
+
+        holder.setChannelTabTitle("1", " Alpha tab ")
+
+        assertTrue(holder.channelTabTitles === before)
+    }
+
+    @Test
     fun roleAndPinSetsAreTrimmedToWorkspaceMembership() {
         val holder = WorkspaceRuntimeStateHolder()
         holder.replaceChannels(listOf(alpha, beta, gamma))
@@ -127,6 +164,29 @@ class WorkspaceRuntimeStateHolderTest {
 
         holder.removeChannel("1")
         assertEquals(emptySet(), holder.moderatorChannelIds)
+    }
+
+    @Test
+    fun repeatedWorkspacePresentationUpdatesReuseStateObjects() {
+        val holder = WorkspaceRuntimeStateHolder(
+            WorkspaceRuntimeSnapshot(
+                channels = listOf(alpha, beta),
+                pinnedChannelIds = listOf("1"),
+                channelTabTitles = mapOf("1" to "Alpha tab"),
+                workspaceLayout = WorkspaceLayout.default("1"),
+            ),
+        )
+        val pinnedBefore = holder.pinnedChannelIds
+        val titlesBefore = holder.channelTabTitles
+        val layoutBefore = holder.workspaceLayout
+
+        holder.updatePinnedChannelIds(listOf(" 1 ", "1"))
+        holder.updateChannelTabTitles(mapOf(" 1 " to " Alpha tab "))
+        holder.restoreWorkspaceLayout(layoutBefore)
+
+        assertTrue(holder.pinnedChannelIds === pinnedBefore)
+        assertTrue(holder.channelTabTitles === titlesBefore)
+        assertTrue(holder.workspaceLayout === layoutBefore)
     }
 
     @Test

@@ -121,6 +121,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.structuralEqualityPolicy
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -266,6 +267,71 @@ import androidx.core.graphics.toColorInt
 import android.widget.Toast
 
 
+internal fun selectLegacyHeldAutoModMessages(
+    queue: List<AutoModHeldMessage>,
+    channelId: String,
+): List<AutoModHeldMessage> = queue
+    .asSequence()
+    .filter { message ->
+        message.channelId == channelId && message.status == AutoModMessageStatus.HELD
+    }
+    .sortedBy(AutoModHeldMessage::heldAtMillis)
+    .toList()
+
+internal fun selectLegacyChatDecorations(
+    messages: List<ChatMessage>,
+    decorations: Map<String, MessageDecoration>,
+): Map<String, MessageDecoration> {
+    if (messages.isEmpty() || decorations.isEmpty()) return EMPTY_MESSAGE_DECORATIONS
+    var selected: MutableMap<String, MessageDecoration>? = null
+    messages.forEach { message ->
+        decorations[message.id]?.let { decoration ->
+            val target = selected ?: LinkedHashMap<String, MessageDecoration>().also {
+                selected = it
+            }
+            target[message.id] = decoration
+        }
+    }
+    return selected ?: EMPTY_MESSAGE_DECORATIONS
+}
+
+internal fun filterLegacyChatMessages(
+    messages: List<ChatMessage>,
+    showSystemMessages: Boolean,
+    filterExpression: String,
+    decorations: Map<String, MessageDecoration>,
+    matchesCompiled: (ChatMessage) -> Boolean,
+): List<ChatMessage> {
+    val needsSystemFiltering = !showSystemMessages
+    if (filterExpression.isEmpty() && decorations.isEmpty() && !needsSystemFiltering) {
+        return messages
+    }
+    var filtered: MutableList<ChatMessage>? = null
+    for (index in messages.indices) {
+        val message = messages[index]
+        val decoration = decorations[message.id]
+        val matchesFilter = when {
+            filterExpression.isEmpty() -> true
+            filterExpression == HIGHLIGHTS_FILTER_QUERY -> decoration?.filteredSplit == true
+            else -> matchesCompiled(message)
+        }
+        val keep =
+            (!needsSystemFiltering || message.type !in SYSTEM_MESSAGE_TYPES) &&
+                matchesFilter &&
+                decoration?.ignoreDisplayMode != IgnoreDisplayMode.HIDE
+        if (keep) {
+            filtered?.add(message)
+        } else if (filtered == null) {
+            filtered = ArrayList<ChatMessage>(messages.size - 1).apply {
+                for (prefixIndex in 0 until index) {
+                    add(messages[prefixIndex])
+                }
+            }
+        }
+    }
+    return filtered ?: messages
+}
+
 @Composable
 internal fun ChannelChatContent(
     state: FerventioUiState,
@@ -316,16 +382,24 @@ internal fun ChannelChatContent(
     val input = state.draftsByChannel[channelId].orEmpty()
     val canWrite = state.isAuthenticated
     val canModerateChannel = channelId in state.moderatedChannelIds
-    val quickModerationStrings = QuickModerationUiStrings(
-        banButton = resourceStrings.string(R.string.ferventio_quick_ban_button),
-        deleteButton = resourceStrings.string(R.string.ferventio_quick_delete_button),
-        banTitle = resourceStrings.string(R.string.ferventio_quick_ban_confirm_title),
-        banBody = resourceStrings.string(R.string.ferventio_quick_ban_confirm_body),
-        deleteTitle = resourceStrings.string(R.string.ferventio_quick_delete_confirm_title),
-        deleteBody = resourceStrings.string(R.string.ferventio_quick_delete_confirm_body),
-        cancel = resourceStrings.string(R.string.ferventio_quick_action_cancel),
-    )
-    val interactiveCapabilities = state.session?.interactiveChatCapabilities(channelId) ?: InteractiveChatCapabilities()
+    val channel = remember(state.channels, channelId) {
+        state.channels.firstOrNull { it.id == channelId }
+    }
+    val session = state.session
+    val quickModerationStrings = remember(resourceStrings) {
+        QuickModerationUiStrings(
+            banButton = resourceStrings.string(R.string.ferventio_quick_ban_button),
+            deleteButton = resourceStrings.string(R.string.ferventio_quick_delete_button),
+            banTitle = resourceStrings.string(R.string.ferventio_quick_ban_confirm_title),
+            banBody = resourceStrings.string(R.string.ferventio_quick_ban_confirm_body),
+            deleteTitle = resourceStrings.string(R.string.ferventio_quick_delete_confirm_title),
+            deleteBody = resourceStrings.string(R.string.ferventio_quick_delete_confirm_body),
+            cancel = resourceStrings.string(R.string.ferventio_quick_action_cancel),
+        )
+    }
+    val interactiveCapabilities = remember(session, channelId) {
+        session?.interactiveChatCapabilities(channelId) ?: InteractiveChatCapabilities()
+    }
     var replyTarget by remember(instanceKey) { mutableStateOf<ChatMessage?>(null) }
     var replyThreadTarget by remember(instanceKey) { mutableStateOf<ChatMessage?>(null) }
     var messageActionsTarget by remember(instanceKey) { mutableStateOf<ChatMessage?>(null) }
@@ -362,7 +436,15 @@ internal fun ChannelChatContent(
     }
     val hasActiveIgnoreRules = remember(state.ignoreRules) { state.ignoreRules.any(IgnoreRule::enabled) }
     val needsDecorationFiltering = filterExpression == HIGHLIGHTS_FILTER_QUERY || hasActiveIgnoreRules
-    val messageDecorations = state.messageDecorationsById
+    val latestMessageDecorations by rememberUpdatedState(state.messageDecorationsById)
+    val messageDecorations by remember(rawMessages) {
+        derivedStateOf(structuralEqualityPolicy()) {
+            selectLegacyChatDecorations(
+                messages = rawMessages,
+                decorations = latestMessageDecorations,
+            )
+        }
+    }
     val filteringDecorations = if (needsDecorationFiltering) messageDecorations else EMPTY_MESSAGE_DECORATIONS
     val messages = remember(
         rawMessages,
@@ -372,21 +454,13 @@ internal fun ChannelChatContent(
         needsDecorationFiltering,
         filteringDecorations,
     ) {
-        val needsSystemFiltering = !state.showSystemMessages
-        if (filterExpression.isEmpty() && !needsDecorationFiltering && !needsSystemFiltering) {
-            rawMessages
-        } else {
-            rawMessages.filter { message ->
-                if (needsSystemFiltering && message.type in SYSTEM_MESSAGE_TYPES) return@filter false
-                val decoration = filteringDecorations[message.id]
-                val matchesFilter = when {
-                    filterExpression.isEmpty() -> true
-                    filterExpression == HIGHLIGHTS_FILTER_QUERY -> decoration?.filteredSplit == true
-                    else -> compiledSplitFilter?.matches(message) == true
-                }
-                matchesFilter && decoration?.ignoreDisplayMode != IgnoreDisplayMode.HIDE
-            }
-        }
+        filterLegacyChatMessages(
+            messages = rawMessages,
+            showSystemMessages = state.showSystemMessages,
+            filterExpression = filterExpression,
+            decorations = filteringDecorations,
+            matchesCompiled = { message -> compiledSplitFilter?.matches(message) == true },
+        )
     }
     val repeatPresentation = remember(messages, effectiveRepeatCollapseEnabled) {
         ChatRepeatPresentationProjector.build(
@@ -395,12 +469,14 @@ internal fun ChannelChatContent(
         )
     }
     val visibleMessages = repeatPresentation.messages
-    val heldAutoModMessages = remember(state.moderation.autoModQueue, channelId) {
-        state.moderation.autoModQueue
-            .asSequence()
-            .filter { it.channelId == channelId && it.status == AutoModMessageStatus.HELD }
-            .sortedBy(AutoModHeldMessage::heldAtMillis)
-            .toList()
+    val latestAutoModQueue by rememberUpdatedState(state.moderation.autoModQueue)
+    val heldAutoModMessages by remember(channelId) {
+        derivedStateOf(structuralEqualityPolicy()) {
+            selectLegacyHeldAutoModMessages(
+                queue = latestAutoModQueue,
+                channelId = channelId,
+            )
+        }
     }
     val totalContentCount = visibleMessages.size + heldAutoModMessages.size
     val hasChatContent = totalContentCount > 0
@@ -459,7 +535,9 @@ internal fun ChannelChatContent(
     }
     val latestMessageId = messages.lastOrNull()?.id
     val latestAutoModMessageId = heldAutoModMessages.lastOrNull()?.messageId
-    val liveContentKey = "${latestMessageId.orEmpty()}|${latestAutoModMessageId.orEmpty()}"
+    val liveContentKey = remember(latestMessageId, latestAutoModMessageId) {
+        "${latestMessageId.orEmpty()}|${latestAutoModMessageId.orEmpty()}"
+    }
     var lastObservedLiveContentKey by remember(instanceKey) { mutableStateOf(liveContentKey) }
     val latestVisibleMessages by rememberUpdatedState(visibleMessages)
     val latestAutoScrollEnabled = rememberUpdatedState(state.autoScrollEnabled)
@@ -507,6 +585,12 @@ internal fun ChannelChatContent(
         }
     }
     val catalog = state.emoteCatalogByChannel[channelId].orEmpty()
+    val emoteSearchIndex = remember(catalog) {
+        EmoteCatalogRanking.buildSearchIndex(catalog)
+    }
+    val emoteUsageRanking = remember(state.recentEmoteKeys) {
+        EmoteCatalogRanking.buildUsageRanking(state.recentEmoteKeys)
+    }
     val emoteCatalogByProviderAndId = remember(catalog) {
         catalog.associateBy { asset -> asset.provider to asset.id }
     }
@@ -518,15 +602,37 @@ internal fun ChannelChatContent(
         composerRichText?.let(::ComposerVisualTransformation) ?: VisualTransformation.None
     }
     val profilesById = state.userProfilesById
-    val currentUserId = state.session?.userId
+    val currentUserId = session?.userId
     val needsUserSuggestions = remember(input) {
         ComposerAutocomplete.currentToken(input).startsWith("@")
     }
     val userSuggestionIndex = if (needsUserSuggestions) {
-        remember(rawMessages, profilesById, currentUserId) {
+        val autocompleteUserIds = remember(rawMessages) {
+            val startIndex = (rawMessages.size - 400).coerceAtLeast(0)
+            buildSet {
+                for (index in startIndex until rawMessages.size) {
+                    rawMessages[index].userId
+                        .takeIf(String::isNotBlank)
+                        ?.let(::add)
+                }
+            }
+        }
+        val latestProfilesById by rememberUpdatedState(state.userProfilesById)
+        val relevantProfilesById by remember(autocompleteUserIds) {
+            derivedStateOf(structuralEqualityPolicy()) {
+                buildMap {
+                    autocompleteUserIds.forEach { userId ->
+                        latestProfilesById[userId]?.let { profile ->
+                            put(userId, profile)
+                        }
+                    }
+                }
+            }
+        }
+        remember(rawMessages, relevantProfilesById, currentUserId) {
             ComposerAutocomplete.buildUserIndex(
                 messages = rawMessages,
-                profilesById = profilesById,
+                profilesById = relevantProfilesById,
                 currentUserId = currentUserId,
             )
         }
@@ -536,8 +642,8 @@ internal fun ChannelChatContent(
     val suggestions = remember(
         input,
         userSuggestionIndex,
-        catalog,
-        state.recentEmoteKeys,
+        emoteSearchIndex,
+        emoteUsageRanking,
         state.favoriteEmoteKeys,
     ) {
         ComposerAutocomplete.suggestions(
@@ -549,6 +655,8 @@ internal fun ChannelChatContent(
             favoriteEmoteKeys = state.favoriteEmoteKeys,
             currentUserId = currentUserId,
             userIndex = userSuggestionIndex,
+            emoteSearchIndex = emoteSearchIndex,
+            emoteUsageRanking = emoteUsageRanking,
         )
     }
     LaunchedEffect(showEmotePicker, suggestions.isNotEmpty()) {
@@ -579,11 +687,35 @@ internal fun ChannelChatContent(
         ffzBadgesByUser.mapValues { (_, badges) -> ImmutableBadgeAssetList(badges) }
     }
     val sentHistory = state.sentMessageHistoryByChannel[channelId].orEmpty()
-    val pinnedMessage = state.pinnedMessagesByChannel[channelId]?.takeIf { pinned ->
-        pinned.endsAt?.let { endsAt ->
-            runCatching { Instant.parse(endsAt).isAfter(Instant.now()) }.getOrDefault(false)
-        } ?: true
+    val pinnedCandidate = state.pinnedMessagesByChannel[channelId]
+    val pinnedExpiryEpochMillis = remember(pinnedCandidate?.endsAt) {
+        pinnedCandidate?.endsAt?.let { endsAt ->
+            runCatching { Instant.parse(endsAt).toEpochMilli() }
+                .getOrDefault(Long.MIN_VALUE)
+        }
     }
+    var pinnedExpired by remember(pinnedCandidate?.messageId, pinnedExpiryEpochMillis) {
+        mutableStateOf(
+            pinnedExpiryEpochMillis?.let { expiry ->
+                expiry == Long.MIN_VALUE || expiry <= System.currentTimeMillis()
+            } ?: false,
+        )
+    }
+    LaunchedEffect(pinnedCandidate?.messageId, pinnedExpiryEpochMillis) {
+        val expiry = pinnedExpiryEpochMillis ?: return@LaunchedEffect
+        if (expiry == Long.MIN_VALUE) {
+            pinnedExpired = true
+            return@LaunchedEffect
+        }
+        val remainingMillis = expiry - System.currentTimeMillis()
+        if (remainingMillis <= 0L) {
+            pinnedExpired = true
+        } else {
+            delay(remainingMillis)
+            pinnedExpired = true
+        }
+    }
+    val pinnedMessage = pinnedCandidate?.takeUnless { pinnedExpired }
     val canManagePinnedMessages = state.isAuthenticated && channelId in state.moderatedChannelIds
     LaunchedEffect(channelId) {
         onRefreshPinnedMessage(channelId)
@@ -592,7 +724,10 @@ internal fun ChannelChatContent(
             onRefreshPinnedMessage(channelId)
         }
     }
-    LaunchedEffect(suggestions.map(ComposerSuggestion::key)) {
+    val suggestionKeys = remember(suggestions) {
+        suggestions.map(ComposerSuggestion::key)
+    }
+    LaunchedEffect(suggestionKeys) {
         autocompleteIndex = autocompleteIndex.coerceIn(0, suggestions.lastIndex.coerceAtLeast(0))
     }
 
@@ -670,8 +805,6 @@ internal fun ChannelChatContent(
             else -> Unit
         }
         if (openNukePreview(message)) return@submit
-        val channel = state.channels.firstOrNull { it.id == channelId }
-        val session = state.session
         val replyUser = replyTarget?.let { target ->
             CustomCommandUser(
                 id = target.userId,
@@ -1105,7 +1238,7 @@ internal fun ChannelChatContent(
                                 ?: ImmutableBadgeAssetList.Empty,
                             onOpenUser = openUserFromRow,
                             onOpenEmote = openEmoteFromRow,
-                            ownUserId = state.session?.userId,
+                            ownUserId = currentUserId,
                             highlighted = highlightedMessageId == message.id,
                             decoration = messageDecorations[message.id] ?: MessageDecoration(),
                             onNavigateToMessage = navigateToMessage,
@@ -1361,7 +1494,7 @@ internal fun ChannelChatContent(
         if (showEmotePicker) {
             TwitchStyleEmotePickerPanel(
                 channelId = channelId,
-                channelName = state.channels.firstOrNull { it.id == channelId }?.displayName ?: "Канал",
+                channelName = channel?.displayName ?: "Канал",
                 catalog = catalog,
                 recentEmoteKeys = state.recentEmoteKeys,
                 favoriteEmoteKeys = state.favoriteEmoteKeys,

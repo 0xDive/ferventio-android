@@ -6,17 +6,20 @@ import io.ferventio.app.domain.ChatHistorySearchRequest
 import io.ferventio.app.domain.ChatHistoryStore
 import io.ferventio.app.domain.ChatMessage
 import io.ferventio.shared.chat.ChatRuntimeStateHolder
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class ChatHistoryPersistenceRuntimeTest {
     @Test
-    fun flushDrainsAcceptedMutationsInOrder() = runTest {
+    fun flushBatchesAdjacentSavesAndPreservesMutationOrder() = runTest {
         val store = RecordingStore()
+        val batchGate = CompletableDeferred<Unit>()
         val runtime = ChatHistoryPersistenceRuntime(
             store = store,
             configProvider = { enabledConfig },
+            batchWindowAction = { batchGate.await() },
         )
         val first = message("1", 1_000L)
         val second = message("2", 2_000L)
@@ -26,12 +29,12 @@ class ChatHistoryPersistenceRuntimeTest {
         runtime.markMessageDeleted("channel", "1")
         runtime.markUserMessagesDeleted("channel", "user")
         runtime.clearChannel("channel")
+        batchGate.complete(Unit)
         runtime.flushAndClose()
 
         assertEquals(
             listOf(
-                "save:1",
-                "save:2",
+                "save-batch:1,2",
                 "delete:channel:1",
                 "timeout:channel:user",
                 "clear:channel",
@@ -83,7 +86,7 @@ class ChatHistoryPersistenceRuntimeTest {
         }
 
         override suspend fun saveMessages(messages: List<ChatMessage>, config: ChatHistoryConfig) {
-            messages.forEach { saveMessage(it, config) }
+            operations += "save-batch:" + messages.joinToString(",") { it.id }
         }
 
         override suspend fun loadRecentMessages(

@@ -33,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,6 +41,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.structuralEqualityPolicy
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
@@ -68,6 +70,7 @@ import io.ferventio.app.domain.ChatMessage
 import io.ferventio.app.domain.ChatNameStyle
 import io.ferventio.app.domain.ChatScrollPosition
 import io.ferventio.app.domain.ChatRepeatCollapseConfig
+import io.ferventio.app.domain.ChatRepeatCollapsePlan
 import io.ferventio.app.domain.ChatRepeatCollapser
 import io.ferventio.app.domain.ChatRepeatSummary
 import io.ferventio.app.domain.CheermoteAsset
@@ -132,37 +135,58 @@ fun FerventioChatTimeline(
     val preferences = runtime.settings.preferences
     val localUiPreferences = runtime.localUiPreferences.preferences
     val ownUserId = runtime.authentication.state.authentication?.accessLease?.session?.userId
-    val decorations = runtime.messageRules.decorationsByMessageId
+    val messageRules = runtime.messageRules
     val savedFilters = runtime.savedFilters.filters
     val canonicalMessages = chat.messages(channel.id)
+    val decorations by remember(messageRules, canonicalMessages) {
+        derivedStateOf(structuralEqualityPolicy()) {
+            selectTimelineDecorations(
+                messages = canonicalMessages,
+                decorations = messageRules.decorationsByMessageId,
+            )
+        }
+    }
+    val workspaceFilter = remember(filterQuery, savedFilters) {
+        compileWorkspaceSplitMessageFilter(
+            filterQuery = filterQuery,
+            savedFilters = savedFilters,
+        )
+    }
     val sourceMessages = remember(
         canonicalMessages,
-        filterQuery,
-        savedFilters,
+        workspaceFilter,
         preferences.showSystemMessages,
         decorations,
     ) {
         filterWorkspaceSplitMessages(
             messages = canonicalMessages,
-            filterQuery = filterQuery,
-            savedFilters = savedFilters,
+            filter = workspaceFilter,
             decorations = decorations,
             showSystemMessages = preferences.showSystemMessages,
         )
     }
     val collapsePlan = remember(sourceMessages, preferences.repeatCollapseEnabled) {
-        ChatRepeatCollapser.build(
-            messages = sourceMessages,
-            config = ChatRepeatCollapseConfig(enabled = preferences.repeatCollapseEnabled),
-        )
+        if (preferences.repeatCollapseEnabled) {
+            ChatRepeatCollapser.build(
+                messages = sourceMessages,
+                config = ChatRepeatCollapseConfig(enabled = true),
+            )
+        } else {
+            ChatRepeatCollapsePlan.Empty
+        }
     }
-    val messages = remember(sourceMessages, collapsePlan.visibleMessageIds) {
-        sourceMessages.filter { message -> message.id in collapsePlan.visibleMessageIds }
+    val messages = if (preferences.repeatCollapseEnabled) {
+        remember(sourceMessages, collapsePlan.visibleMessageIds) {
+            projectVisibleTimelineMessages(
+                messages = sourceMessages,
+                visibleMessageIds = collapsePlan.visibleMessageIds,
+            )
+        }
+    } else {
+        sourceMessages
     }
     val heldAutoModMessages = remember(autoModHeldMessages) {
-        autoModHeldMessages
-            .filter { message -> message.status == AutoModMessageStatus.HELD }
-            .sortedWith(compareBy(AutoModHeldMessage::heldAtMillis, AutoModHeldMessage::messageId))
+        normalizeHeldAutoModTimelineMessages(autoModHeldMessages)
     }
     val timelineItemCount = messages.size + heldAutoModMessages.size
     val lastTimelineIndex = (timelineItemCount - 1).coerceAtLeast(0)
@@ -432,6 +456,89 @@ fun FerventioChatTimeline(
     }
 }
 
+internal fun normalizeHeldAutoModTimelineMessages(
+    messages: List<AutoModHeldMessage>,
+): List<AutoModHeldMessage> {
+    if (messages.size < 2) {
+        return if (messages.firstOrNull()?.status == AutoModMessageStatus.HELD || messages.isEmpty()) {
+            messages
+        } else {
+            emptyList()
+        }
+    }
+    var previous: AutoModHeldMessage? = null
+    var requiresNormalization = false
+    messages.forEach { message ->
+        if (message.status != AutoModMessageStatus.HELD) {
+            requiresNormalization = true
+            return@forEach
+        }
+        val prior = previous
+        if (
+            prior != null &&
+            compareHeldAutoModTimelineMessages(prior, message) > 0
+        ) {
+            requiresNormalization = true
+        }
+        previous = message
+    }
+    if (!requiresNormalization) return messages
+    return messages
+        .asSequence()
+        .filter { it.status == AutoModMessageStatus.HELD }
+        .sortedWith(Comparator(::compareHeldAutoModTimelineMessages))
+        .toList()
+}
+
+private fun compareHeldAutoModTimelineMessages(
+    left: AutoModHeldMessage,
+    right: AutoModHeldMessage,
+): Int {
+    val heldAtComparison = left.heldAtMillis.compareTo(right.heldAtMillis)
+    return if (heldAtComparison != 0) {
+        heldAtComparison
+    } else {
+        left.messageId.compareTo(right.messageId)
+    }
+}
+
+internal fun projectVisibleTimelineMessages(
+    messages: List<ChatMessage>,
+    visibleMessageIds: Set<String>,
+): List<ChatMessage> {
+    var filtered: MutableList<ChatMessage>? = null
+    for (index in messages.indices) {
+        val message = messages[index]
+        if (message.id in visibleMessageIds) {
+            filtered?.add(message)
+        } else if (filtered == null) {
+            filtered = ArrayList<ChatMessage>(messages.size - 1).apply {
+                for (prefixIndex in 0 until index) {
+                    add(messages[prefixIndex])
+                }
+            }
+        }
+    }
+    return filtered ?: messages
+}
+
+internal fun selectTimelineDecorations(
+    messages: List<ChatMessage>,
+    decorations: Map<String, MessageDecoration>,
+): Map<String, MessageDecoration> {
+    if (messages.isEmpty() || decorations.isEmpty()) return emptyMap()
+    var selected: MutableMap<String, MessageDecoration>? = null
+    messages.forEach { message ->
+        decorations[message.id]?.let { decoration ->
+            val target = selected ?: LinkedHashMap<String, MessageDecoration>().also {
+                selected = it
+            }
+            target[message.id] = decoration
+        }
+    }
+    return selected ?: emptyMap()
+}
+
 private fun LazyListState.isTimelineAtLiveTail(empty: Boolean): Boolean {
     val layout = layoutInfo
     if (layout.totalItemsCount == 0) return empty
@@ -608,15 +715,26 @@ private fun ChatMessageRow(
 
     val chat = LocalFerventioRuntimeState.current.chat
     val deletedPlaceholder = stringResource(Res.string.chat_message_deleted)
-    val presentation = projectChatMessage(
-        message = message,
-        deletedPlaceholder = deletedPlaceholder,
-        thirdPartyEmotes = thirdPartyEmotes,
-        cheermoteAssetsByPrefix = cheermoteAssets,
-        animatedMediaSupported = supportsAnimatedChatMedia && preferences.animateEmotes,
-        showDeletedMessageContent = preferences.showDeletedMessageContent,
-    )
-    val renderSegments = groupChatMessageSegments(presentation.segments)
+    val presentation = remember(
+        message,
+        deletedPlaceholder,
+        thirdPartyEmotes,
+        cheermoteAssets,
+        preferences.animateEmotes,
+        preferences.showDeletedMessageContent,
+    ) {
+        projectChatMessage(
+            message = message,
+            deletedPlaceholder = deletedPlaceholder,
+            thirdPartyEmotes = thirdPartyEmotes,
+            cheermoteAssetsByPrefix = cheermoteAssets,
+            animatedMediaSupported = supportsAnimatedChatMedia && preferences.animateEmotes,
+            showDeletedMessageContent = preferences.showDeletedMessageContent,
+        )
+    }
+    val renderSegments = remember(presentation.segments) {
+        groupChatMessageSegments(presentation.segments)
+    }
     val uriHandler = LocalUriHandler.current
     val linkColor = MaterialTheme.colorScheme.primary
     val mentionColor = MaterialTheme.colorScheme.tertiary
@@ -680,150 +798,176 @@ private fun ChatMessageRow(
             }
         }
 
-        val text = buildAnnotatedString {
-            if (preferences.showTimestamps && !showQuickActionStrip) {
-                withStyle(SpanStyle(color = metadataColor)) {
-                    append("[")
-                    append(formatChatTimestamp(message.timestampMillis))
-                    append("] ")
-                }
-            }
-            if (avatarImageUrl != null) {
-                appendInlineContent(inlineAvatarId(), authorLabel)
-                append(" ")
-            }
-            if (message.isAction) append("* ")
-            badges.forEachIndexed { index, _ ->
-                appendInlineContent(inlineBadgeId(index), "◆")
-                append(" ")
-            }
-            val authorStart = length
-            withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) {
-                append(authorLabel)
-            }
-            val authorEnd = length
-            if (authorEnd > authorStart) {
-                addStringAnnotation(
-                    tag = AUTHOR_ANNOTATION_TAG,
-                    annotation = message.id,
-                    start = authorStart,
-                    end = authorEnd,
-                )
-            }
-            append(if (message.isAction) " " else ": ")
-
-            withStyle(
-                SpanStyle(
-                    fontStyle = if (message.isAction || presentation.isDeleted) FontStyle.Italic
-                    else FontStyle.Normal,
-                ),
-            ) {
-                renderSegments.forEachIndexed { index, renderSegment ->
-                    val segment = renderSegment.base
-                    if (segment.imageUrl != null && segment.kind.isInlineEmote()) {
-                        appendInlineContent(inlineSegmentId(index), segment.text.ifBlank { "emote" })
-                        return@forEachIndexed
+        val text = remember(
+            message.id,
+            message.timestampMillis,
+            message.isAction,
+            preferences.showTimestamps,
+            showQuickActionStrip,
+            metadataColor,
+            avatarImageUrl,
+            authorLabel,
+            badges,
+            presentation.isDeleted,
+            renderSegments,
+            linkColor,
+            mentionColor,
+        ) {
+            buildAnnotatedString {
+                if (preferences.showTimestamps && !showQuickActionStrip) {
+                    withStyle(SpanStyle(color = metadataColor)) {
+                        append("[")
+                        append(formatChatTimestamp(message.timestampMillis))
+                        append("] ")
                     }
-                    val start = length
-                    append(segment.text)
-                    val end = length
-                    if (end <= start) return@forEachIndexed
-                    when (segment.kind) {
-                        ChatMessageSegmentKind.LINK -> {
-                            addStyle(
-                                SpanStyle(
-                                    color = linkColor,
-                                    textDecoration = TextDecoration.Underline,
-                                ),
+                }
+                if (avatarImageUrl != null) {
+                    appendInlineContent(inlineAvatarId(), authorLabel)
+                    append(" ")
+                }
+                if (message.isAction) append("* ")
+                badges.forEachIndexed { index, _ ->
+                    appendInlineContent(inlineBadgeId(index), "◆")
+                    append(" ")
+                }
+                val authorStart = length
+                withStyle(SpanStyle(fontWeight = FontWeight.SemiBold)) {
+                    append(authorLabel)
+                }
+                val authorEnd = length
+                if (authorEnd > authorStart) {
+                    addStringAnnotation(
+                        tag = AUTHOR_ANNOTATION_TAG,
+                        annotation = message.id,
+                        start = authorStart,
+                        end = authorEnd,
+                    )
+                }
+                append(if (message.isAction) " " else ": ")
+
+                withStyle(
+                    SpanStyle(
+                        fontStyle = if (message.isAction || presentation.isDeleted) FontStyle.Italic
+                        else FontStyle.Normal,
+                    ),
+                ) {
+                    renderSegments.forEachIndexed { index, renderSegment ->
+                        val segment = renderSegment.base
+                        if (segment.imageUrl != null && segment.kind.isInlineEmote()) {
+                            appendInlineContent(inlineSegmentId(index), segment.text.ifBlank { "emote" })
+                            return@forEachIndexed
+                        }
+                        val start = length
+                        append(segment.text)
+                        val end = length
+                        if (end <= start) return@forEachIndexed
+                        when (segment.kind) {
+                            ChatMessageSegmentKind.LINK -> {
+                                addStyle(
+                                    SpanStyle(
+                                        color = linkColor,
+                                        textDecoration = TextDecoration.Underline,
+                                    ),
+                                    start,
+                                    end,
+                                )
+                                segment.url?.let { url ->
+                                    addStringAnnotation(URL_ANNOTATION_TAG, url, start, end)
+                                }
+                            }
+                            ChatMessageSegmentKind.MENTION -> addStyle(
+                                SpanStyle(color = mentionColor, fontWeight = FontWeight.SemiBold),
                                 start,
                                 end,
                             )
-                            segment.url?.let { url ->
-                                addStringAnnotation(URL_ANNOTATION_TAG, url, start, end)
-                            }
+                            ChatMessageSegmentKind.TWITCH_EMOTE,
+                            ChatMessageSegmentKind.THIRD_PARTY_EMOTE,
+                            ChatMessageSegmentKind.GIF -> addStyle(
+                                SpanStyle(fontWeight = FontWeight.Medium),
+                                start,
+                                end,
+                            )
+                            ChatMessageSegmentKind.CHEERMOTE -> addStyle(
+                                SpanStyle(fontWeight = FontWeight.Bold),
+                                start,
+                                end,
+                            )
+                            ChatMessageSegmentKind.TEXT,
+                            ChatMessageSegmentKind.UNKNOWN -> Unit
                         }
-                        ChatMessageSegmentKind.MENTION -> addStyle(
-                            SpanStyle(color = mentionColor, fontWeight = FontWeight.SemiBold),
-                            start,
-                            end,
-                        )
-                        ChatMessageSegmentKind.TWITCH_EMOTE,
-                        ChatMessageSegmentKind.THIRD_PARTY_EMOTE,
-                        ChatMessageSegmentKind.GIF -> addStyle(
-                            SpanStyle(fontWeight = FontWeight.Medium),
-                            start,
-                            end,
-                        )
-                        ChatMessageSegmentKind.CHEERMOTE -> addStyle(
-                            SpanStyle(fontWeight = FontWeight.Bold),
-                            start,
-                            end,
-                        )
-                        ChatMessageSegmentKind.TEXT,
-                        ChatMessageSegmentKind.UNKNOWN -> Unit
                     }
                 }
             }
         }
 
-        val inlineContent = buildMap<String, InlineTextContent> {
-            avatarImageUrl?.let { imageUrl ->
-                put(
-                    inlineAvatarId(),
-                    InlineTextContent(
-                        placeholder = Placeholder(
-                            width = 1.2.em,
-                            height = 1.2.em,
-                            placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
-                        ),
-                    ) {
-                        SharedAvatarIcon(
-                            imageUrl = imageUrl,
-                            label = authorLabel,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    },
-                )
-            }
-            badges.forEachIndexed { index, badge ->
-                put(
-                    inlineBadgeId(index),
-                    InlineTextContent(
-                        placeholder = Placeholder(
-                            width = 1.05.em,
-                            height = 1.05.em,
-                            placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
-                        ),
-                    ) {
-                        SharedBadgeIcon(
-                            badge = badge,
-                            asset = chat.badgeAsset(message.channelId, badge),
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    },
-                )
-            }
-            renderSegments.forEachIndexed { index, renderSegment ->
-                if (renderSegment.base.imageUrl == null) return@forEachIndexed
-                if (!renderSegment.base.kind.isInlineEmote()) return@forEachIndexed
-                val bttvVisualState = BttvEmoteVisualState(renderSegment.base.bttvModifiers)
-                put(
-                    inlineSegmentId(index),
-                    InlineTextContent(
-                        placeholder = Placeholder(
-                            width = (1.35f * emoteScale * bttvVisualState.widthMultiplier).em,
-                            height = (1.35f * emoteScale).em,
-                            placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
-                        ),
-                    ) {
-                        SharedInlineEmoteStack(
-                            base = renderSegment.base,
-                            overlays = renderSegment.overlays,
-                            animationsEnabled = preferences.animateEmotes,
-                            modifier = Modifier.fillMaxSize(),
-                        )
-                    },
-                )
+        val inlineContent = remember(
+            avatarImageUrl,
+            authorLabel,
+            badges,
+            renderSegments,
+            emoteScale,
+            preferences.animateEmotes,
+            message.channelId,
+        ) {
+            buildMap<String, InlineTextContent> {
+                avatarImageUrl?.let { imageUrl ->
+                    put(
+                        inlineAvatarId(),
+                        InlineTextContent(
+                            placeholder = Placeholder(
+                                width = 1.2.em,
+                                height = 1.2.em,
+                                placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
+                            ),
+                        ) {
+                            SharedAvatarIcon(
+                                imageUrl = imageUrl,
+                                label = authorLabel,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        },
+                    )
+                }
+                badges.forEachIndexed { index, badge ->
+                    put(
+                        inlineBadgeId(index),
+                        InlineTextContent(
+                            placeholder = Placeholder(
+                                width = 1.05.em,
+                                height = 1.05.em,
+                                placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
+                            ),
+                        ) {
+                            SharedBadgeIcon(
+                                badge = badge,
+                                asset = chat.badgeAsset(message.channelId, badge),
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        },
+                    )
+                }
+                renderSegments.forEachIndexed { index, renderSegment ->
+                    if (renderSegment.base.imageUrl == null) return@forEachIndexed
+                    if (!renderSegment.base.kind.isInlineEmote()) return@forEachIndexed
+                    val bttvVisualState = BttvEmoteVisualState(renderSegment.base.bttvModifiers)
+                    put(
+                        inlineSegmentId(index),
+                        InlineTextContent(
+                            placeholder = Placeholder(
+                                width = (1.35f * emoteScale * bttvVisualState.widthMultiplier).em,
+                                height = (1.35f * emoteScale).em,
+                                placeholderVerticalAlign = PlaceholderVerticalAlign.TextCenter,
+                            ),
+                        ) {
+                            SharedInlineEmoteStack(
+                                base = renderSegment.base,
+                                overlays = renderSegment.overlays,
+                                animationsEnabled = preferences.animateEmotes,
+                                modifier = Modifier.fillMaxSize(),
+                            )
+                        },
+                    )
+                }
             }
         }
 

@@ -89,35 +89,53 @@ internal fun SharedUserCardSheet(
     }
 
     val liveMessages = runtime.chat.messages(effectiveData.channelId)
-    val displayedRecentMessages = effectiveData.recentMessages.map { cached ->
-        liveMessages.firstOrNull { live -> live.id == cached.id } ?: cached
+    val authenticatedUserId = runtime.authentication.state.authentication
+        ?.accessLease
+        ?.session
+        ?.userId
+    val displayedRecentMessages = remember(effectiveData.recentMessages, liveMessages) {
+        mergeUserCardRecentMessagesWithLive(
+            cachedMessages = effectiveData.recentMessages,
+            liveMessages = liveMessages,
+        )
     }
-    val liveData = effectiveData.copy(recentMessages = displayedRecentMessages)
-    val profileBadges = displayedRecentMessages
-        .asReversed()
-        .flatMap(ChatMessage::badges)
-        .distinctBy { badge -> badge.setId + "/" + badge.id }
-        .take(MAX_HEADER_BADGES)
-    val moderationAvailability = userCardModerationAvailability(
-        data = liveData,
-        authenticatedUserId = runtime.authentication.state.authentication
-            ?.accessLease
-            ?.session
-            ?.userId,
-    )
-    val canBlockUser = canBlockUserCardUser(
-        data = liveData,
-        authenticatedUserId = runtime.authentication.state.authentication
-            ?.accessLease
-            ?.session
-            ?.userId,
-    )
-    val visibleRecentMessages = userCardRecentMessagesForDisplay(
-        messages = displayedRecentMessages,
-        selectedMessageId = effectiveData.sourceMessageId,
-    )
+    val liveData = remember(effectiveData, displayedRecentMessages) {
+        if (displayedRecentMessages === effectiveData.recentMessages) {
+            effectiveData
+        } else {
+            effectiveData.copy(recentMessages = displayedRecentMessages)
+        }
+    }
+    val profileBadges = remember(displayedRecentMessages) {
+        displayedRecentMessages
+            .asReversed()
+            .flatMap(ChatMessage::badges)
+            .distinctBy { badge -> badge.setId + "/" + badge.id }
+            .take(MAX_HEADER_BADGES)
+    }
+    val moderationAvailability = remember(liveData, authenticatedUserId) {
+        userCardModerationAvailability(
+            data = liveData,
+            authenticatedUserId = authenticatedUserId,
+        )
+    }
+    val canBlockUser = remember(liveData, authenticatedUserId) {
+        canBlockUserCardUser(
+            data = liveData,
+            authenticatedUserId = authenticatedUserId,
+        )
+    }
+    val visibleRecentMessages = remember(
+        displayedRecentMessages,
+        effectiveData.sourceMessageId,
+    ) {
+        userCardRecentMessagesForDisplay(
+            messages = displayedRecentMessages,
+            selectedMessageId = effectiveData.sourceMessageId,
+        )
+    }
 
-    val canMention = runtime.authentication.state.authentication != null &&
+    val canMention = authenticatedUserId != null &&
         effectiveData.user.login.isNotBlank()
 
     fun mentionUser() {

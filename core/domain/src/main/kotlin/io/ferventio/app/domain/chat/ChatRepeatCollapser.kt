@@ -96,11 +96,10 @@ object ChatRepeatCollapser {
         val threshold = minRepeatCount.coerceAtLeast(2)
         val boundedWindowMillis = windowMillis.coerceAtLeast(0L)
         val participantLimit = maxParticipants.coerceAtLeast(0)
-        val visibleIds = LinkedHashSet<String>(messages.size)
         val anchorByMessageId = LinkedHashMap<String, String>()
         val summaries = LinkedHashMap<String, ChatRepeatSummary>()
 
-        var run = mutableListOf<ChatMessage>()
+        val run = ArrayList<ChatMessage>()
         var runKey: String? = null
 
         fun flushRun() {
@@ -108,7 +107,6 @@ object ChatRepeatCollapser {
 
             if (run.size >= threshold) {
                 val anchor = run.first()
-                visibleIds += anchor.id
                 val distinctParticipants = run
                     .asSequence()
                     .map { ChatRepeatParticipant(it.userId, it.userDisplayName) }
@@ -121,11 +119,9 @@ object ChatRepeatCollapser {
                     totalParticipantCount = distinctParticipants.size,
                 )
                 run.forEach { message -> anchorByMessageId[message.id] = anchor.id }
-            } else {
-                run.forEach { message -> visibleIds += message.id }
             }
 
-            run = mutableListOf()
+            run.clear()
             runKey = null
         }
 
@@ -133,7 +129,6 @@ object ChatRepeatCollapser {
             val key = collapseKey(message)
             if (key == null) {
                 flushRun()
-                visibleIds += message.id
                 return@forEach
             }
 
@@ -149,6 +144,15 @@ object ChatRepeatCollapser {
         }
         flushRun()
 
+        if (summaries.isEmpty()) return ChatRepeatCollapsePlan.Empty
+
+        val visibleIds = LinkedHashSet<String>(messages.size)
+        messages.forEach { message ->
+            val anchorId = anchorByMessageId[message.id]
+            if (anchorId == null || anchorId == message.id) {
+                visibleIds += message.id
+            }
+        }
         return ChatRepeatCollapsePlan(
             visibleMessageIds = visibleIds,
             anchorByMessageId = anchorByMessageId,
@@ -174,11 +178,34 @@ object ChatRepeatCollapser {
         return normalized.takeIf(String::isNotBlank)
     }
 
-    private fun normalize(text: String): String = text
-        .trim()
-        .lowercase()
-        .replace(WHITESPACE, " ")
+    private fun normalize(text: String): String {
+        val lowered = text.trim().lowercase()
+        if (lowered.isEmpty()) return lowered
 
-    private val WHITESPACE = Regex("\\s+")
+        var previousWhitespace = false
+        var needsCollapse = false
+        for (char in lowered) {
+            val whitespace = char.isWhitespace()
+            if (whitespace && (char != ' ' || previousWhitespace)) {
+                needsCollapse = true
+                break
+            }
+            previousWhitespace = whitespace
+        }
+        if (!needsCollapse) return lowered
+
+        return buildString(lowered.length) {
+            var inWhitespace = false
+            lowered.forEach { char ->
+                if (char.isWhitespace()) {
+                    if (!inWhitespace) append(' ')
+                    inWhitespace = true
+                } else {
+                    append(char)
+                    inWhitespace = false
+                }
+            }
+        }
+    }
     private val PROTECTED_BADGE_SET_IDS = setOf("broadcaster", "moderator", "vip")
 }

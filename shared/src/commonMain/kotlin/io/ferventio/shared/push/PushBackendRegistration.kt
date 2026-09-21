@@ -1,6 +1,7 @@
 package io.ferventio.shared.push
 
 import io.ferventio.app.domain.MobileDeviceIdentity
+import io.ferventio.app.domain.NotificationEventType
 import io.ferventio.app.domain.MobileDeviceIdentityValidation
 import kotlinx.serialization.Serializable
 
@@ -27,6 +28,8 @@ data class PushRegistrationRequest(
     val channelIds: List<String> = emptyList(),
     val moderatorChannelIds: List<String> = emptyList(),
     val notificationRules: List<String> = emptyList(),
+    val notificationChannelRules: Map<String, List<String>> = emptyMap(),
+    val notificationChannelMutedUntilEpochMillis: Map<String, Long> = emptyMap(),
     val highlightPhrases: List<String> = emptyList(),
     val selectedUserLogins: List<String> = emptyList(),
 )
@@ -37,26 +40,13 @@ data class PushRegistrationContext(
     val channelIds: List<String> = emptyList(),
     val moderatorChannelIds: List<String> = emptyList(),
     val notificationRules: List<String> = DEFAULT_NOTIFICATION_RULES,
+    val notificationChannelRules: Map<String, List<String>> = emptyMap(),
+    val notificationChannelMutedUntilEpochMillis: Map<String, Long> = emptyMap(),
     val highlightPhrases: List<String> = emptyList(),
     val selectedUserLogins: List<String> = emptyList(),
 ) {
     companion object {
-        val DEFAULT_NOTIFICATION_RULES = listOf(
-            "mention",
-            "reply",
-            "automod_hold",
-            "ban",
-            "timeout",
-            "highlight",
-            "selected_user",
-            "stream_online",
-            "title_change",
-            "game_change",
-            "raid",
-            "reward",
-            "subscription",
-            "moderation_action",
-        )
+        val DEFAULT_NOTIFICATION_RULES = NotificationEventType.allRuleIds
     }
 }
 
@@ -134,6 +124,9 @@ class PushRegistrationRequestFactory {
             channelIds = context.channelIds,
             moderatorChannelIds = context.moderatorChannelIds,
             notificationRules = context.notificationRules,
+            notificationChannelRules = context.notificationChannelRules,
+            notificationChannelMutedUntilEpochMillis =
+                context.notificationChannelMutedUntilEpochMillis,
             highlightPhrases = context.highlightPhrases,
             selectedUserLogins = context.selectedUserLogins,
         ).also(PushRegistrationValidation::requireValid)

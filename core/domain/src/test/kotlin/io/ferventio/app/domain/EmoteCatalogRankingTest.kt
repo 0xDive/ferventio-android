@@ -64,6 +64,81 @@ class EmoteCatalogRankingTest {
     }
 
     @Test
+    fun indexedSearchMatchesDirectRanking() {
+        val exact = asset("1", "Cat")
+        val prefix = asset("2", "CatJam")
+        val contains = asset("3", "MegaCat")
+        val catalog = listOf(contains, prefix, exact)
+        val recent = listOf(prefix.usageKey, prefix.usageKey)
+
+        val direct = EmoteCatalogRanking.search(
+            query = "Cat",
+            catalog = catalog,
+            recentEmoteKeys = recent,
+            favoriteEmoteKeys = setOf(exact.usageKey),
+            limit = 8,
+        )
+        val indexed = EmoteCatalogRanking.search(
+            query = "Cat",
+            index = EmoteCatalogRanking.buildSearchIndex(catalog),
+            recentEmoteKeys = recent,
+            favoriteEmoteKeys = setOf(exact.usageKey),
+            limit = 8,
+        )
+
+        assertEquals(direct, indexed)
+    }
+
+    @Test
+    fun prebuiltUsageRankingAvoidsRecountingRecentKeysPerQuery() {
+        val regular = asset("1", "CatWave")
+        val frequent = asset("2", "CatJam")
+        val index = EmoteCatalogRanking.buildSearchIndex(listOf(regular, frequent))
+        val usage = EmoteCatalogRanking.buildUsageRanking(
+            listOf(frequent.usageKey, frequent.usageKey, regular.usageKey),
+        )
+
+        val result = EmoteCatalogRanking.search(
+            query = "Cat",
+            index = index,
+            recentEmoteKeys = emptyList(),
+            usageRanking = usage,
+            limit = 8,
+        )
+
+        assertEquals(frequent, result.first())
+    }
+
+    @Test
+    fun usageRankingCountsInOneOrderAndKeepsNewestOccurrenceIndex() {
+        val ranking = EmoteCatalogRanking.buildUsageRanking(
+            listOf("cat", "dog", "cat", "cat", "dog"),
+        )
+
+        assertEquals(3, ranking.usageByKey.getValue("cat").count)
+        assertEquals(0, ranking.usageByKey.getValue("cat").mostRecentIndex)
+        assertEquals(2, ranking.usageByKey.getValue("dog").count)
+        assertEquals(1, ranking.usageByKey.getValue("dog").mostRecentIndex)
+    }
+
+    @Test
+    fun indexedSearchRespectsProviderFilter() {
+        val sevenTv = asset("1", "WaveCat", provider = "7tv")
+        val twitch = asset("2", "WaveCat", provider = "twitch")
+        val index = EmoteCatalogRanking.buildSearchIndex(listOf(sevenTv, twitch))
+
+        val result = EmoteCatalogRanking.search(
+            query = "Wave",
+            index = index,
+            recentEmoteKeys = emptyList(),
+            limit = 8,
+            providerId = "twitch",
+        )
+
+        assertEquals(listOf(twitch), result)
+    }
+
+    @Test
     fun recentKeepsLastUsedOrderAndRemovesDuplicates() {
         val older = asset("1", "Older")
         val newest = asset("2", "Newest")
@@ -94,10 +169,11 @@ class EmoteCatalogRankingTest {
         id: String,
         code: String,
         scope: EmoteScope = EmoteScope.GLOBAL,
+        provider: String = "7tv",
     ) = ThirdPartyEmoteAsset(
         id = id,
         code = code,
-        provider = "7tv",
+        provider = provider,
         imageType = "webp",
         animated = false,
         imageUrl1x = "https://cdn/$id/1",

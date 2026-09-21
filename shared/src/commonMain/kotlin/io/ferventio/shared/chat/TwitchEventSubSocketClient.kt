@@ -34,6 +34,7 @@ internal class TwitchEventSubSocketClient(
     private val jitterFraction: () -> Double = { Random.nextDouble() },
     private val nowEpochMillis: () -> Long = { Clock.System.now().toEpochMilliseconds() },
     private val deliveryGate: TwitchEventSubDeliveryGate = TwitchEventSubDeliveryGate(),
+    private val onSessionOpened: (sessionId: String) -> Unit = {},
 ) {
     private var closed = false
 
@@ -69,6 +70,7 @@ internal class TwitchEventSubSocketClient(
                     val sessionId = welcome.sessionId
                         ?.takeIf(String::isNotBlank)
                         ?: error("Twitch EventSub welcome is missing a session id")
+                    onSessionOpened(sessionId)
                     val keepaliveSeconds =
                         TwitchEventSubConnectionPolicy.keepaliveSeconds(
                             welcome.keepaliveTimeoutSeconds,

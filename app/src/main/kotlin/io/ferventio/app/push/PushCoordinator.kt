@@ -32,6 +32,7 @@ class PushCoordinator(
     private val appContext = context.applicationContext
     private val provider = PlatformPushProviderFactory.create(appContext)
     private val notificationPresenter = NotificationPresenter(appContext)
+    private val backendRegistrationGate = PushRegistrationUpsertGate()
     private val json = Json { ignoreUnknownKeys = true }
     private var registrationContextProvider: () -> PushRegistrationContext = { PushRegistrationContext() }
     private var payloadHandler: (PushNotificationPayload) -> Unit = {}
@@ -137,7 +138,9 @@ class PushCoordinator(
                 withContext(Dispatchers.Main) {
                     provider.register(activity, null)
                 }
-            }.onFailure { error -> fail(error.userMessage()) }
+            }.onFailure { error ->
+                if (settingsStore.pushEnabled) fail(error.userMessage())
+            }
         }
     }
 
@@ -208,6 +211,9 @@ class PushCoordinator(
                         channelIds = context.channelIds,
                         moderatorChannelIds = context.moderatorChannelIds,
                         notificationRules = context.notificationRules,
+                        notificationChannelRules = context.notificationChannelRules,
+                        notificationChannelMutedUntilEpochMillis =
+                            context.notificationChannelMutedUntilEpochMillis,
                         highlightPhrases = context.highlightPhrases,
                         selectedUserLogins = context.selectedUserLogins,
                     )
@@ -223,12 +229,23 @@ class PushCoordinator(
                         channelIds = context.channelIds,
                         moderatorChannelIds = context.moderatorChannelIds,
                         notificationRules = context.notificationRules,
+                        notificationChannelRules = context.notificationChannelRules,
+                        notificationChannelMutedUntilEpochMillis =
+                            context.notificationChannelMutedUntilEpochMillis,
                         highlightPhrases = context.highlightPhrases,
                         selectedUserLogins = context.selectedUserLogins,
                     )
                 }
-                client.register(serverUrl, request)
+                backendRegistrationGate.submit(serverUrl, request) {
+                    if (!settingsStore.pushEnabled) {
+                        false
+                    } else {
+                        client.register(serverUrl, request)
+                        true
+                    }
+                }
             }.onSuccess {
+                if (!settingsStore.pushEnabled) return@onSuccess
                 mutableState.update {
                     it.copy(
                         enabled = true,
@@ -246,12 +263,17 @@ class PushCoordinator(
                     )
                 }
                 provider.activate()
-            }.onFailure { error -> fail(error.userMessage()) }
+            }.onFailure { error ->
+                if (settingsStore.pushEnabled) fail(error.userMessage())
+            }
         }
     }
 
     fun showReplyNotification(message: ChatMessage) {
-        if (!settingsStore.pushEnabled || !settingsStore.replyNotificationsEnabled) return
+        if (
+            !settingsStore.pushEnabled ||
+            !settingsStore.notificationEnabled("reply", message.channelId)
+        ) return
         notificationPresenter.show(
             PushNotificationPayload(
                 type = "reply",
@@ -265,13 +287,21 @@ class PushCoordinator(
     }
 
     fun showHighlightAlert(alert: HighlightAlert) {
-        if (alert.playSound && !alert.push) {
+        val decision = resolveHighlightDelivery(
+            deliveryEnabled = settingsStore.notificationEnabled(
+                "highlight",
+                alert.message.channelId,
+            ),
+            pushRequested = alert.push,
+            playSoundRequested = alert.playSound,
+        )
+        if (decision.playStandaloneSound) {
             runCatching {
                 val sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
                 RingtoneManager.getRingtone(appContext, sound)?.play()
             }
         }
-        if (!alert.push) return
+        if (!decision.showNotification) return
         notificationPresenter.show(
             PushNotificationPayload(
                 type = "highlight",
@@ -281,13 +311,13 @@ class PushCoordinator(
                 channelLogin = alert.message.channelLogin,
                 messageId = alert.message.id,
                 destination = "mentions",
-                silent = !alert.playSound,
+                silent = decision.notificationSilent,
             ),
         )
     }
 
     fun showAutoModNotification(message: AutoModHeldMessage) {
-        if (!settingsStore.autoModNotificationsEnabled) return
+        if (!settingsStore.notificationEnabled("automod_hold", message.channelId)) return
         notificationPresenter.show(
             PushNotificationPayload(
                 type = "automod_hold",
@@ -317,7 +347,9 @@ class PushCoordinator(
             settingsStore.pushLastEventId = eventId
         }
         runCatching { payloadHandler(payload) }
-        notificationPresenter.show(payload)
+        if (settingsStore.notificationEnabled(payload.type, payload.channelId)) {
+            notificationPresenter.show(payload)
+        }
         mutableState.update {
             it.copy(
                 status = PushStatus.ACTIVE,
@@ -460,9 +492,14 @@ class PushCoordinator(
         installationId: String,
         deviceSecret: String,
     ) {
-        if (serverUrl.isBlank()) return
         scope.launch {
-            runCatching { client.unregister(serverUrl, installationId, deviceSecret) }
+            runCatching {
+                backendRegistrationGate.clear {
+                    if (serverUrl.isNotBlank()) {
+                        client.unregister(serverUrl, installationId, deviceSecret)
+                    }
+                }
+            }
         }
     }
 

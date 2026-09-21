@@ -18,11 +18,13 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.structuralEqualityPolicy
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -84,20 +86,22 @@ internal fun FerventioSplitFilterEditorDialog(
         else MessageFilterLanguage.compileForSplit(normalizedExpression)
     }
     val valid = normalizedExpression.isEmpty() || isHighlights || compiled?.isValid == true
-    val preview = remember(normalizedExpression, isHighlights, compiled, messages, decorations) {
-        val matched = when {
-            normalizedExpression.isEmpty() -> messages
-            isHighlights -> messages.filter { message ->
-                decorations[message.id]?.filteredSplit == true
+    val preview by remember(normalizedExpression, isHighlights, compiled, messages) {
+        derivedStateOf(structuralEqualityPolicy()) {
+            val matched = when {
+                normalizedExpression.isEmpty() -> messages
+                isHighlights -> messages.filter { message ->
+                    decorations[message.id]?.filteredSplit == true
+                }
+                compiled != null -> messages.filter(compiled::matches)
+                else -> emptyList()
             }
-            compiled != null -> messages.filter(compiled::matches)
-            else -> emptyList()
+            SplitFilterPreview(
+                checked = messages.size,
+                matched = matched.size,
+                messages = matched.take(MAX_PREVIEW_MESSAGES),
+            )
         }
-        SplitFilterPreview(
-            checked = messages.size,
-            matched = matched.size,
-            messages = matched.take(MAX_PREVIEW_MESSAGES),
-        )
     }
 
     AlertDialog(

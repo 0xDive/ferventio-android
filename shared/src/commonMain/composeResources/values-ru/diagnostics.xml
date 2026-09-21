@@ -23,4 +23,23 @@
     <string name="diagnostics_report_description">Копируемый отчёт содержит только статусы и счётчики. В него никогда не входят ID каналов, сообщения чата, токены авторизации или текст ошибок.</string>
     <string name="diagnostics_copy">Копировать диагностику</string>
     <string name="diagnostics_copied">Диагностика скопирована.</string>
+    <string name="diagnostics_transport_limit">Лимит WebSocket transport</string>
+    <string name="diagnostics_transport_limit_reached">Достигнут</string>
+    <string name="diagnostics_eventsub_session">Текущая WebSocket-сессия</string>
+    <string name="diagnostics_eventsub_sessions">Активные WebSocket-сессии</string>
+    <string name="diagnostics_eventsub_subscriptions">Активные подписки</string>
+    <string name="diagnostics_eventsub_inspect">Проверить EventSub-сессии</string>
+    <string name="diagnostics_eventsub_refresh">Обновить EventSub-сессии</string>
+    <string name="diagnostics_eventsub_cleanup">Освободить старые EventSub-слоты</string>
+    <string name="diagnostics_eventsub_cleanup_confirm_title">Освободить WebSocket-слоты EventSub?</string>
+    <string name="diagnostics_eventsub_cleanup_confirm_body">Ferventio удалит активные EventSub-подписки других WebSocket-сессий для этого Twitch-аккаунта и Client ID. Другие запущенные экземпляры Ferventio могут потерять EventSub до переподключения.</string>
+    <string name="diagnostics_eventsub_cleanup_confirm_all_body">У текущего WebSocket нет активных подписок. Ferventio удалит все активные WebSocket EventSub-подписки для этого Twitch-аккаунта и Client ID. Другие запущенные экземпляры Ferventio могут отключиться.</string>
+    <string name="diagnostics_eventsub_cleanup_confirm">Освободить слоты</string>
+    <string name="diagnostics_eventsub_cleanup_cancel">Отмена</string>
+    <string name="diagnostics_eventsub_cleanup_result">Удалено подписок: %1$d, WebSocket-сессий: %2$d.</string>
+    <string name="diagnostics_eventsub_session_current">текущая</string>
+    <string name="diagnostics_eventsub_session_other">другая</string>
+    <string name="diagnostics_eventsub_session_row">%1$s · подписок: %2$d</string>
+    <string name="diagnostics_eventsub_loading">Загружаем EventSub-сессии…</string>
+    <string name="diagnostics_eventsub_error">Не удалось обслужить EventSub: %1$s</string>
 </resources>

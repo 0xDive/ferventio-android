@@ -7,6 +7,15 @@ import kotlin.test.assertTrue
 
 class FerventioDiagnosticsTest {
     @Test
+    fun compactEventSubSessionIdKeepsDiagnosticsReadable() {
+        assertEquals("short-session", compactEventSubSessionId("short-session"))
+        assertEquals(
+            "abcdefgh…uvwxyz",
+            compactEventSubSessionId("abcdefghijklmnopqrstuvwxyz"),
+        )
+    }
+
+    @Test
     fun diagnosticReportContainsOnlySafeStatusAndCounters() {
         val report = FerventioDiagnosticsSnapshot(
             versionName = "1.2.3",
@@ -20,12 +29,14 @@ class FerventioDiagnosticsTest {
             liveChannels = 3,
             liveMessages = 42,
             historyAvailable = true,
+            eventSubTransportLimitReached = false,
         ).toDiagnosticReport()
 
         assertTrue(report.startsWith("Ferventio diagnostics\n"))
         assertTrue("version=1.2.3" in report)
         assertTrue("eventsub.status=CONNECTED" in report)
         assertTrue("eventsub.attempt=2" in report)
+        assertTrue("eventsub.transport_limit=false" in report)
         assertTrue("workspace.channels=4" in report)
         assertTrue("chat.live_messages=42" in report)
         assertTrue("history.available=true" in report)
@@ -33,6 +44,6 @@ class FerventioDiagnosticsTest {
         assertFalse("message=" in report)
         assertFalse("token" in report)
         assertFalse("error=" in report)
-        assertEquals(12, report.lines().size)
+        assertEquals(13, report.lines().size)
     }
 }

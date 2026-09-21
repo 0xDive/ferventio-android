@@ -13,6 +13,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 internal fun SharedAppPreferences.toChatHistoryConfig(): ChatHistoryConfig = ChatHistoryConfig(
@@ -32,6 +33,9 @@ internal fun SharedAppPreferences.toChatHistoryConfig(): ChatHistoryConfig = Cha
 internal class ChatHistoryPersistenceRuntime(
     store: ChatHistoryStore,
     private val configProvider: () -> ChatHistoryConfig,
+    private val batchWindowAction: suspend () -> Unit = {
+        delay(SAVE_BATCH_WINDOW_MILLIS)
+    },
 ) {
     private val runtimeBoundStore = store as? RuntimeBoundChatHistoryStore
     private val mutationStore = runtimeBoundStore?.delegate ?: store
@@ -42,17 +46,30 @@ internal class ChatHistoryPersistenceRuntime(
     init {
         runtimeBoundStore?.bind(this)
         worker = scope.launch {
-            for (mutation in queue) {
-                try {
-                    mutation.apply(mutationStore)
-                    mutation.complete(Result.success(Unit))
-                } catch (error: CancellationException) {
-                    mutation.complete(Result.failure(error))
-                    throw error
-                } catch (error: Exception) {
-                    mutation.complete(Result.failure(error))
-                    // Local history must never take down live chat. Search can still use the last
-                    // successfully persisted snapshot and a later accepted event retries naturally.
+            var pendingMutation: Mutation? = null
+            while (true) {
+                val mutation = pendingMutation
+                    ?: queue.receiveCatching().getOrNull()
+                    ?: break
+                pendingMutation = null
+
+                if (mutation is Mutation.SaveMessage) {
+                    val batch = ArrayList<Mutation.SaveMessage>(SAVE_BATCH_SIZE).apply {
+                        add(mutation)
+                    }
+                    batchWindowAction()
+                    while (batch.size < SAVE_BATCH_SIZE) {
+                        val next = queue.tryReceive().getOrNull() ?: break
+                        if (next is Mutation.SaveMessage && next.config == mutation.config) {
+                            batch += next
+                        } else {
+                            pendingMutation = next
+                            break
+                        }
+                    }
+                    applySaveBatch(batch)
+                } else {
+                    applyMutation(mutation)
                 }
             }
         }
@@ -123,6 +140,38 @@ internal class ChatHistoryPersistenceRuntime(
         queue.trySend(mutation)
     }
 
+    private suspend fun applySaveBatch(batch: List<Mutation.SaveMessage>) {
+        if (batch.isEmpty()) return
+        try {
+            mutationStore.saveMessages(
+                messages = batch.map(Mutation.SaveMessage::message),
+                config = batch.first().config,
+            )
+            batch.forEach { it.complete(Result.success(Unit)) }
+        } catch (error: CancellationException) {
+            batch.forEach { it.complete(Result.failure(error)) }
+            throw error
+        } catch (error: Exception) {
+            batch.forEach { it.complete(Result.failure(error)) }
+            // Local history must never take down live chat. Search can still use the last
+            // successfully persisted snapshot and a later accepted event retries naturally.
+        }
+    }
+
+    private suspend fun applyMutation(mutation: Mutation) {
+        try {
+            mutation.apply(mutationStore)
+            mutation.complete(Result.success(Unit))
+        } catch (error: CancellationException) {
+            mutation.complete(Result.failure(error))
+            throw error
+        } catch (error: Exception) {
+            mutation.complete(Result.failure(error))
+            // Local history must never take down live chat. Search can still use the last
+            // successfully persisted snapshot and a later accepted event retries naturally.
+        }
+    }
+
     private sealed interface Mutation {
         suspend fun apply(store: ChatHistoryStore)
 
@@ -174,5 +223,10 @@ internal class ChatHistoryPersistenceRuntime(
                 completion.complete(result)
             }
         }
+    }
+
+    private companion object {
+        const val SAVE_BATCH_WINDOW_MILLIS = 24L
+        const val SAVE_BATCH_SIZE = 64
     }
 }

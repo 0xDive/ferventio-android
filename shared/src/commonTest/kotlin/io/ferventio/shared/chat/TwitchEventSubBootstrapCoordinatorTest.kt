@@ -5,6 +5,7 @@ import io.ferventio.app.domain.ChatChannel
 import io.ferventio.app.domain.StoredAuthentication
 import io.ferventio.app.domain.TwitchAccessLease
 import io.ferventio.app.domain.TwitchSession
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -160,6 +161,45 @@ class TwitchEventSubBootstrapCoordinatorTest {
             calls,
         )
         assertFalse(result.failures.single().cause!!.isTwitchAuthenticationFailure())
+    }
+
+    @Test
+    fun remainingSubscriptionsUseBoundedParallelism() = runTest {
+        val channels = listOf(
+            channel("one", "one"),
+            channel("two", "two"),
+            channel("three", "three"),
+            channel("four", "four"),
+        )
+        var measureConcurrency = false
+        var active = 0
+        var peak = 0
+        val coordinator = TwitchEventSubBootstrapCoordinator { _, _, _ ->
+            if (measureConcurrency) {
+                active += 1
+                peak = maxOf(peak, active)
+                try {
+                    delay(100L)
+                } finally {
+                    active -= 1
+                }
+            }
+        }
+        val bootstrap = coordinator.bootstrap(
+            authentication = authentication(),
+            sessionId = "socket-session",
+            channels = channels,
+            moderatedChannelIds = emptySet(),
+        )
+
+        measureConcurrency = true
+        coordinator.createRemaining(
+            authentication = authentication(),
+            sessionId = "socket-session",
+            bootstrap = bootstrap,
+        )
+
+        assertEquals(4, peak)
     }
 
     @Test

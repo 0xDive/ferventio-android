@@ -53,7 +53,7 @@ class WorkspaceSettingsBackupUploadClientTest {
                     assertEquals("s".repeat(32), request.headers["X-Device-Secret"])
                     val uploaded = body.getValue("payload").toString()
                     val decoded = SharedSettingsBackupCodec.decode(uploaded)
-                    assertEquals(2, decoded.document.formatVersion)
+                    assertEquals(SharedSettingsBackupCodec.BACKUP_FORMAT_VERSION, decoded.document.formatVersion)
                     assertEquals("0.0.6", decoded.document.appVersion)
                     assertEquals(uploadTime.toString(), decoded.document.createdAt)
                     assertTrue(decoded.document.content.settings.repeatCollapseEnabled)

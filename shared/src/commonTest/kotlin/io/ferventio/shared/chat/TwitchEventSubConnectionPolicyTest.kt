@@ -44,7 +44,7 @@ class TwitchEventSubConnectionPolicyTest {
     }
 
     @Test
-    fun websocketTransportLimitUsesLongerRetryBudgetAndDelay() {
+    fun websocketTransportLimitUsesShortRecoveryBudgetAndMinimumDelay() {
         val error = TwitchEventSubSubscriptionException(
             statusCode = 429,
             twitchMessage = "number of websocket transports limit exceeded",
@@ -55,8 +55,8 @@ class TwitchEventSubConnectionPolicyTest {
                 TwitchEventSubSubscriptionException(429, "rate limit exceeded"),
             ),
         )
-        assertTrue(TwitchEventSubConnectionPolicy.canRetryTransportLimit(7))
-        assertFalse(TwitchEventSubConnectionPolicy.canRetryTransportLimit(8))
+        assertTrue(TwitchEventSubConnectionPolicy.canRetryTransportLimit(1))
+        assertFalse(TwitchEventSubConnectionPolicy.canRetryTransportLimit(2))
         assertEquals(
             5_000L,
             TwitchEventSubConnectionPolicy.transportLimitRetryDelayMillis(1, 0.0),

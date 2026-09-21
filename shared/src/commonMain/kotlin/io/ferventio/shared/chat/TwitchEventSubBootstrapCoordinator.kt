@@ -4,6 +4,9 @@ import io.ferventio.app.domain.AuthenticationPersistenceValidation
 import io.ferventio.app.domain.ChatChannel
 import io.ferventio.app.domain.StoredAuthentication
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 
 internal data class TwitchEventSubBootstrapFailure(
     val channel: ChatChannel,
@@ -148,13 +151,52 @@ internal class TwitchEventSubBootstrapCoordinator(
     ): List<TwitchEventSubBootstrapFailure> {
         val channelById = bootstrap.channels.associateBy(ChatChannel::id)
         val failures = mutableListOf<TwitchEventSubBootstrapFailure>()
-        for (spec in bootstrap.remainingSubscriptions) {
-            val channel = channelById.getValue(spec.broadcasterId)
-            val error = createCatching(authentication, sessionId, spec)
-            if (error != null) {
-                failures += error.toFailure(channel, spec.type)
-                if (error.isTwitchAuthenticationFailure()) break
+        val remaining = bootstrap.remainingSubscriptions
+        if (remaining.isEmpty()) return failures
+
+        // Preserve the pre-optimization fail-fast contract for a stale/invalid token. If auth is
+        // broken, every supplemental request would fail the same way; probing one request before
+        // starting a batch avoids needless traffic and keeps reauthentication deterministic.
+        val probe = remaining.first()
+        val probeError = createCatching(authentication, sessionId, probe)
+        if (probeError != null) {
+            failures += probeError.toFailure(
+                channel = channelById.getValue(probe.broadcasterId),
+                type = probe.type,
+            )
+            if (
+                probeError.isTwitchAuthenticationFailure() ||
+                TwitchEventSubConnectionPolicy.isWebSocketTransportLimit(probeError)
+            ) {
+                return failures
             }
+        }
+
+        for (
+            batch in remaining
+                .drop(1)
+                .chunked(REMAINING_SUBSCRIPTION_CONCURRENCY)
+        ) {
+            val batchResults = coroutineScope {
+                batch.map { spec ->
+                    async {
+                        spec to createCatching(authentication, sessionId, spec)
+                    }
+                }.awaitAll()
+            }
+            var stopAfterBatch = false
+            for ((spec, error) in batchResults) {
+                if (error == null) continue
+                val channel = channelById.getValue(spec.broadcasterId)
+                failures += error.toFailure(channel, spec.type)
+                if (
+                    error.isTwitchAuthenticationFailure() ||
+                    TwitchEventSubConnectionPolicy.isWebSocketTransportLimit(error)
+                ) {
+                    stopAfterBatch = true
+                }
+            }
+            if (stopAfterBatch) break
         }
         return failures
     }
@@ -170,6 +212,10 @@ internal class TwitchEventSubBootstrapCoordinator(
         throw cancelled
     } catch (error: Throwable) {
         error
+    }
+
+    private companion object {
+        const val REMAINING_SUBSCRIPTION_CONCURRENCY = 4
     }
 
     private fun Throwable.toFailure(

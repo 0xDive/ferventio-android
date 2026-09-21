@@ -145,6 +145,44 @@ class TwitchModerationRuntimeTest {
     }
 
     @Test
+    fun missingAutoModDecisionIsTreatedAsAlreadyResolved() = runTest {
+        val state = ChatRuntimeStateHolder().apply {
+            applyAutoMod(
+                AutoModHeldMessage(
+                    channelId = CHANNEL_ID,
+                    channelLogin = "channel",
+                    channelName = "Channel",
+                    userId = "viewer-id",
+                    userLogin = "viewer",
+                    userName = "Viewer",
+                    messageId = "automod-missing",
+                    text = "held",
+                ),
+            )
+        }
+        val gateway = FakeModerationGateway(
+            failure = TwitchModerationMutationException(
+                operation = "deny AutoMod message",
+                statusCode = 404,
+                twitchMessage = "message not found",
+            ),
+        )
+        val runtime = TwitchModerationRuntime(state, gateway)
+
+        assertFalse(
+            runtime.decideAutoModMessage(
+                authentication = authentication(),
+                messageId = "automod-missing",
+                approve = false,
+            ),
+        )
+
+        assertTrue(state.autoModHeldMessages(CHANNEL_ID).isEmpty())
+        assertEquals(AutoModMessageStatus.EXPIRED, state.autoModQueue.single().status)
+        assertFalse(state.authenticationRequired)
+    }
+
+    @Test
     fun rateLimitedMutationDoesNotChangeSharedOrAuthenticationState() = runTest {
         val state = ChatRuntimeStateHolder().apply {
             append(message("message-1", "user-a"))

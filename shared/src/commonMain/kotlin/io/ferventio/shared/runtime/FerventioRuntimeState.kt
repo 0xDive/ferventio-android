@@ -8,7 +8,10 @@ import io.ferventio.shared.auth.AccountMutationStateHolder
 import io.ferventio.shared.auth.MobileAuthenticationStateHolder
 import io.ferventio.shared.chat.ChatAttentionStateHolder
 import io.ferventio.shared.chat.ChatRuntimeStateHolder
+import io.ferventio.shared.chat.TwitchChatManagementClient
+import io.ferventio.shared.chat.ThirdPartyEmoteCatalogRuntime
 import io.ferventio.shared.chat.TwitchChatMessageRuntime
+import io.ferventio.shared.chat.TwitchEventSubTransportMaintenanceRuntime
 import io.ferventio.shared.chat.TwitchInteractiveRuntime
 import io.ferventio.shared.history.RuntimeBoundChatHistoryStore
 import io.ferventio.shared.moderation.TwitchModerationRuntime
@@ -18,6 +21,7 @@ import io.ferventio.shared.settings.SharedAppSettingsStateHolder
 import io.ferventio.shared.settings.SharedLocalUiPreferencesStateHolder
 import io.ferventio.shared.settings.SharedMessageRulesStateHolder
 import io.ferventio.shared.settings.SharedSavedFiltersStateHolder
+import io.ferventio.shared.user.TwitchUserCardRuntime
 import io.ferventio.shared.user.TwitchUserSafetyRuntime
 import io.ferventio.shared.workspace.WorkspaceRuntimeStateHolder
 
@@ -41,8 +45,18 @@ class FerventioRuntimeState(
     }
 
     val moderation: TwitchModerationRuntime by lazy { TwitchModerationRuntime(chat) }
+    val chatManagement: TwitchChatManagementClient by lazy { TwitchChatManagementClient() }
     val interactive: TwitchInteractiveRuntime by lazy { TwitchInteractiveRuntime(chat) }
     val chatMessages: TwitchChatMessageRuntime by lazy { TwitchChatMessageRuntime(chat) }
+    val eventSubMaintenance: TwitchEventSubTransportMaintenanceRuntime by lazy {
+        TwitchEventSubTransportMaintenanceRuntime()
+    }
+    val thirdPartyEmotes: ThirdPartyEmoteCatalogRuntime by lazy {
+        ThirdPartyEmoteCatalogRuntime()
+    }
+    val userCards: TwitchUserCardRuntime by lazy {
+        TwitchUserCardRuntime()
+    }
     val userSafety: TwitchUserSafetyRuntime by lazy { TwitchUserSafetyRuntime(chat) }
 
     constructor(

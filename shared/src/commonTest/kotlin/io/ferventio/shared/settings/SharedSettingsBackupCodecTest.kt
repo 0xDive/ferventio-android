@@ -10,7 +10,10 @@ class SharedSettingsBackupCodecTest {
     fun contentHashMatchesExistingAndroidCompatibleVector() {
         assertEquals(
             "e2fe5cee606756ff7540b5d292799450f01e5c6bdac1d4a81c88c808269ff614",
-            SharedSettingsBackupCodec.contentHashForTesting(androidCompatibleContent()),
+            SharedSettingsBackupCodec.contentHashForTesting(
+                androidCompatibleContent(),
+                formatVersion = 2,
+            ),
         )
     }
 
@@ -23,7 +26,7 @@ class SharedSettingsBackupCodecTest {
             SharedSettingsBackupCodec.encodeForTesting(document),
         )
 
-        assertEquals(2, decoded.document.formatVersion)
+        assertEquals(SharedSettingsBackupCodec.BACKUP_FORMAT_VERSION, decoded.document.formatVersion)
         assertEquals(2, decoded.summary.channelCount)
         assertEquals(1, decoded.summary.workspaceCount)
         assertEquals(0, decoded.summary.filterCount)
@@ -51,13 +54,30 @@ class SharedSettingsBackupCodecTest {
     @Test
     fun appliesAndroidDefaultsWhenFormatFieldsAreMissing() {
         val content = androidCompatibleContent()
-        val encoded = SharedSettingsBackupCodec.encodeForTesting(document(content = content))
+        val encoded = SharedSettingsBackupCodec.encodeForTesting(
+            document(content = content, formatVersion = 2),
+        )
             .replace("\"format\":\"ferventio-settings-backup\",", "")
             .replace("\"formatVersion\":2,", "")
 
         val decoded = SharedSettingsBackupCodec.decode(encoded)
 
         assertEquals(SharedSettingsBackupCodec.BACKUP_FORMAT, decoded.document.format)
+        assertEquals(2, decoded.document.formatVersion)
+    }
+
+    @Test
+    fun versionTwoBackupWithoutNotificationPolicyKeepsLegacyChecksum() {
+        val content = androidCompatibleContent()
+        val encoded = SharedSettingsBackupCodec.encodeForTesting(
+            document(content = content, formatVersion = 2),
+        ).replace(
+            Regex("""\s*"notificationPreferences"\s*:\s*\{\}\s*,?"""),
+            "",
+        )
+
+        val decoded = SharedSettingsBackupCodec.decode(encoded)
+
         assertEquals(2, decoded.document.formatVersion)
     }
 

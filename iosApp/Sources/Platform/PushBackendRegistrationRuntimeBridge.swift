@@ -5,6 +5,7 @@ import Foundation
 final class PushBackendRegistrationRuntimeBridge {
     private let stateHolder: PushRegistrationStateHolder
     private let workspaceState: WorkspaceRuntimeStateHolder
+    private let settingsState: SharedAppSettingsStateHolder
     private let identityStore: DeviceIdentityStore
     private let coordinator: ApnsPushRegistrationCoordinator
     private let serverURL: String
@@ -15,12 +16,14 @@ final class PushBackendRegistrationRuntimeBridge {
     private var pendingAuthentication: StoredAuthentication?
     private var lastAuthentication: StoredAuthentication?
     private var lastRegisteredPushContextRevision: Int64?
+    private var lastRegisteredSettingsRevision: Int64?
     private var lastRegisteredAuthenticationFingerprint: String?
     private var lastRegisteredServerURL: String?
 
     init(
         stateHolder: PushRegistrationStateHolder,
         workspaceState: WorkspaceRuntimeStateHolder,
+        settingsState: SharedAppSettingsStateHolder,
         identityStore: DeviceIdentityStore,
         coordinator: ApnsPushRegistrationCoordinator = ApnsPushRegistrationCoordinator(),
         serverURL: String,
@@ -28,6 +31,7 @@ final class PushBackendRegistrationRuntimeBridge {
     ) {
         self.stateHolder = stateHolder
         self.workspaceState = workspaceState
+        self.settingsState = settingsState
         self.identityStore = identityStore
         self.coordinator = coordinator
         self.serverURL = serverURL
@@ -37,6 +41,7 @@ final class PushBackendRegistrationRuntimeBridge {
     static func live(
         stateHolder: PushRegistrationStateHolder,
         workspaceState: WorkspaceRuntimeStateHolder,
+        settingsState: SharedAppSettingsStateHolder,
         bundle: Bundle = .main
     ) throws -> PushBackendRegistrationRuntimeBridge {
         let configuration = try AppConfiguration.live(bundle: bundle)
@@ -44,6 +49,7 @@ final class PushBackendRegistrationRuntimeBridge {
         let bridge = PushBackendRegistrationRuntimeBridge(
             stateHolder: stateHolder,
             workspaceState: workspaceState,
+            settingsState: settingsState,
             identityStore: DeviceIdentityStore(store: keychain),
             serverURL: configuration.serverURL,
             appVersion: resolvedAppVersion(bundle: bundle)
@@ -95,11 +101,13 @@ final class PushBackendRegistrationRuntimeBridge {
             }
 
             let revision = workspaceState.pushContextRevision
+            let settingsRevision = settingsState.syncRevision
             let authenticationFingerprint = fingerprint(for: currentAuthentication)
             guard
                 let deviceToken = stateHolder.deviceToken,
                 requiresSynchronization(
                     revision: revision,
+                    settingsRevision: settingsRevision,
                     authenticationFingerprint: authenticationFingerprint
                 )
             else {
@@ -112,7 +120,8 @@ final class PushBackendRegistrationRuntimeBridge {
                 authentication: currentAuthentication,
                 authenticationFingerprint: authenticationFingerprint,
                 deviceToken: deviceToken,
-                pushContextRevision: revision
+                pushContextRevision: revision,
+                settingsRevision: settingsRevision
             )
 
             guard !cleanupRequested else {
@@ -196,10 +205,12 @@ final class PushBackendRegistrationRuntimeBridge {
 
     private func requiresSynchronization(
         revision: Int64,
+        settingsRevision: Int64,
         authenticationFingerprint: String
     ) -> Bool {
         stateHolder.needsBackendRegistration ||
             lastRegisteredPushContextRevision != revision ||
+            lastRegisteredSettingsRevision != settingsRevision ||
             lastRegisteredAuthenticationFingerprint != authenticationFingerprint
     }
 
@@ -207,7 +218,8 @@ final class PushBackendRegistrationRuntimeBridge {
         authentication: StoredAuthentication,
         authenticationFingerprint: String,
         deviceToken: String,
-        pushContextRevision: Int64
+        pushContextRevision: Int64,
+        settingsRevision: Int64
     ) async -> Bool {
         stateHolder.markBackendRegistrationStarted()
         let workspace = workspaceState.snapshot
@@ -220,19 +232,22 @@ final class PushBackendRegistrationRuntimeBridge {
                 apnsDeviceToken: deviceToken,
                 appVersion: appVersion,
                 authentication: authentication,
-                workspace: workspace
+                workspace: workspace,
+                preferences: settingsState.preferences
             )
 
             guard
                 !cleanupRequested,
                 stateHolder.deviceToken == deviceToken,
                 workspaceState.pushContextRevision == pushContextRevision,
+                settingsState.syncRevision == settingsRevision,
                 workspaceState.isReadyForPushRegistration
             else {
                 return true
             }
 
             lastRegisteredPushContextRevision = pushContextRevision
+            lastRegisteredSettingsRevision = settingsRevision
             lastRegisteredAuthenticationFingerprint = authenticationFingerprint
             lastRegisteredServerURL = authentication.backendCredential.serverUrl
             stateHolder.markBackendRegistered()
@@ -242,6 +257,7 @@ final class PushBackendRegistrationRuntimeBridge {
                 !cleanupRequested,
                 stateHolder.deviceToken == deviceToken,
                 workspaceState.pushContextRevision == pushContextRevision,
+                settingsState.syncRevision == settingsRevision,
                 workspaceState.isReadyForPushRegistration
             else {
                 return true
@@ -256,6 +272,7 @@ final class PushBackendRegistrationRuntimeBridge {
 
     private func resetBackendRegistrationTracking() {
         lastRegisteredPushContextRevision = nil
+        lastRegisteredSettingsRevision = nil
         lastRegisteredAuthenticationFingerprint = nil
         lastRegisteredServerURL = nil
     }

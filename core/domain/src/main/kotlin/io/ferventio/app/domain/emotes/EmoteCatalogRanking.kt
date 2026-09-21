@@ -1,6 +1,116 @@
 package io.ferventio.app.domain
 
+class EmoteCatalogSearchIndex internal constructor(
+    internal val entries: List<EmoteCatalogSearchEntry>,
+    private val entriesByTwoCharToken: Map<String, List<EmoteCatalogSearchEntry>>,
+) {
+    internal fun candidates(normalizedQuery: String): List<EmoteCatalogSearchEntry> =
+        if (normalizedQuery.length < 2) {
+            entries
+        } else {
+            entriesByTwoCharToken[normalizedQuery.substring(0, 2)].orEmpty()
+        }
+}
+
+internal data class EmoteCatalogSearchEntry(
+    val asset: ThirdPartyEmoteAsset,
+    val normalizedCode: String,
+)
+
+internal data class EmoteUsageStat(
+    val count: Int,
+    val mostRecentIndex: Int,
+)
+
+class EmoteUsageRanking internal constructor(
+    internal val usageByKey: Map<String, EmoteUsageStat>,
+)
+
+private data class MutableEmoteUsageStat(
+    var count: Int,
+    val mostRecentIndex: Int,
+)
+
 object EmoteCatalogRanking {
+    fun buildUsageRanking(
+        recentEmoteKeys: List<String>,
+    ): EmoteUsageRanking = EmoteUsageRanking(buildUsageStats(recentEmoteKeys))
+
+    fun buildSearchIndex(
+        catalog: List<ThirdPartyEmoteAsset>,
+    ): EmoteCatalogSearchIndex {
+        if (catalog.isEmpty()) {
+            return EmoteCatalogSearchIndex(emptyList(), emptyMap())
+        }
+        val seenKeys = HashSet<String>(catalog.size)
+        val entries = ArrayList<EmoteCatalogSearchEntry>(catalog.size)
+        val buckets = linkedMapOf<String, MutableList<EmoteCatalogSearchEntry>>()
+
+        catalog.forEach { asset ->
+            if (!seenKeys.add(asset.usageKey)) return@forEach
+            val entry = EmoteCatalogSearchEntry(
+                asset = asset,
+                normalizedCode = asset.code.lowercase(),
+            )
+            entries += entry
+
+            if (entry.normalizedCode.length >= 2) {
+                val seenTokens = HashSet<String>()
+                for (index in 0 until entry.normalizedCode.lastIndex) {
+                    val token = entry.normalizedCode.substring(index, index + 2)
+                    if (seenTokens.add(token)) {
+                        buckets.getOrPut(token) { arrayListOf() } += entry
+                    }
+                }
+            }
+        }
+
+        return EmoteCatalogSearchIndex(
+            entries = entries,
+            entriesByTwoCharToken = buckets,
+        )
+    }
+
+    fun search(
+        query: String,
+        index: EmoteCatalogSearchIndex,
+        recentEmoteKeys: List<String>,
+        favoriteEmoteKeys: Set<String> = emptySet(),
+        limit: Int,
+        providerId: String? = null,
+        usageRanking: EmoteUsageRanking? = null,
+    ): List<ThirdPartyEmoteAsset> {
+        val normalizedQuery = query.trim().lowercase()
+        if (normalizedQuery.isEmpty()) return emptyList()
+        val usage = usageRanking?.usageByKey ?: buildUsageStats(recentEmoteKeys)
+        return index.candidates(normalizedQuery)
+            .asSequence()
+            .filter { entry ->
+                (providerId == null || entry.asset.provider == providerId) &&
+                    entry.normalizedCode.contains(normalizedQuery)
+            }
+            .sortedWith(
+                compareBy<EmoteCatalogSearchEntry> { entry ->
+                    when {
+                        entry.normalizedCode == normalizedQuery -> 0
+                        entry.normalizedCode.startsWith(normalizedQuery) -> 1
+                        else -> 2
+                    }
+                }
+                    .thenBy { entry -> if (entry.asset.scope == EmoteScope.CHANNEL) 0 else 1 }
+                    .thenBy { entry -> if (entry.asset.usageKey in favoriteEmoteKeys) 0 else 1 }
+                    .thenByDescending { entry -> usage[entry.asset.usageKey]?.count ?: 0 }
+                    .thenBy { entry ->
+                        usage[entry.asset.usageKey]?.mostRecentIndex ?: Int.MAX_VALUE
+                    }
+                    .thenBy { entry -> providerSortOrder(entry.asset.provider) }
+                    .thenBy(EmoteCatalogSearchEntry::normalizedCode),
+            )
+            .take(limit.coerceAtLeast(0))
+            .map(EmoteCatalogSearchEntry::asset)
+            .toList()
+    }
+
     fun suggestions(
         input: String,
         catalog: List<ThirdPartyEmoteAsset>,
@@ -78,16 +188,22 @@ object EmoteCatalogRanking {
 
     private fun buildUsageStats(recentEmoteKeys: List<String>): Map<String, EmoteUsageStat> {
         if (recentEmoteKeys.isEmpty()) return emptyMap()
-        val counts = recentEmoteKeys.groupingBy { it }.eachCount()
-        val newestIndex = buildMap<String, Int> {
-            recentEmoteKeys.forEachIndexed { index, key ->
-                if (!containsKey(key)) put(key, index)
+        val stats = LinkedHashMap<String, MutableEmoteUsageStat>()
+        recentEmoteKeys.forEachIndexed { index, key ->
+            val existing = stats[key]
+            if (existing == null) {
+                stats[key] = MutableEmoteUsageStat(
+                    count = 1,
+                    mostRecentIndex = index,
+                )
+            } else {
+                existing.count += 1
             }
         }
-        return counts.mapValues { (key, count) ->
+        return stats.mapValues { (_, stat) ->
             EmoteUsageStat(
-                count = count,
-                mostRecentIndex = newestIndex[key] ?: Int.MAX_VALUE,
+                count = stat.count,
+                mostRecentIndex = stat.mostRecentIndex,
             )
         }
     }
@@ -119,8 +235,4 @@ object EmoteCatalogRanking {
         else -> Int.MAX_VALUE
     }
 
-    private data class EmoteUsageStat(
-        val count: Int,
-        val mostRecentIndex: Int,
-    )
 }

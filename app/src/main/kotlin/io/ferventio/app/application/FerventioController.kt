@@ -38,6 +38,9 @@ import io.ferventio.app.network.BackendSettingsPutResult
 import io.ferventio.app.network.BackendSettingsSnapshot
 import io.ferventio.app.push.PushNotificationPayload
 import io.ferventio.app.security.SafeLog
+import io.ferventio.shared.chat.TwitchEventSubTransportCleanupResult
+import io.ferventio.shared.chat.TwitchEventSubTransportMaintenanceRuntime
+import io.ferventio.shared.chat.TwitchEventSubTransportRecoverySnapshot
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -108,6 +111,10 @@ class FerventioController(
     private var accessLeaseFallbackActive: Boolean = false
     private var eventSubClient: TwitchEventSubClient? = null
     private var eventSubJob: Job? = null
+    private var lastAutoModExpirySweepAtMillis: Long = 0L
+    private val eventSubMaintenanceRuntime = TwitchEventSubTransportMaintenanceRuntime()
+    @Volatile
+    private var activeEventSubSessionId: String? = null
     private val pinnedMessageRefreshJobs = ConcurrentHashMap<String, Job>()
     private val pinnedMessageRequestGenerations = ConcurrentHashMap<String, AtomicLong>()
     private val recentMessagesJobs = ConcurrentHashMap<String, Job>()
@@ -175,14 +182,17 @@ class FerventioController(
                 batch += next
             }
             runCatching {
+                val writeBatch = collectLegacyHistoryWriteBatch(batch)
                 historyRepository.saveMessages(
-                    messages = batch.map(HistoryWriteRequest::message),
+                    messages = writeBatch.messages,
                     enabled = settingsStore.localHistoryEnabled,
                     limitPerChannel = settingsStore.localHistoryLimit,
                     retentionDays = settingsStore.localHistoryRetentionDays,
                     maxDatabaseSizeMb = settingsStore.localHistoryMaxSizeMb,
                 )
-                historyRepository.saveAttentionEntries(batch.mapNotNull(HistoryWriteRequest::attention))
+                if (writeBatch.attentionEntries.isNotEmpty()) {
+                    historyRepository.saveAttentionEntries(writeBatch.attentionEntries)
+                }
             }.onFailure { error ->
                 mutableState.update { state ->
                     state.copy(lastConnectionError = state.lastConnectionError ?: "Room: ${error.userMessage()}")
@@ -608,8 +618,10 @@ class FerventioController(
 
 
     fun renameChannelTab(channelId: String, title: String) {
-        if (mutableState.value.channels.none { it.id == channelId }) return
+        val current = mutableState.value
+        if (current.channels.none { it.id == channelId }) return
         val normalizedTitle = title.trim().take(32)
+        if (current.channelTabTitles[channelId].orEmpty() == normalizedTitle) return
         mutableState.update { state ->
             val updated = if (normalizedTitle.isBlank()) {
                 state.channelTabTitles - channelId
@@ -622,30 +634,85 @@ class FerventioController(
     }
 
     fun markChannelRead(channelId: String) {
-        val canMarkRead = ChannelReadPolicy.canMarkRead(channelId, mutableState.value.visibleChannelIds)
-        if (!canMarkRead) return
+        val current = mutableState.value
+        val canMarkRead = ChannelReadPolicy.canMarkRead(channelId, current.visibleChannelIds)
+        if (!canMarkRead || channelId !in current.channelAttention) return
         mutableState.update { state ->
-            val unreadForChannel = state.attentionEntries.count { it.channelId == channelId && !it.isRead }
-            state.copy(
-                channelAttention = state.channelAttention - channelId,
-                attentionEntries = state.attentionEntries.map { entry ->
-                    if (entry.channelId == channelId) entry.copy(isRead = true) else entry
-                },
-                mentionUnreadCount = (state.mentionUnreadCount - unreadForChannel).coerceAtLeast(0),
-            )
+            var unreadForChannel = 0
+            val updatedEntries = mapLegacyListIfChanged(state.attentionEntries) { entry ->
+                if (entry.channelId == channelId && !entry.isRead) {
+                    unreadForChannel += 1
+                    entry.copy(isRead = true)
+                } else {
+                    entry
+                }
+            }
+            val hasChannelAttention = channelId in state.channelAttention
+            if (updatedEntries == null && !hasChannelAttention) {
+                state
+            } else {
+                state.copy(
+                    channelAttention = if (hasChannelAttention) {
+                        state.channelAttention - channelId
+                    } else {
+                        state.channelAttention
+                    },
+                    attentionEntries = updatedEntries ?: state.attentionEntries,
+                    mentionUnreadCount =
+                        (state.mentionUnreadCount - unreadForChannel).coerceAtLeast(0),
+                )
+            }
         }
         scope.launch { runCatching { historyRepository.markChannelAttentionRead(channelId) } }
     }
 
     fun markAllMentionsRead() {
+        val current = mutableState.value
+        if (
+            current.mentionUnreadCount == 0 &&
+            current.channelAttention.values.none { attention -> attention.mentionCount > 0 }
+        ) {
+            return
+        }
         mutableState.update { state ->
-            state.copy(
-                attentionEntries = state.attentionEntries.map { entry -> entry.copy(isRead = true) },
-                mentionUnreadCount = 0,
-                channelAttention = state.channelAttention.mapValues { (_, attention) ->
-                    attention.copy(mentionCount = 0)
-                }.filterValues(ChannelAttention::hasUnread),
-            )
+            val updatedEntries = mapLegacyListIfChanged(state.attentionEntries) { entry ->
+                if (entry.isRead) entry else entry.copy(isRead = true)
+            }
+            var channelAttentionChanged = false
+            val updatedChannelAttention = buildMap {
+                state.channelAttention.forEach { (channelId, attention) ->
+                    val updated = if (attention.mentionCount == 0) {
+                        attention
+                    } else {
+                        channelAttentionChanged = true
+                        attention.copy(mentionCount = 0)
+                    }
+                    if (updated.hasUnread) {
+                        put(channelId, updated)
+                    } else {
+                        if (channelId in state.channelAttention) {
+                            channelAttentionChanged = true
+                        }
+                    }
+                }
+            }
+            if (
+                updatedEntries == null &&
+                state.mentionUnreadCount == 0 &&
+                !channelAttentionChanged
+            ) {
+                state
+            } else {
+                state.copy(
+                    attentionEntries = updatedEntries ?: state.attentionEntries,
+                    mentionUnreadCount = 0,
+                    channelAttention = if (channelAttentionChanged) {
+                        updatedChannelAttention
+                    } else {
+                        state.channelAttention
+                    },
+                )
+            }
         }
         scope.launch { runCatching { historyRepository.markAllAttentionRead() } }
     }
@@ -688,8 +755,12 @@ class FerventioController(
             shouldPersist = true
             val previous = state.channelAttention[channelId] ?: ChannelAttention()
             state.copy(
-                attentionEntries = (listOf(entry) + state.attentionEntries)
-                    .take(MAX_ATTENTION_ENTRIES),
+                attentionEntries = prependLegacyDistinctByKeyBounded(
+                    source = state.attentionEntries,
+                    value = entry,
+                    maxSize = MAX_ATTENTION_ENTRIES,
+                    key = AttentionEntry::messageId,
+                ),
                 mentionUnreadCount = (state.mentionUnreadCount + 1)
                     .coerceAtMost(MAX_ATTENTION_COUNT),
                 channelAttention = state.channelAttention + (
@@ -734,11 +805,17 @@ class FerventioController(
             } else {
                 state.channelAttention
             }
+            val updatedAttentionEntries = mapLegacyListIfChanged(state.attentionEntries) { item ->
+                if (item.messageId == entry.messageId && !item.isRead) {
+                    item.copy(isRead = true)
+                } else {
+                    item
+                }
+            }
             state.copy(
-                attentionEntries = state.attentionEntries.map { item ->
-                    if (item.messageId == entry.messageId) item.copy(isRead = true) else item
-                },
-                mentionUnreadCount = (state.mentionUnreadCount - if (entry.isRead) 0 else 1).coerceAtLeast(0),
+                attentionEntries = updatedAttentionEntries ?: state.attentionEntries,
+                mentionUnreadCount =
+                    (state.mentionUnreadCount - if (entry.isRead) 0 else 1).coerceAtLeast(0),
                 channelAttention = nextChannelAttention,
                 messagesByChannel = state.messagesByChannel + (resolvedChannelId to injected),
             )
@@ -749,15 +826,23 @@ class FerventioController(
 
     fun upsertHighlightRule(rule: HighlightRule) {
         val normalized = rule.copy(pattern = rule.pattern.trim().take(MAX_RULE_PATTERN_LENGTH))
-        val updated = (mutableState.value.highlightRules.filterNot { it.id == normalized.id } + normalized)
-            .take(MAX_MESSAGE_RULES)
+        val current = mutableState.value.highlightRules
+        val updated = upsertLegacyListAtEnd(
+            source = current,
+            value = normalized,
+            maxSize = MAX_MESSAGE_RULES,
+            key = HighlightRule::id,
+        )
+        if (updated === current) return
         settingsStore.highlightRules = updated
         mutableState.update { it.copy(highlightRules = updated) }
         rebuildMessageRuleEvaluation()
     }
 
     fun deleteHighlightRule(ruleId: String) {
-        val updated = mutableState.value.highlightRules.filterNot { it.id == ruleId }
+        val current = mutableState.value.highlightRules
+        val updated = removeLegacyListByKey(current, ruleId, HighlightRule::id)
+        if (updated === current) return
         settingsStore.highlightRules = updated
         mutableState.update { it.copy(highlightRules = updated) }
         rebuildMessageRuleEvaluation()
@@ -765,15 +850,23 @@ class FerventioController(
 
     fun upsertIgnoreRule(rule: IgnoreRule) {
         val normalized = rule.copy(pattern = rule.pattern.trim().take(MAX_RULE_PATTERN_LENGTH))
-        val updated = (mutableState.value.ignoreRules.filterNot { it.id == normalized.id } + normalized)
-            .take(MAX_MESSAGE_RULES)
+        val current = mutableState.value.ignoreRules
+        val updated = upsertLegacyListAtEnd(
+            source = current,
+            value = normalized,
+            maxSize = MAX_MESSAGE_RULES,
+            key = IgnoreRule::id,
+        )
+        if (updated === current) return
         settingsStore.ignoreRules = updated
         mutableState.update { it.copy(ignoreRules = updated) }
         rebuildMessageRuleEvaluation()
     }
 
     fun deleteIgnoreRule(ruleId: String) {
-        val updated = mutableState.value.ignoreRules.filterNot { it.id == ruleId }
+        val current = mutableState.value.ignoreRules
+        val updated = removeLegacyListByKey(current, ruleId, IgnoreRule::id)
+        if (updated === current) return
         settingsStore.ignoreRules = updated
         mutableState.update { it.copy(ignoreRules = updated) }
         rebuildMessageRuleEvaluation()
@@ -799,10 +892,16 @@ class FerventioController(
             showError("Фильтр с таким названием уже существует")
             return false
         }
-        val updated = (current.filterNot { it.id == normalized.id } + normalized)
-            .take(MAX_SAVED_FILTERS)
-        settingsStore.savedMessageFilters = updated
-        mutableState.update { it.copy(savedMessageFilters = updated) }
+        val updated = upsertLegacyListAtEnd(
+            source = current,
+            value = normalized,
+            maxSize = MAX_SAVED_FILTERS,
+            key = SavedMessageFilter::id,
+        )
+        if (updated !== current) {
+            settingsStore.savedMessageFilters = updated
+            mutableState.update { it.copy(savedMessageFilters = updated) }
+        }
         return true
     }
 
@@ -844,9 +943,12 @@ class FerventioController(
                 return false
             }
         }
-        val merged = MessageFilterCodec.merge(mutableState.value.savedMessageFilters, imported)
-        settingsStore.savedMessageFilters = merged
-        mutableState.update { it.copy(savedMessageFilters = merged) }
+        val current = mutableState.value.savedMessageFilters
+        val merged = MessageFilterCodec.merge(current, imported)
+        if (merged != current) {
+            settingsStore.savedMessageFilters = merged
+            mutableState.update { it.copy(savedMessageFilters = merged) }
+        }
         return true
     }
 
@@ -918,7 +1020,11 @@ class FerventioController(
     fun recordEmoteUsage(asset: ThirdPartyEmoteAsset) {
         val key = asset.usageKey
         if (key.isBlank()) return
-        val updated = (listOf(key) + mutableState.value.recentEmoteKeys).take(MAX_RECENT_EMOTE_USES)
+        val updated = prependLegacyBoundedAllowDuplicates(
+            source = mutableState.value.recentEmoteKeys,
+            value = key,
+            maxSize = MAX_RECENT_EMOTE_USES,
+        )
         settingsStore.recentEmoteKeys = updated
         mutableState.update { state -> state.copy(recentEmoteKeys = updated) }
     }
@@ -1039,7 +1145,24 @@ class FerventioController(
 
     fun setReplyNotificationsEnabled(enabled: Boolean) {
         settingsStore.replyNotificationsEnabled = enabled
-        mutableState.update { it.copy(replyNotificationsEnabled = enabled) }
+        val policy = settingsStore.notificationPreferences
+            .withGlobalEvent(NotificationEventType.REPLY.ruleId, enabled)
+        settingsStore.notificationPreferences = policy
+        mutableState.update {
+            it.copy(
+                replyNotificationsEnabled = enabled,
+                notificationPreferences = policy,
+            )
+        }
+    }
+
+    fun setNotificationPreferences(value: NotificationPreferences) {
+        val normalized = value.normalized()
+        settingsStore.notificationPreferences = normalized
+        mutableState.update { state ->
+            if (state.notificationPreferences == normalized) state
+            else state.copy(notificationPreferences = normalized)
+        }
     }
 
     fun saveCustomCommand(command: CustomCommand, oldName: String? = null): Boolean {
@@ -1603,7 +1726,9 @@ class FerventioController(
                 historyError = "Не удалось загрузить историю: ${error.userMessage()}"
                 emptyMap()
             }
-            ChatMessageTextPreparation.warm(loaded.values.flatten())
+            ChatMessageTextPreparation.warm(
+                loaded.values.asSequence().flatten().asIterable(),
+            )
             mutableState.update { state ->
                 val restored = state.channels.associate { channel ->
                     channel.id to loaded[channel.id].orEmpty().takeLast(MAX_MESSAGES_PER_CHANNEL)
@@ -2902,6 +3027,7 @@ class FerventioController(
                 userCardShowBanAction = settingsStore.userCardShowBanAction,
                 userCardModerationActionOrder = settingsStore.userCardModerationActionOrder,
                 replyNotificationsEnabled = settingsStore.replyNotificationsEnabled,
+                notificationPreferences = settingsStore.notificationPreferences,
                 highlightRules = settingsStore.highlightRules,
                 ignoreRules = settingsStore.ignoreRules,
                 savedMessageFilters = settingsStore.savedMessageFilters,
@@ -3233,8 +3359,14 @@ class FerventioController(
 
     fun setAutoModNotificationsEnabled(enabled: Boolean) {
         settingsStore.autoModNotificationsEnabled = enabled
+        val policy = settingsStore.notificationPreferences
+            .withGlobalEvent(NotificationEventType.AUTOMOD_HOLD.ruleId, enabled)
+        settingsStore.notificationPreferences = policy
         mutableState.update { state ->
-            state.copy(moderation = state.moderation.copy(autoModNotificationsEnabled = enabled))
+            state.copy(
+                notificationPreferences = policy,
+                moderation = state.moderation.copy(autoModNotificationsEnabled = enabled),
+            )
         }
     }
 
@@ -3259,16 +3391,40 @@ class FerventioController(
             }.onSuccess {
                 val status = if (approve) AutoModMessageStatus.APPROVED else AutoModMessageStatus.DENIED
                 mutableState.update { state ->
+                    val updatedQueue = mapLegacyListIfChanged(state.moderation.autoModQueue) { item ->
+                        if (item.messageId == messageId && item.status != status) {
+                            item.copy(status = status)
+                        } else {
+                            item
+                        }
+                    } ?: return@update state
                     state.copy(
-                        moderation = state.moderation.copy(
-                            autoModQueue = state.moderation.autoModQueue.map { item ->
-                                if (item.messageId == messageId) item.copy(status = status) else item
-                            },
-                        ),
+                        moderation = state.moderation.copy(autoModQueue = updatedQueue),
                     )
                 }
                 showNotice(if (approve) "Сообщение AutoMod разрешено" else "Сообщение AutoMod отклонено")
-            }.onFailure { showError(it.userMessage()) }
+            }.onFailure { error ->
+                if (error is TwitchApiException && error.statusCode == 404) {
+                    mutableState.update { state ->
+                        val updatedQueue = mapLegacyListIfChanged(state.moderation.autoModQueue) { item ->
+                            if (
+                                item.messageId == messageId &&
+                                item.status != AutoModMessageStatus.EXPIRED
+                            ) {
+                                item.copy(status = AutoModMessageStatus.EXPIRED)
+                            } else {
+                                item
+                            }
+                        } ?: return@update state
+                        state.copy(
+                            moderation = state.moderation.copy(autoModQueue = updatedQueue),
+                        )
+                    }
+                    showNotice("Сообщение AutoMod уже обработано или время решения истекло")
+                } else {
+                    showError(error.userMessage())
+                }
+            }
         }
     }
 
@@ -3350,6 +3506,34 @@ class FerventioController(
 
     fun reconnectEventSub() {
         reconnectCurrentTransport(force = true, reason = "Ручное переподключение")
+    }
+
+    fun currentEventSubSessionIdForDiagnostics(): String? = activeEventSubSessionId
+
+    suspend fun inspectEventSubTransportSessions(): TwitchEventSubTransportRecoverySnapshot =
+        eventSubMaintenanceRuntime.load(requireStoredAuthenticationForEventSubMaintenance())
+
+    suspend fun clearStaleEventSubTransportSessions(): TwitchEventSubTransportCleanupResult {
+        val authentication = requireStoredAuthenticationForEventSubMaintenance()
+        val result = eventSubMaintenanceRuntime.clearOtherSessions(
+            authentication = authentication,
+            protectedSessionId = activeEventSubSessionId,
+        )
+        reconnectEventSub()
+        return result
+    }
+
+    private fun requireStoredAuthenticationForEventSubMaintenance(): StoredAuthentication {
+        val credential = requireNotNull(backendCredential) {
+            "Серверная сессия недоступна"
+        }
+        val lease = requireNotNull(credentials) {
+            "Twitch access lease недоступен"
+        }
+        return StoredAuthentication(
+            backendCredential = credential,
+            accessLease = lease,
+        )
     }
 
     fun onAppForegrounded() {
@@ -3509,15 +3693,26 @@ class FerventioController(
         val channel = current.channels.firstOrNull { it.id == message.channelId }
             ?: return showError("Канал больше не открыт")
         mutableState.update { state ->
+            val existing = state.messagesByChannel[channel.id].orEmpty()
+            val updatedMessages = mapLegacyListIfChanged(existing) { current ->
+                if (current.id == message.id) {
+                    current.copy(
+                        outgoingState = OutgoingMessageState.SENDING,
+                        outgoingError = null,
+                    )
+                } else {
+                    current
+                }
+            }
             state.copy(
-                messagesByChannel = state.messagesByChannel + (
-                    channel.id to state.messagesByChannel[channel.id].orEmpty().map { existing ->
-                        if (existing.id == message.id) {
-                            existing.copy(outgoingState = OutgoingMessageState.SENDING, outgoingError = null)
-                        } else existing
-                    }
-                ),
-                rateLimitsByChannel = state.rateLimitsByChannel - channel.id,
+                messagesByChannel = updatedMessages?.let { updated ->
+                    state.messagesByChannel + (channel.id to updated)
+                } ?: state.messagesByChannel,
+                rateLimitsByChannel = if (channel.id in state.rateLimitsByChannel) {
+                    state.rateLimitsByChannel - channel.id
+                } else {
+                    state.rateLimitsByChannel
+                },
             )
         }
         val wireText = if (message.isAction) "/me ${message.text}" else message.text
@@ -3542,7 +3737,11 @@ class FerventioController(
             }
             state.copy(
                 messagesByChannel = state.messagesByChannel + (
-                    message.channelId to (existing + message).takeLast(memoryLimit)
+                    message.channelId to appendBoundedMessage(
+                        existing = existing,
+                        message = message,
+                        limit = memoryLimit,
+                    )
                 ),
             )
         }
@@ -3570,19 +3769,27 @@ class FerventioController(
                 }
             }.onSuccess { result ->
                 mutableState.update { state ->
+                    val existing = state.messagesByChannel[channel.id].orEmpty()
+                    val updatedMessages = mapLegacyListIfChanged(existing) { message ->
+                        if (message.id == localMessageId) {
+                            message.copy(
+                                outgoingState = OutgoingMessageState.SENT,
+                                outgoingError = null,
+                                serverMessageId = result.messageId,
+                            )
+                        } else {
+                            message
+                        }
+                    }
                     state.copy(
-                        messagesByChannel = state.messagesByChannel + (
-                            channel.id to state.messagesByChannel[channel.id].orEmpty().map { message ->
-                                if (message.id == localMessageId) {
-                                    message.copy(
-                                        outgoingState = OutgoingMessageState.SENT,
-                                        outgoingError = null,
-                                        serverMessageId = result.messageId,
-                                    )
-                                } else message
-                            }
-                        ),
-                        rateLimitsByChannel = state.rateLimitsByChannel - channel.id,
+                        messagesByChannel = updatedMessages?.let { updated ->
+                            state.messagesByChannel + (channel.id to updated)
+                        } ?: state.messagesByChannel,
+                        rateLimitsByChannel = if (channel.id in state.rateLimitsByChannel) {
+                            state.rateLimitsByChannel - channel.id
+                        } else {
+                            state.rateLimitsByChannel
+                        },
                     )
                 }
             }.onFailure { error ->
@@ -3596,17 +3803,21 @@ class FerventioController(
                             )
                         )
                     } else state.rateLimitsByChannel
+                    val existing = state.messagesByChannel[channel.id].orEmpty()
+                    val updatedMessages = mapLegacyListIfChanged(existing) { message ->
+                        if (message.id == localMessageId) {
+                            message.copy(
+                                outgoingState = OutgoingMessageState.FAILED,
+                                outgoingError = error.userMessage(),
+                            )
+                        } else {
+                            message
+                        }
+                    }
                     state.copy(
-                        messagesByChannel = state.messagesByChannel + (
-                            channel.id to state.messagesByChannel[channel.id].orEmpty().map { message ->
-                                if (message.id == localMessageId) {
-                                    message.copy(
-                                        outgoingState = OutgoingMessageState.FAILED,
-                                        outgoingError = error.userMessage(),
-                                    )
-                                } else message
-                            }
-                        ),
+                        messagesByChannel = updatedMessages?.let { updated ->
+                            state.messagesByChannel + (channel.id to updated)
+                        } ?: state.messagesByChannel,
                         rateLimitsByChannel = rateLimit,
                     )
                 }
@@ -3618,9 +3829,13 @@ class FerventioController(
         val normalized = text.trim()
         if (normalized.isEmpty()) return
         mutableState.update { state ->
-            val updatedChannel = (listOf(normalized) + state.sentMessageHistoryByChannel[channelId].orEmpty())
-                .distinct()
-                .take(MAX_SENT_MESSAGE_HISTORY)
+            val currentChannel = state.sentMessageHistoryByChannel[channelId].orEmpty()
+            val updatedChannel = prependLegacyDistinctBounded(
+                source = currentChannel,
+                value = normalized,
+                maxSize = MAX_SENT_MESSAGE_HISTORY,
+            )
+            if (updatedChannel === currentChannel) return@update state
             val updated = state.sentMessageHistoryByChannel + (channelId to updatedChannel)
             settingsStore.sentMessageHistoryByChannel = updated
             state.copy(sentMessageHistoryByChannel = updated)
@@ -4257,27 +4472,26 @@ class FerventioController(
         }
         rebuildMessageRuleEvaluation()
         startTokenValidation()
-        val moderated = runCatching {
+        val moderatedResult = runCatching {
             api.getModeratedChannelIds(session.clientId, lease.accessToken, session.userId)
-        }.getOrDefault(emptySet()) + session.userId
+        }
+        val moderated = moderatedResult.getOrDefault(emptySet()) + session.userId
         currentCoroutineContext().ensureActive()
         if (performanceScenarioActive) return
-        mutableState.update { state ->
-            state.copy(
-                moderatedChannelIds = moderated,
-                moderation = state.moderation.copy(
-                    selectedChannelId = state.moderation.selectedChannelId
-                        ?.takeIf(moderated::contains)
-                        ?: state.selectedChannelId?.takeIf(moderated::contains),
-                ),
-            )
-        }
+        applyModeratedChannels(moderated)
         currentCoroutineContext().ensureActive()
         if (performanceScenarioActive) return
         restoreChannelsAndConnect(session, lease.accessToken)
         if (performanceScenarioActive) return
         restoreAttentionEntries()
-        refreshModeratedChannels(session)
+        if (moderatedResult.isSuccess) {
+            applyModeratedChannels(moderated)
+            mutableState.value.selectedChannelId?.let(::refreshPinnedMessage)
+        } else {
+            // Preserve the old recovery behavior when the bootstrap lookup failed, without
+            // duplicating a successful Helix moderation/channels request on every login.
+            refreshModeratedChannels(session)
+        }
         queueUserProfileHydration(session.userId)
         if (settingsStore.settingsSyncEnabled) scheduleSettingsSync(immediate = true)
     }
@@ -4543,12 +4757,111 @@ class FerventioController(
                 snapshot = snapshot,
                 enabledProviders = enabledProviders,
             ) { _, _ ->
-                emoteLiveRefreshJob?.cancel()
-                emoteLiveRefreshJob = scope.launch {
-                    delay(700)
-                    if (mutableState.value.isAnonymous) refreshAnonymousChatAssets()
+                scheduleLiveEmoteCatalogRefresh()
+            }
+        }
+    }
+
+    private fun scheduleLiveEmoteCatalogRefresh() {
+        emoteLiveRefreshJob?.cancel()
+        lateinit var refreshJob: Job
+        refreshJob = scope.launch {
+            try {
+                delay(700L)
+                refreshLiveEmoteCatalogs()
+            } finally {
+                if (emoteLiveRefreshJob === refreshJob) {
+                    emoteLiveRefreshJob = null
                 }
             }
+        }
+        emoteLiveRefreshJob = refreshJob
+    }
+
+    private suspend fun refreshLiveEmoteCatalogs() {
+        val initial = mutableState.value
+        val channels = initial.channels
+        if (channels.isEmpty()) return
+
+        val session = initial.session
+        val accessToken = credentials?.accessToken
+        val authenticated = session != null && accessToken != null
+        val providerContext = if (authenticated) {
+            val authenticatedSession = requireNotNull(session)
+            EmoteProviderContext(
+                twitchClientId = authenticatedSession.clientId,
+                twitchAccessToken = requireNotNull(accessToken),
+                twitchUserId = authenticatedSession.userId,
+            )
+        } else {
+            EmoteProviderContext("", "", "")
+        }
+        val enabledProviders = buildSet {
+            if (settingsStore.betterTtvEnabled) add(EmoteRepository.BETTER_TTV)
+            if (settingsStore.frankerFaceZEnabled) add(EmoteRepository.FRANKER_FACE_Z)
+            if (settingsStore.sevenTvEnabled) add(EmoteRepository.SEVEN_TV)
+        }
+        val snapshot = emoteRepository.refresh(
+            context = providerContext,
+            channels = channels,
+            enabledProviders = enabledProviders,
+            includeTwitch = authenticated,
+        )
+
+        val activeChannelIds = mutableState.value.channels.map(ChatChannel::id).toSet()
+        val activeChannels = channels.filter { channel -> channel.id in activeChannelIds }
+        mutableState.update { state ->
+            val next = state.copy(
+                emoteCatalogByChannel = snapshot.catalogByChannel.filterKeys(activeChannelIds::contains),
+                emoteLiveProviders = snapshot.liveProviders,
+                emoteCatalogErrorMessage = snapshot.errorMessage,
+                betterTtvEmotesByChannel = if (state.betterTtvEnabled) {
+                    activeChannels.associate { channel ->
+                        channel.id to snapshot.emotes(EmoteRepository.BETTER_TTV, channel.id)
+                    }
+                } else {
+                    emptyMap()
+                },
+                frankerFaceZEmotesByChannel = if (state.frankerFaceZEnabled) {
+                    activeChannels.associate { channel ->
+                        channel.id to snapshot.emotes(EmoteRepository.FRANKER_FACE_Z, channel.id)
+                    }
+                } else {
+                    emptyMap()
+                },
+                sevenTvEmotesByChannel = if (state.sevenTvEnabled) {
+                    activeChannels.associate { channel ->
+                        channel.id to snapshot.emotes(EmoteRepository.SEVEN_TV, channel.id)
+                    }
+                } else {
+                    emptyMap()
+                },
+            )
+            val changedChannels = changedThirdPartyCatalogChannels(
+                before = state,
+                after = next,
+                candidateChannelIds = activeChannelIds,
+            )
+            next.copy(
+                messagesByChannel = reprocessThirdPartyEmotes(next, changedChannels),
+            )
+        }
+
+        if (authenticated) {
+            refreshSelectedTwitchChannelEmotes()
+        }
+        val liveChannels = if (authenticated) {
+            activeChannels
+        } else {
+            activeChannels.filterNot { it.id.startsWith(ANONYMOUS_CHANNEL_ID_PREFIX) }
+        }
+        emoteRepository.startLiveUpdates(
+            scope = scope,
+            channels = liveChannels,
+            snapshot = snapshot,
+            enabledProviders = enabledProviders,
+        ) { _, _ ->
+            scheduleLiveEmoteCatalogRefresh()
         }
     }
 
@@ -4834,7 +5147,7 @@ class FerventioController(
                 errorMessage = "Не удалось восстановить сообщения: ${error.userMessage()}"
                 emptyMap()
             }
-            ChatMessageTextPreparation.warm(messages.values.flatten())
+            messages.values.forEach(ChatMessageTextPreparation::warm)
             val positions = runCatching {
                 historyRepository.loadScrollPositions(channelIds)
             }.getOrElse { error ->
@@ -4849,10 +5162,14 @@ class FerventioController(
         }.getOrElse { emptyList() }
         val cachedByLogin = cachedChannels.associateBy { it.login.lowercase() }
         val selectedLogin = settingsStore.selectedChannelLogin?.lowercase()
+        var cachedHistorySnapshot:
+            Triple<Map<String, List<ChatMessage>>, Map<String, ChatScrollPosition>, String?>? = null
 
         if (cachedChannels.isNotEmpty()) {
             mutableState.update { it.copy(isHistoryLoading = settingsStore.localHistoryEnabled) }
-            val (cachedMessages, cachedPositions, cachedError) = loadHistorySnapshot(cachedChannels)
+            val historySnapshot = loadHistorySnapshot(cachedChannels)
+            cachedHistorySnapshot = historySnapshot
+            val (cachedMessages, cachedPositions, cachedError) = historySnapshot
             val cachedSelected = selectedLogin
                 ?.let(cachedByLogin::get)
                 ?: cachedChannels.firstOrNull()
@@ -4922,7 +5239,12 @@ class FerventioController(
                 }
             }
 
-        val (savedMessages, savedScrollPositions, historyError) = loadHistorySnapshot(channels)
+        val cachedIds = cachedChannels.map(ChatChannel::id)
+        val refreshedIds = channels.map(ChatChannel::id)
+        val historySnapshot = cachedHistorySnapshot
+            ?.takeIf { cachedIds == refreshedIds }
+            ?: loadHistorySnapshot(channels)
+        val (savedMessages, savedScrollPositions, historyError) = historySnapshot
         val selected = selectedLogin
             ?.let { login -> channels.firstOrNull { it.login.equals(login, ignoreCase = true) } }
             ?: channels.firstOrNull()
@@ -4944,8 +5266,12 @@ class FerventioController(
         }
         normalizeChannelPreferences(channels, selected?.id)
         refreshTwitchChatAssets(session, accessToken, channels)
-        savedMessages.values.flatten().forEach { message ->
-            if (message.author.profileImageUrl.isNullOrBlank()) queueUserProfileHydration(message.userId)
+        savedMessages.values.forEach { messages ->
+            messages.forEach { message ->
+                if (message.author.profileImageUrl.isNullOrBlank()) {
+                    queueUserProfileHydration(message.userId)
+                }
+            }
         }
         connectEventSub(session, accessToken)
         selected?.let { channel -> scheduleRecentMessagesLoad(listOf(channel)) }
@@ -5231,37 +5557,40 @@ class FerventioController(
             }
             val perChannelDeferred = async {
                 coroutineScope {
+                    val channelSemaphore = Semaphore(CHAT_ASSET_CHANNEL_CONCURRENCY)
                     channels.map { channel ->
                         async {
-                            val badgesDeferred = async {
-                                runCatching {
-                                    api.getChannelChatBadges(
-                                        clientId = session.clientId,
-                                        token = accessToken,
-                                        broadcasterId = channel.id,
-                                    )
-                                }.getOrDefault(emptyMap())
+                            channelSemaphore.withPermit {
+                                val badgesDeferred = async {
+                                    runCatching {
+                                        api.getChannelChatBadges(
+                                            clientId = session.clientId,
+                                            token = accessToken,
+                                            broadcasterId = channel.id,
+                                        )
+                                    }.getOrDefault(emptyMap())
+                                }
+                                val cheermotesDeferred = async {
+                                    runCatching {
+                                        api.getCheermotes(
+                                            clientId = session.clientId,
+                                            token = accessToken,
+                                            broadcasterId = channel.id,
+                                        )
+                                    }.getOrDefault(emptyMap())
+                                }
+                                val ffzChannelBadgesDeferred = async {
+                                    if (!settingsStore.showBadges) emptyMap()
+                                    else runCatching {
+                                        api.getFrankerFaceZChannelBadgesByUserId(channel.id)
+                                    }.getOrDefault(emptyMap())
+                                }
+                                channel.id to Triple(
+                                    badgesDeferred.await(),
+                                    cheermotesDeferred.await(),
+                                    ffzChannelBadgesDeferred.await(),
+                                )
                             }
-                            val cheermotesDeferred = async {
-                                runCatching {
-                                    api.getCheermotes(
-                                        clientId = session.clientId,
-                                        token = accessToken,
-                                        broadcasterId = channel.id,
-                                    )
-                                }.getOrDefault(emptyMap())
-                            }
-                            val ffzChannelBadgesDeferred = async {
-                                if (!settingsStore.showBadges) emptyMap()
-                                else runCatching {
-                                    api.getFrankerFaceZChannelBadgesByUserId(channel.id)
-                                }.getOrDefault(emptyMap())
-                            }
-                            channel.id to Triple(
-                                badgesDeferred.await(),
-                                cheermotesDeferred.await(),
-                                ffzChannelBadgesDeferred.await(),
-                            )
                         }
                     }.awaitAll().toMap()
                 }
@@ -5325,11 +5654,7 @@ class FerventioController(
                 snapshot = snapshot,
                 enabledProviders = enabledProviders,
             ) { _, _ ->
-                emoteLiveRefreshJob?.cancel()
-                emoteLiveRefreshJob = scope.launch {
-                    delay(700)
-                    refreshChatAssetsForCurrentSession()
-                }
+                scheduleLiveEmoteCatalogRefresh()
             }
         }
     }
@@ -5440,6 +5765,11 @@ class FerventioController(
                             }
                         }
                     },
+                    onSessionOpened = { sessionId ->
+                        if (generation == eventSubGeneration.get()) {
+                            activeEventSubSessionId = sessionId
+                        }
+                    },
                 )
                 eventSubClient = client
                 try {
@@ -5449,6 +5779,7 @@ class FerventioController(
                     if (generation == eventSubGeneration.get()) {
                         eventSubClient = null
                         eventSubJob = null
+                        activeEventSubSessionId = null
                     }
                 }
             }
@@ -5852,6 +6183,7 @@ class FerventioController(
         val client = eventSubClient
         eventSubJob = null
         eventSubClient = null
+        activeEventSubSessionId = null
         client?.close()
         job?.cancel()
     }
@@ -5894,6 +6226,42 @@ class FerventioController(
         }
     }
 
+    private fun sweepStaleAutoModQueue(
+        nowMillis: Long = System.currentTimeMillis(),
+    ) {
+        if (nowMillis - lastAutoModExpirySweepAtMillis < AUTOMOD_EXPIRY_SWEEP_INTERVAL_MILLIS) return
+        lastAutoModExpirySweepAtMillis = nowMillis
+        val cutoff = nowMillis - AUTOMOD_STALE_HOLD_GRACE_MILLIS
+        mutableState.update { state ->
+            val queue = state.moderation.autoModQueue
+            if (
+                queue.none { message ->
+                    message.status == AutoModMessageStatus.HELD &&
+                        message.heldAtMillis > 0L &&
+                        message.heldAtMillis <= cutoff
+                }
+            ) {
+                state
+            } else {
+                state.copy(
+                    moderation = state.moderation.copy(
+                        autoModQueue = queue.map { message ->
+                            if (
+                                message.status == AutoModMessageStatus.HELD &&
+                                message.heldAtMillis > 0L &&
+                                message.heldAtMillis <= cutoff
+                            ) {
+                                message.copy(status = AutoModMessageStatus.EXPIRED)
+                            } else {
+                                message
+                            }
+                        },
+                    ),
+                )
+            }
+        }
+    }
+
     private fun stopTokenValidation() {
         tokenValidationJob?.cancel()
         tokenValidationJob = null
@@ -5931,6 +6299,7 @@ class FerventioController(
     }
 
     private fun handleChatEvent(event: ChatEvent) {
+        sweepStaleAutoModQueue()
         when (event) {
             is ChatEvent.Message -> appendMessage(event.message)
             is ChatEvent.AutoModHeld -> {
@@ -5941,7 +6310,9 @@ class FerventioController(
                         .take(MAX_AUTOMOD_QUEUE_ITEMS)
                     state.copy(moderation = state.moderation.copy(autoModQueue = updated))
                 }
-                if (settingsStore.autoModNotificationsEnabled) onAutoModHeld(message)
+                if (settingsStore.notificationEnabled("automod_hold", message.channelId)) {
+                    onAutoModHeld(message)
+                }
             }
             is ChatEvent.AutoModUpdated -> {
                 val message = event.message
@@ -6002,20 +6373,13 @@ class FerventioController(
                 }
             }
             is ChatEvent.UserMessagesCleared -> {
+                val atMillis = System.currentTimeMillis()
                 mutableState.update { state ->
-                    val updated = state.messagesByChannel[event.channelId].orEmpty().map { message ->
-                        if (message.userId == event.userId) {
-                            message.copy(
-                                flags = message.flags.copy(isDeleted = true),
-                                moderation = ModerationState(
-                                    action = ModerationAction.TIMEOUT,
-                                    atMillis = System.currentTimeMillis(),
-                                ),
-                            )
-                        } else {
-                            message
-                        }
-                    }
+                    val updated = markLegacyUserMessagesDeleted(
+                        messages = state.messagesByChannel[event.channelId].orEmpty(),
+                        userId = event.userId,
+                        atMillis = atMillis,
+                    ) ?: return@update state
                     state.copy(messagesByChannel = state.messagesByChannel + (event.channelId to updated))
                 }
                 scope.launch {
@@ -6070,41 +6434,22 @@ class FerventioController(
                 }
                 emptyList()
             }
-        val channels = mutableState.value.channels
-        val remapped = stored.map { entry ->
-            val channel = channels.firstOrNull { candidate ->
-                candidate.id == entry.channelId || candidate.login.equals(entry.channelLogin, ignoreCase = true)
-            }
-            if (channel == null || channel.id == entry.channelId) entry else entry.copy(channelId = channel.id)
-        }
+        val remapped = remapLegacyAttentionEntries(
+            entries = stored,
+            channels = mutableState.value.channels,
+        )
+        val restoredSummary = summarizeLegacyAttention(
+            entries = remapped,
+            maxCount = MAX_ATTENTION_COUNT,
+        )
         mutableState.update { state ->
-            val restoredAttention = remapped.filterNot(AttentionEntry::isRead)
-                .groupBy(AttentionEntry::channelId)
-                .mapValues { (_, entries) ->
-                    ChannelAttention(
-                        unreadCount = entries.size.coerceAtMost(MAX_ATTENTION_COUNT),
-                        mentionCount = entries.size.coerceAtMost(MAX_ATTENTION_COUNT),
-                        firstUnreadMessageId = entries.minByOrNull(AttentionEntry::timestampMillis)?.messageId,
-                    )
-                }
-            val mergedChannelAttention = restoredAttention.entries.fold(state.channelAttention) { accumulated, item ->
-                val previous = accumulated[item.key]
-                val restored = item.value
-                accumulated + (
-                    item.key to if (previous == null) {
-                        restored
-                    } else {
-                        previous.copy(
-                            unreadCount = maxOf(previous.unreadCount, restored.unreadCount),
-                            mentionCount = maxOf(previous.mentionCount, restored.mentionCount),
-                            firstUnreadMessageId = previous.firstUnreadMessageId ?: restored.firstUnreadMessageId,
-                        )
-                    }
-                )
-            }
+            val mergedChannelAttention = mergeLegacyChannelAttention(
+                existing = state.channelAttention,
+                restored = restoredSummary.channelAttention,
+            )
             state.copy(
                 attentionEntries = remapped,
-                mentionUnreadCount = remapped.count { !it.isRead },
+                mentionUnreadCount = restoredSummary.unreadCount,
                 channelAttention = mergedChannelAttention,
             )
         }
@@ -6123,46 +6468,55 @@ class FerventioController(
             session = snapshot.session,
         )
         messageRuleEvaluator = evaluator
-        val messages = snapshot.messagesByChannel.values.flatten()
+        val messageBuckets = snapshot.messagesByChannel.values
+        val messageCount = messageBuckets.sumOf(List<ChatMessage>::size)
         val existingAttention = snapshot.attentionEntries
         messageRuleRebuildJob = scope.launch(Dispatchers.Default) {
-            val decorations = HashMap<String, MessageDecoration>(messages.size)
+            val decorations = HashMap<String, MessageDecoration>(messageCount)
             val generatedAttention = ArrayList<AttentionEntry>()
+            val evaluatedMessageIds = HashSet<String>(messageCount)
             val existingById = existingAttention.associateBy(AttentionEntry::messageId)
-            messages.forEachIndexed { index, message ->
-                if (index % RULE_REBUILD_CANCELLATION_INTERVAL == 0) {
-                    currentCoroutineContext().ensureActive()
-                }
-                if (message.isSystem) return@forEachIndexed
-                val decoration = evaluator.evaluate(message)
-                if (decoration.isHighlighted || decoration.isIgnored) decorations[message.id] = decoration
-                if (!decoration.isIgnored) {
-                    val directMention = evaluator.isDirectMention(message)
-                    val highlightMention = decoration.isHighlighted && decoration.addToMentions
-                    if ((directMention || highlightMention) && message.id !in existingById) {
-                        generatedAttention += AttentionEntry(
-                            messageId = message.id,
-                            channelId = message.channelId,
-                            channelLogin = message.channelLogin,
-                            authorId = message.userId,
-                            authorLogin = message.userLogin,
-                            authorDisplayName = message.userDisplayName,
-                            text = message.text,
-                            timestamp = message.timestamp,
-                            timestampMillis = message.timestampMillis,
-                            isRead = true,
-                            isDirectMention = directMention,
-                            isHighlight = highlightMention,
-                            highlightReasons = decoration.highlightReasons,
-                            highlightColorArgb = decoration.highlightColorArgb,
-                        )
+            var processedMessages = 0
+            messageBuckets.forEach { messages ->
+                messages.forEach { message ->
+                    if (processedMessages % RULE_REBUILD_CANCELLATION_INTERVAL == 0) {
+                        currentCoroutineContext().ensureActive()
+                    }
+                    processedMessages += 1
+                    evaluatedMessageIds += message.id
+                    if (!message.isSystem) {
+                        val decoration = evaluator.evaluate(message)
+                        if (decoration.isHighlighted || decoration.isIgnored) {
+                            decorations[message.id] = decoration
+                        }
+                        if (!decoration.isIgnored) {
+                            val directMention = evaluator.isDirectMention(message)
+                            val highlightMention = decoration.isHighlighted && decoration.addToMentions
+                            if ((directMention || highlightMention) && message.id !in existingById) {
+                                generatedAttention += AttentionEntry(
+                                    messageId = message.id,
+                                    channelId = message.channelId,
+                                    channelLogin = message.channelLogin,
+                                    authorId = message.userId,
+                                    authorLogin = message.userLogin,
+                                    authorDisplayName = message.userDisplayName,
+                                    text = message.text,
+                                    timestamp = message.timestamp,
+                                    timestampMillis = message.timestampMillis,
+                                    isRead = true,
+                                    isDirectMention = directMention,
+                                    isHighlight = highlightMention,
+                                    highlightReasons = decoration.highlightReasons,
+                                    highlightColorArgb = decoration.highlightColorArgb,
+                                )
+                            }
+                        }
                     }
                 }
             }
             if (generatedAttention.isNotEmpty()) {
                 runCatching { historyRepository.saveAttentionEntries(generatedAttention) }
             }
-            val evaluatedMessageIds = messages.asSequence().map(ChatMessage::id).toSet()
             mutableState.update { state ->
                 val combinedAttention = (generatedAttention + state.attentionEntries)
                     .distinctBy(AttentionEntry::messageId)
@@ -6281,8 +6635,12 @@ class FerventioController(
             val nextAttentionEntries = if (attentionEntry == null) {
                 state.attentionEntries
             } else {
-                (listOf(attentionEntry) + state.attentionEntries.filterNot { it.messageId == attentionEntry.messageId })
-                    .take(MAX_ATTENTION_ENTRIES)
+                prependLegacyDistinctByKeyBounded(
+                    source = state.attentionEntries,
+                    value = attentionEntry,
+                    maxSize = MAX_ATTENTION_ENTRIES,
+                    key = AttentionEntry::messageId,
+                )
             }
             val droppedMessageId = if (
                 optimisticIndex < 0 && existing.size >= memoryLimit && existing.isNotEmpty()
@@ -6292,7 +6650,9 @@ class FerventioController(
                 null
             }
             val retainedDecorations = droppedMessageId
-                ?.let(state.messageDecorationsById::minus)
+                ?.let { messageId ->
+                    removeLegacyMapKeyIfPresent(state.messageDecorationsById, messageId)
+                }
                 ?: state.messageDecorationsById
             state.copy(
                 messagesByChannel = state.messagesByChannel + (enrichedMessage.channelId to updated),
@@ -6306,11 +6666,15 @@ class FerventioController(
                     decoration.isHighlighted || decoration.isIgnored -> {
                         retainedDecorations + (enrichedMessage.id to decoration)
                     }
-                    enrichedMessage.id in retainedDecorations -> retainedDecorations - enrichedMessage.id
+                    enrichedMessage.id in retainedDecorations ->
+                        removeLegacyMapKeyIfPresent(retainedDecorations, enrichedMessage.id)
                     else -> retainedDecorations
                 },
                 rateLimitsByChannel = if (isOwnMessage) {
-                    state.rateLimitsByChannel - enrichedMessage.channelId
+                    removeLegacyMapKeyIfPresent(
+                        state.rateLimitsByChannel,
+                        enrichedMessage.channelId,
+                    )
                 } else {
                     state.rateLimitsByChannel
                 },
@@ -6355,15 +6719,7 @@ class FerventioController(
         existing: List<ChatMessage>,
         message: ChatMessage,
         limit: Int,
-    ): List<ChatMessage> {
-        if (limit <= 0) return emptyList()
-        val keepExisting = minOf(existing.size, limit - 1)
-        val fromIndex = existing.size - keepExisting
-        return ArrayList<ChatMessage>(keepExisting + 1).apply {
-            if (keepExisting > 0) addAll(existing.subList(fromIndex, existing.size))
-            add(message)
-        }
-    }
+    ): List<ChatMessage> = appendLegacyBounded(existing, message, limit)
 
     private fun refreshModeratedChannels(session: TwitchSession) {
         scope.launch {
@@ -6377,17 +6733,30 @@ class FerventioController(
                 }
             }
             val moderated = result.getOrNull()?.plus(session.userId) ?: return@launch
-            mutableState.update { state ->
-                val currentModerationChannel = state.moderation.selectedChannelId
-                    ?.takeIf(moderated::contains)
-                    ?: state.selectedChannelId?.takeIf(moderated::contains)
-                    ?: state.channels.firstOrNull { it.id in moderated }?.id
+            applyModeratedChannels(moderated)
+            mutableState.value.selectedChannelId?.let(::refreshPinnedMessage)
+        }
+    }
+
+    private fun applyModeratedChannels(moderated: Set<String>) {
+        mutableState.update { state ->
+            val currentModerationChannel = state.moderation.selectedChannelId
+                ?.takeIf(moderated::contains)
+                ?: state.selectedChannelId?.takeIf(moderated::contains)
+                ?: state.channels.firstOrNull { it.id in moderated }?.id
+            if (
+                state.moderatedChannelIds == moderated &&
+                state.moderation.selectedChannelId == currentModerationChannel
+            ) {
+                state
+            } else {
                 state.copy(
                     moderatedChannelIds = moderated,
-                    moderation = state.moderation.copy(selectedChannelId = currentModerationChannel),
+                    moderation = state.moderation.copy(
+                        selectedChannelId = currentModerationChannel,
+                    ),
                 )
             }
-            mutableState.value.selectedChannelId?.let(::refreshPinnedMessage)
         }
     }
 
@@ -6439,20 +6808,13 @@ class FerventioController(
     }
 
     private fun markMessageDeleted(channelId: String, messageId: String) {
+        val atMillis = System.currentTimeMillis()
         mutableState.update { state ->
-            val updated = state.messagesByChannel[channelId].orEmpty().map { message ->
-                if (message.id == messageId) {
-                    message.copy(
-                        flags = message.flags.copy(isDeleted = true),
-                        moderation = ModerationState(
-                            action = ModerationAction.DELETE,
-                            atMillis = System.currentTimeMillis(),
-                        ),
-                    )
-                } else {
-                    message
-                }
-            }
+            val updated = markLegacyMessageDeleted(
+                messages = state.messagesByChannel[channelId].orEmpty(),
+                messageId = messageId,
+                atMillis = atMillis,
+            ) ?: return@update state
             state.copy(messagesByChannel = state.messagesByChannel + (channelId to updated))
         }
         scope.launch { runCatching { historyRepository.markMessageDeleted(channelId, messageId) } }
@@ -6528,11 +6890,11 @@ class FerventioController(
         val result = state.messagesByChannel.toMutableMap()
         channelIds.forEach { channelId ->
             val messages = state.messagesByChannel[channelId] ?: return@forEach
-            val updated = messages.map { message -> enrichThirdPartyEmotes(message, state) }
-            if (updated != messages) {
-                result[channelId] = updated
-                changed = true
-            }
+            val updated = mapLegacyListIfChanged(messages) { message ->
+                enrichThirdPartyEmotes(message, state)
+            } ?: return@forEach
+            result[channelId] = updated
+            changed = true
         }
         return if (changed) result else state.messagesByChannel
     }
@@ -6541,7 +6903,7 @@ class FerventioController(
         message: ChatMessage,
         state: FerventioUiState,
     ): ChatMessage {
-        val baseMessage = removeThirdPartyEmoteFragments(message)
+        val baseMessage = stripLegacyThirdPartyEmoteFragments(message)
         val emotes = parsedThirdPartyEmotesByChannel[message.channelId] ?: run {
             rebuildThirdPartyEmoteCache(state, listOf(message.channelId))
             parsedThirdPartyEmotesByChannel[message.channelId].orEmpty()
@@ -6549,39 +6911,6 @@ class FerventioController(
         return ThirdPartyEmoteParser.enrich(baseMessage, emotes)
     }
 
-    private fun removeThirdPartyEmoteFragments(message: ChatMessage): ChatMessage {
-        var changed = false
-        var previousSourceWasEmote = false
-        val fragments = buildList {
-            fun appendText(value: String) {
-                if (value.isEmpty()) return
-                val previous = lastOrNull() as? ChatFragment.Text
-                if (previous == null) add(ChatFragment.Text(value))
-                else this[lastIndex] = previous.copy(text = previous.text + value)
-            }
-
-            message.fragments.forEach { fragment ->
-                if (fragment is ChatFragment.ThirdPartyEmote) {
-                    changed = true
-                    // Parsing a composite removes the separator before the zero-width layer.
-                    // Restore one while rebuilding the source text, otherwise a future catalog
-                    // refresh would see "BaseOverlay" and could no longer resolve either token.
-                    if (fragment.zeroWidth && previousSourceWasEmote) appendText(" ")
-                    appendText(fragment.text)
-                    previousSourceWasEmote = true
-                } else {
-                    add(fragment)
-                    previousSourceWasEmote = when (fragment) {
-                        is ChatFragment.TwitchEmote,
-                        is ChatFragment.Gif,
-                        is ChatFragment.Cheermote -> true
-                        else -> false
-                    }
-                }
-            }
-        }
-        return if (changed) message.copy(fragments = fragments) else message
-    }
 
     private fun formatBytes(bytes: Long): String {
         if (bytes <= 0L) return "кэш изображений"
@@ -6648,13 +6977,21 @@ class FerventioController(
             val updated = transform(state.workspaceLayout).normalized(knownIds)
             val selectedFromLayout = updated.activeTab?.activeSplit?.channelId
                 ?.takeIf(knownIds::contains)
+            val nextSelectedChannelId =
+                selectedFromLayout ?: state.selectedChannelId?.takeIf(knownIds::contains)
+            if (
+                updated == state.workspaceLayout &&
+                nextSelectedChannelId == state.selectedChannelId
+            ) {
+                return@update state
+            }
             settingsStore.workspaceLayoutJson = WorkspaceLayoutCodec.encode(updated)
             selectedFromLayout
                 ?.let { selectedId -> state.channels.firstOrNull { it.id == selectedId }?.login }
                 ?.let { login -> settingsStore.selectedChannelLogin = login }
             state.copy(
                 workspaceLayout = updated,
-                selectedChannelId = selectedFromLayout ?: state.selectedChannelId?.takeIf(knownIds::contains),
+                selectedChannelId = nextSelectedChannelId,
             )
         }
     }
@@ -6859,6 +7196,7 @@ class FerventioController(
         userCardShowBanAction = settingsStore.userCardShowBanAction,
         userCardModerationActionOrder = settingsStore.userCardModerationActionOrder,
         replyNotificationsEnabled = settingsStore.replyNotificationsEnabled,
+        notificationPreferences = settingsStore.notificationPreferences,
         highlightRules = settingsStore.highlightRules,
         ignoreRules = settingsStore.ignoreRules,
         savedMessageFilters = settingsStore.savedMessageFilters,
@@ -6950,6 +7288,8 @@ class FerventioController(
         const val SETTINGS_SYNC_DEBOUNCE_MILLIS = 1_500L
         const val MAX_USER_CARD_TIMEOUT_PRESETS = 10
         const val MAX_AUTOMOD_QUEUE_ITEMS = 200
+        const val AUTOMOD_EXPIRY_SWEEP_INTERVAL_MILLIS = 30_000L
+        const val AUTOMOD_STALE_HOLD_GRACE_MILLIS = 24 * 60 * 60 * 1_000L
         const val MAX_MODERATION_HISTORY_ITEMS = 300
         const val MAX_OBSERVED_CHATTERS = 1_000
         const val OBSERVED_CHATTERS_NOTICE =
@@ -6962,6 +7302,7 @@ class FerventioController(
         const val TOKEN_LEASE_RETRY_SECONDS = 15L
         const val ANONYMOUS_CHANNEL_ID_PREFIX = "irc:"
         const val EVENTSUB_SETUP_CONCURRENCY = 4
+        const val CHAT_ASSET_CHANNEL_CONCURRENCY = 3
         const val EVENT_QUEUE_CAPACITY = 512
         const val EVENTSUB_ACTIVITY_PUBLISH_INTERVAL_MILLIS = 1_000L
         const val SCROLL_SAVE_DEBOUNCE_MILLIS = 250L
@@ -7009,11 +7350,6 @@ private data class AnonymousBadgeSnapshot(
     val channelAssets: Map<String, Map<String, ChatBadgeAsset>>,
     val globalFfzBadges: Map<String, List<ChatBadgeAsset>>?,
     val channelFfzBadges: Map<String, Map<String, List<ChatBadgeAsset>>>,
-)
-
-private data class HistoryWriteRequest(
-    val message: ChatMessage,
-    val attention: AttentionEntry? = null,
 )
 
 private fun secureStateEquals(left: String, right: String): Boolean {

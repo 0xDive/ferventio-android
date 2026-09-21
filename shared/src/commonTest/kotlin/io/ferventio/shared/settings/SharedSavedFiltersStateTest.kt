@@ -5,6 +5,7 @@ import io.ferventio.app.domain.SavedMessageFilter
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class SharedSavedFiltersStateTest {
     @Test
@@ -33,6 +34,25 @@ class SharedSavedFiltersStateTest {
         assertEquals(1, state.filters.size)
         assertEquals("Updated", state.filters.single().name)
         assertEquals("badge.vip == true", state.filters.single().expression)
+    }
+
+    @Test
+    fun identicalUpsertRestoreAndMissingDeleteReuseFilterList() {
+        val filter = SavedMessageFilter(
+            id = "filter-1",
+            name = "First",
+            expression = "text contains \"one\"",
+        )
+        val state = SharedSavedFiltersStateHolder(
+            SharedSavedFiltersSnapshot(filters = listOf(filter)),
+        )
+        val before = state.filters
+
+        state.upsert(filter)
+        state.restore(state.snapshot)
+        state.delete("missing")
+
+        assertTrue(state.filters === before)
     }
 
     @Test

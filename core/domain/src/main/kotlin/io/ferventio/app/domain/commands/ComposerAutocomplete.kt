@@ -33,6 +33,8 @@ object ComposerAutocomplete {
         favoriteEmoteKeys: Set<String>,
         currentUserId: String?,
         userIndex: List<ComposerSuggestion.User>? = null,
+        emoteSearchIndex: EmoteCatalogSearchIndex? = null,
+        emoteUsageRanking: EmoteUsageRanking? = null,
         limit: Int = 8,
     ): List<ComposerSuggestion> {
         val token = currentToken(input)
@@ -50,13 +52,27 @@ object ComposerAutocomplete {
 
             token.startsWith("/") -> emptyList()
 
-            token.length >= 2 -> EmoteCatalogRanking.suggestions(
-                input = input,
-                catalog = catalog,
-                recentEmoteKeys = recentEmoteKeys,
-                favoriteEmoteKeys = favoriteEmoteKeys,
-                limit = limit,
-            ).map(ComposerSuggestion::Emote)
+            token.length >= 2 -> {
+                val emotes = if (emoteSearchIndex == null) {
+                    EmoteCatalogRanking.suggestions(
+                        input = input,
+                        catalog = catalog,
+                        recentEmoteKeys = recentEmoteKeys,
+                        favoriteEmoteKeys = favoriteEmoteKeys,
+                        limit = limit,
+                    )
+                } else {
+                    EmoteCatalogRanking.search(
+                        query = token,
+                        index = emoteSearchIndex,
+                        recentEmoteKeys = recentEmoteKeys,
+                        favoriteEmoteKeys = favoriteEmoteKeys,
+                        limit = limit,
+                        usageRanking = emoteUsageRanking,
+                    )
+                }
+                emotes.map(ComposerSuggestion::Emote)
+            }
 
             else -> emptyList()
         }

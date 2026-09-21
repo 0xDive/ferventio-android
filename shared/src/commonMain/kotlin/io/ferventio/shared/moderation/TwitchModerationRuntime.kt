@@ -104,20 +104,29 @@ class TwitchModerationRuntime(
         authentication: StoredAuthentication,
         messageId: String,
         approve: Boolean,
-    ): Boolean = executeMutation {
-        gateway.decideAutoModMessage(
-            authentication = authentication,
-            messageId = messageId,
-            approve = approve,
-        )
-        val session = authentication.accessLease?.session
+    ): Boolean = try {
+        executeMutation {
+            gateway.decideAutoModMessage(
+                authentication = authentication,
+                messageId = messageId,
+                approve = approve,
+            )
+            val session = authentication.accessLease?.session
+            chatState.markAutoModDecision(
+                messageId = messageId,
+                status = if (approve) AutoModMessageStatus.APPROVED else AutoModMessageStatus.DENIED,
+                moderatorId = session?.userId,
+                moderatorLogin = session?.login,
+                moderatorName = session?.login,
+            )
+        }
+    } catch (error: TwitchModerationMutationException) {
+        if (error.statusCode != AUTOMOD_MESSAGE_NOT_FOUND_CODE) throw error
         chatState.markAutoModDecision(
             messageId = messageId,
-            status = if (approve) AutoModMessageStatus.APPROVED else AutoModMessageStatus.DENIED,
-            moderatorId = session?.userId,
-            moderatorLogin = session?.login,
-            moderatorName = session?.login,
+            status = AutoModMessageStatus.EXPIRED,
         )
+        false
     }
 
     private suspend fun <T> executeMutation(block: suspend () -> T): T = try {
@@ -134,5 +143,6 @@ class TwitchModerationRuntime(
 
     private companion object {
         const val AUTHENTICATION_FAILURE_CODE = 401
+        const val AUTOMOD_MESSAGE_NOT_FOUND_CODE = 404
     }
 }

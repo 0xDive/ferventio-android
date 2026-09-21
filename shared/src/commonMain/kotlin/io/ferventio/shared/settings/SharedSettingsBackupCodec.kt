@@ -24,7 +24,7 @@ import kotlinx.serialization.json.jsonObject
 @Serializable
 internal data class SharedSettingsBackupDocument(
     val format: String = SharedSettingsBackupCodec.BACKUP_FORMAT,
-    val formatVersion: Int = SharedSettingsBackupCodec.BACKUP_FORMAT_VERSION,
+    val formatVersion: Int = 2,
     val createdAt: String,
     val appVersion: String,
     val contentHash: String,
@@ -68,6 +68,7 @@ internal data class SharedSettingsBackupSettings(
     val showComposerEmoteImages: Boolean,
     val replyNotificationsEnabled: Boolean,
     val autoModNotificationsEnabled: Boolean,
+    val notificationPreferences: JsonElement = JsonObject(emptyMap()),
     val recentMessagesEnabled: Boolean = false,
     val localHistoryEnabled: Boolean,
     val localHistoryLimit: Int,
@@ -105,7 +106,7 @@ internal data class SharedSettingsBackupDecodeResult(
 
 internal object SharedSettingsBackupCodec {
     const val BACKUP_FORMAT = "ferventio-settings-backup"
-    const val BACKUP_FORMAT_VERSION = 2
+    const val BACKUP_FORMAT_VERSION = 3
 
     @OptIn(ExperimentalSerializationApi::class)
     private val compactJson = Json {
@@ -115,6 +116,7 @@ internal object SharedSettingsBackupCodec {
     }
     private val channelLoginPattern = Regex("[A-Za-z0-9_]{1,25}")
     private val v1RepeatCollapseField = Regex(",\"repeatCollapseEnabled\":(?:true|false)")
+    private val legacyNotificationPreferencesField = Regex(",\\\"notificationPreferences\\\":\\{\\}")
 
     fun decode(raw: String): SharedSettingsBackupDecodeResult {
         SharedSettingsBackupInputGuard.requireWithinLimits(raw)
@@ -207,6 +209,9 @@ internal object SharedSettingsBackupCodec {
                 showComposerEmoteImages = normalizedPreferences.showComposerEmoteImages,
                 replyNotificationsEnabled = normalizedPreferences.replyNotificationsEnabled,
                 autoModNotificationsEnabled = normalizedPreferences.autoModNotificationsEnabled,
+                notificationPreferences = NotificationPreferencesCodec.encodeElement(
+                    normalizedPreferences.notificationPreferences,
+                ),
                 recentMessagesEnabled = normalizedPreferences.recentMessagesEnabled,
                 localHistoryEnabled = normalizedPreferences.localHistoryEnabled,
                 localHistoryLimit = normalizedPreferences.localHistoryLimit,
@@ -293,10 +298,12 @@ internal object SharedSettingsBackupCodec {
             "Unsupported Ferventio settings backup version: $formatVersion"
         }
         val canonicalText = compactJson.encodeToString(content).let { encoded ->
-            if (formatVersion == 1) {
-                encoded.replace(v1RepeatCollapseField, "")
-            } else {
-                encoded
+            when (formatVersion) {
+                1 -> encoded
+                    .replace(v1RepeatCollapseField, "")
+                    .replace(legacyNotificationPreferencesField, "")
+                2 -> encoded.replace(legacyNotificationPreferencesField, "")
+                else -> encoded
             }
         }
         return sha256Hex(canonicalText)

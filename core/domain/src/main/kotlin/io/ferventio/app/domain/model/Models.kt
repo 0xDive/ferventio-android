@@ -560,6 +560,7 @@ data class FerventioUiState(
     val userCardModerationActionOrder: List<String> = emptyList(),
     val replyComposerTargets: Map<String, String> = emptyMap(),
     val replyNotificationsEnabled: Boolean = true,
+    val notificationPreferences: NotificationPreferences = NotificationPreferences(),
     val rateLimitsByChannel: Map<String, ChatRateLimitState> = emptyMap(),
     val pinnedMessagesByChannel: Map<String, PinnedChatMessage> = emptyMap(),
     val emoteLiveProviders: Set<String> = emptySet(),

@@ -36,6 +36,37 @@ class SharedLocalUiPreferencesStateTest {
     }
 
     @Test
+    fun identicalUpdatesDoNotWriteLocalStoreAgain() {
+        val store = RecordingStore()
+        val state = SharedLocalUiPreferencesStateHolder(store)
+
+        state.setDraft("channel-1", "hello")
+        val writesAfterFirstDraft = store.saveCount
+        state.setDraft("channel-1", "hello")
+
+        state.recordSentMessage("channel-1", "message")
+        val writesAfterFirstMessage = store.saveCount
+        state.recordSentMessage("channel-1", "message")
+
+        assertEquals(1, writesAfterFirstDraft)
+        assertEquals(2, writesAfterFirstMessage)
+        assertEquals(2, store.saveCount)
+    }
+
+    @Test
+    fun repeatedTopSentMessageDoesNotWriteStoreAgain() {
+        val store = RecordingStore()
+        val state = SharedLocalUiPreferencesStateHolder(store)
+
+        state.recordSentMessage("channel-1", "same")
+        val writes = store.saveCount
+        state.recordSentMessage("channel-1", "same")
+
+        assertEquals(writes, store.saveCount)
+        assertEquals(listOf("same"), state.sentMessageHistory("channel-1"))
+    }
+
+    @Test
     fun composerDraftsAndHistoryPersistLocally() {
         val store = RecordingStore()
         val state = SharedLocalUiPreferencesStateHolder(store)
@@ -56,11 +87,14 @@ class SharedLocalUiPreferencesStateTest {
 
     private class RecordingStore : SharedLocalUiPreferencesStore {
         private var value = SharedLocalUiPreferences()
+        var saveCount: Int = 0
+            private set
 
         override fun load(): SharedLocalUiPreferences = value
 
         override fun save(preferences: SharedLocalUiPreferences) {
             value = preferences
+            saveCount += 1
         }
     }
 }

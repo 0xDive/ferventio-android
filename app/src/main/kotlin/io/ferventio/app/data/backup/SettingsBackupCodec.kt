@@ -14,6 +14,7 @@ import java.time.Instant
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
+import io.ferventio.shared.settings.NotificationPreferencesCodec
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -24,7 +25,7 @@ import kotlinx.serialization.json.jsonObject
 @Serializable
 data class SettingsBackupDocument(
     val format: String = BACKUP_FORMAT,
-    val formatVersion: Int = BACKUP_FORMAT_VERSION,
+    val formatVersion: Int = 2,
     val createdAt: String,
     val appVersion: String,
     val contentHash: String,
@@ -68,6 +69,7 @@ data class BackupSettings(
     val showComposerEmoteImages: Boolean,
     val replyNotificationsEnabled: Boolean,
     val autoModNotificationsEnabled: Boolean,
+    val notificationPreferences: JsonElement = JsonObject(emptyMap()),
     val recentMessagesEnabled: Boolean = false,
     val localHistoryEnabled: Boolean,
     val localHistoryLimit: Int,
@@ -136,6 +138,9 @@ object SettingsBackupCodec {
                 showComposerEmoteImages = store.showComposerEmoteImages,
                 replyNotificationsEnabled = store.replyNotificationsEnabled,
                 autoModNotificationsEnabled = store.autoModNotificationsEnabled,
+                notificationPreferences = NotificationPreferencesCodec.encodeElement(
+                    store.notificationPreferences,
+                ),
                 localHistoryEnabled = store.localHistoryEnabled,
                 localHistoryLimit = store.localHistoryLimit,
                 localHistoryRetentionDays = store.localHistoryRetentionDays,
@@ -161,6 +166,7 @@ object SettingsBackupCodec {
             favouriteEmotes = store.favoriteEmoteKeys.sorted(),
         )
         return SettingsBackupDocument(
+            formatVersion = BACKUP_FORMAT_VERSION,
             createdAt = createdAt.toString(),
             appVersion = appVersion,
             contentHash = contentHash(content),
@@ -231,6 +237,9 @@ object SettingsBackupCodec {
             store.showComposerEmoteImages = settings.showComposerEmoteImages
             store.replyNotificationsEnabled = settings.replyNotificationsEnabled
             store.autoModNotificationsEnabled = settings.autoModNotificationsEnabled
+            store.notificationPreferences = NotificationPreferencesCodec.decodeElement(
+                settings.notificationPreferences,
+            )
             store.localHistoryEnabled = settings.localHistoryEnabled
             store.localHistoryLimit = settings.localHistoryLimit
             store.localHistoryRetentionDays = settings.localHistoryRetentionDays
@@ -286,10 +295,12 @@ object SettingsBackupCodec {
     internal fun contentHashForVersion(content: SettingsBackupContent, formatVersion: Int): String {
         require(formatVersion in 1..BACKUP_FORMAT_VERSION) { "Неподдерживаемая версия резервной копии: $formatVersion" }
         val canonicalText = compactJson.encodeToString(content).let { encoded ->
-            if (formatVersion == 1) {
-                encoded.replace(Regex(",\"repeatCollapseEnabled\":(?:true|false)"), "")
-            } else {
-                encoded
+            when (formatVersion) {
+                1 -> encoded
+                    .replace(Regex(",\\\"repeatCollapseEnabled\\\":(?:true|false)"), "")
+                    .replace(Regex(",\\\"notificationPreferences\\\":\\{\\}"), "")
+                2 -> encoded.replace(Regex(",\\\"notificationPreferences\\\":\\{\\}"), "")
+                else -> encoded
             }
         }
         return MessageDigest.getInstance("SHA-256")
@@ -361,4 +372,4 @@ object SettingsBackupCodec {
 }
 
 const val BACKUP_FORMAT = "ferventio-settings-backup"
-const val BACKUP_FORMAT_VERSION = 2
+const val BACKUP_FORMAT_VERSION = 3

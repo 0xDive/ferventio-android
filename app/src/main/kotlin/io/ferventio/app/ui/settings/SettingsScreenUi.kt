@@ -224,6 +224,7 @@ import io.ferventio.app.domain.UserCardUiState
 import io.ferventio.app.push.PushCoordinator
 import io.ferventio.app.push.PushStatus
 import io.ferventio.app.push.PushUiState
+import io.ferventio.shared.chat.TwitchEventSubTransportRecoverySnapshot
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -236,6 +237,12 @@ import coil3.compose.AsyncImagePainter
 import coil3.compose.rememberAsyncImagePainter
 import androidx.core.graphics.toColorInt
 
+
+private fun compactEventSubSessionId(value: String): String {
+    val normalized = value.trim()
+    if (normalized.length <= 16) return normalized
+    return normalized.take(8) + "…" + normalized.takeLast(6)
+}
 
 internal enum class SettingsPage {
     ROOT,
@@ -308,6 +315,15 @@ internal fun SettingsScreen(
     var confirmClearCrashReports by rememberSaveable { mutableStateOf(false) }
     var confirmRevokeDevice by rememberSaveable { mutableStateOf(false) }
     var confirmRevokeAllSessions by rememberSaveable { mutableStateOf(false) }
+    var confirmEventSubTransportCleanup by rememberSaveable { mutableStateOf(false) }
+    var eventSubTransportSnapshot by remember {
+        mutableStateOf<TwitchEventSubTransportRecoverySnapshot?>(null)
+    }
+    var eventSubTransportBusy by remember { mutableStateOf(false) }
+    var eventSubTransportError by remember { mutableStateOf<String?>(null) }
+    var eventSubTransportCleanupFeedback by remember {
+        mutableStateOf<Pair<Int, Int>?>(null)
+    }
     var userCardTimeoutInput by rememberSaveable { mutableStateOf("") }
     var languageQuery by rememberSaveable { mutableStateOf("") }
     val hideKeyboard = {
@@ -317,6 +333,85 @@ internal fun SettingsScreen(
     val strings = rememberAppStrings(state.appLanguage)
     val resourceStrings = rememberAppResourceStrings(state.appLanguage)
     val diagnosticsCopiedText = localizedString("Диагностика скопирована")
+
+    fun refreshEventSubTransportSessions() {
+        if (eventSubTransportBusy) return
+        eventSubTransportBusy = true
+        eventSubTransportError = null
+        eventSubTransportCleanupFeedback = null
+        uiScope.launch {
+            try {
+                eventSubTransportSnapshot = controller.inspectEventSubTransportSessions()
+            } catch (error: Throwable) {
+                eventSubTransportError = error.message
+                    ?.trim()
+                    ?.takeIf(String::isNotEmpty)
+                    ?: "Не удалось получить EventSub-сессии"
+            } finally {
+                eventSubTransportBusy = false
+            }
+        }
+    }
+
+    fun clearStaleEventSubTransportSessions() {
+        if (eventSubTransportBusy) return
+        confirmEventSubTransportCleanup = false
+        eventSubTransportBusy = true
+        eventSubTransportError = null
+        eventSubTransportCleanupFeedback = null
+        uiScope.launch {
+            try {
+                val result = controller.clearStaleEventSubTransportSessions()
+                eventSubTransportCleanupFeedback =
+                    result.deletedSubscriptionCount to result.targetedSessionIds.size
+                eventSubTransportSnapshot = controller.inspectEventSubTransportSessions()
+            } catch (error: Throwable) {
+                eventSubTransportError = error.message
+                    ?.trim()
+                    ?.takeIf(String::isNotEmpty)
+                    ?: "Не удалось освободить EventSub-слоты"
+            } finally {
+                eventSubTransportBusy = false
+            }
+        }
+    }
+
+    if (confirmEventSubTransportCleanup) {
+        val currentSessionId = controller.currentEventSubSessionIdForDiagnostics()
+        val currentPresent = currentSessionId != null &&
+            eventSubTransportSnapshot?.sessions.orEmpty().any { it.sessionId == currentSessionId }
+        AlertDialog(
+            onDismissRequest = {
+                if (!eventSubTransportBusy) confirmEventSubTransportCleanup = false
+            },
+            title = { LocalizedText("Освободить WebSocket-слоты EventSub?") },
+            text = {
+                LocalizedText(
+                    if (currentPresent) {
+                        "Будут удалены EventSub-подписки других WebSocket-сессий. Другие запущенные экземпляры Ferventio могут потерять EventSub до переподключения."
+                    } else {
+                        "Текущая WebSocket-сессия не имеет активных подписок. Будут удалены все активные WebSocket EventSub-подписки этого Twitch-аккаунта и Client ID."
+                    },
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !eventSubTransportBusy,
+                    onClick = ::clearStaleEventSubTransportSessions,
+                ) {
+                    LocalizedText("Освободить слоты", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !eventSubTransportBusy,
+                    onClick = { confirmEventSubTransportCleanup = false },
+                ) {
+                    LocalizedText("Отмена")
+                }
+            },
+        )
+    }
 
     LaunchedEffect(settingsListDragged) {
         if (settingsListDragged) hideKeyboard()
@@ -1227,76 +1322,13 @@ internal fun SettingsScreen(
                     }
 
                     SettingsPage.NOTIFICATIONS -> item {
-                        SettingsSection("Push-уведомления") {
-                            SettingsSwitchRow(
-                                title = "Уведомлять об ответах",
-                                description = "Показывать уведомление, когда входящее сообщение является reply на ваше сообщение.",
-                                checked = state.replyNotificationsEnabled,
-                                onCheckedChange = controller::setReplyNotificationsEnabled,
-                            )
-                            LocalizedText(pushStatusLabel(pushState), color = pushStatusColor(pushState.status))
-                            LocalizedText(
-                                "Уведомления подключаются автоматически после входа в Twitch. Вводить адрес сервера или отдельно включать push не нужно.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            OutlinedButton(
-                                onClick = {
-                                    context.startActivity(
-                                        android.content.Intent(
-                                            android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS,
-                                        ).apply {
-                                            putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
-                                            addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
-                                        },
-                                    )
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Icon(Icons.Default.Notifications, contentDescription = null)
-                                Spacer(Modifier.width(6.dp))
-                                LocalizedText("Настройки уведомлений Android")
-                            }
-                            if (pushState.foregroundServiceRequired) {
-                                LocalizedText(
-                                    "FOSS-сборка получает уведомления самостоятельно через постоянное защищённое соединение. Android будет показывать служебное уведомление, пока автономный push включён.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                                pushState.lastConnectedAtMillis?.let { timestamp ->
-                                    LocalizedText("Последнее подключение: ${formatPushTime(timestamp)}")
-                                }
-                                pushState.lastHeartbeatAtMillis?.let { timestamp ->
-                                    LocalizedText("Последний heartbeat: ${formatPushTime(timestamp)}")
-                                }
-                                if (pushState.reconnectAttempt > 0) {
-                                    LocalizedText("Попытка переподключения: ${pushState.reconnectAttempt}")
-                                }
-                                OutlinedButton(
-                                    onClick = {
-                                        context.startActivity(
-                                            android.content.Intent(
-                                                android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS,
-                                            ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK),
-                                        )
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                ) { LocalizedText("Настройки батареи") }
-                            }
-                            if (pushState.enabled) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                ) {
-                                    OutlinedButton(onClick = onReconnectPush, modifier = Modifier.weight(1f)) {
-                                        LocalizedText("Переподключить")
-                                    }
-                                    OutlinedButton(onClick = onTestPush, modifier = Modifier.weight(1f)) {
-                                        LocalizedText("Отправить тест")
-                                    }
-                                }
-                            }
-                        }
+                        NotificationSettingsContent(
+                            state = state,
+                            controller = controller,
+                            pushState = pushState,
+                            onTestPush = onTestPush,
+                            onReconnectPush = onReconnectPush,
+                        )
                     }
 
                     SettingsPage.ADVANCED -> {
@@ -1327,6 +1359,75 @@ internal fun SettingsScreen(
                                         )
                                     }
                                     state.lastConnectionError?.let { LocalizedText(it, color = MaterialTheme.colorScheme.error) }
+                                    controller.currentEventSubSessionIdForDiagnostics()?.let { sessionId ->
+                                        VerbatimText(
+                                            "Session: " + compactEventSubSessionId(sessionId),
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                    }
+                                    eventSubTransportSnapshot?.let { snapshot ->
+                                        LocalizedText(
+                                            "Активные WebSocket-сессии: ${snapshot.sessionCount}",
+                                            color = if (snapshot.sessionCount >= 3) {
+                                                MaterialTheme.colorScheme.error
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurfaceVariant
+                                            },
+                                        )
+                                        LocalizedText(
+                                            "Активные EventSub-подписки: ${snapshot.subscriptionCount}",
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                        snapshot.sessions.forEach { session ->
+                                            VerbatimText(
+                                                compactEventSubSessionId(session.sessionId) +
+                                                    " · " + session.subscriptionCount + " subs",
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                style = MaterialTheme.typography.bodySmall,
+                                            )
+                                        }
+                                    }
+                                    if (eventSubTransportBusy) {
+                                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
+                                    }
+                                    eventSubTransportError?.let { error ->
+                                        LocalizedText(error, color = MaterialTheme.colorScheme.error)
+                                    }
+                                    eventSubTransportCleanupFeedback?.let { (subscriptions, sessions) ->
+                                        LocalizedText(
+                                            "Удалено подписок: $subscriptions; WebSocket-сессий: $sessions",
+                                            color = MaterialTheme.colorScheme.primary,
+                                        )
+                                    }
+                                    OutlinedButton(
+                                        enabled = !eventSubTransportBusy,
+                                        onClick = ::refreshEventSubTransportSessions,
+                                        modifier = Modifier.fillMaxWidth(),
+                                    ) {
+                                        LocalizedText(
+                                            if (eventSubTransportSnapshot == null) {
+                                                "Проверить EventSub-сессии"
+                                            } else {
+                                                "Обновить EventSub-сессии"
+                                            },
+                                        )
+                                    }
+                                    if (eventSubTransportSnapshot?.sessions.orEmpty().any { session ->
+                                            session.sessionId != controller.currentEventSubSessionIdForDiagnostics()
+                                        }
+                                    ) {
+                                        OutlinedButton(
+                                            enabled = !eventSubTransportBusy,
+                                            onClick = { confirmEventSubTransportCleanup = true },
+                                            modifier = Modifier.fillMaxWidth(),
+                                        ) {
+                                            LocalizedText(
+                                                "Освободить старые EventSub-слоты",
+                                                color = MaterialTheme.colorScheme.error,
+                                            )
+                                        }
+                                    }
                                     TextButton(onClick = controller::reconnectEventSub) {
                                         Icon(Icons.Default.Refresh, contentDescription = null)
                                         Spacer(Modifier.width(6.dp))

@@ -16,6 +16,31 @@ internal data class UserCardModerationAvailability(
     val canDeleteSourceMessage: Boolean,
 )
 
+internal fun mergeUserCardRecentMessagesWithLive(
+    cachedMessages: List<ChatMessage>,
+    liveMessages: List<ChatMessage>,
+): List<ChatMessage> {
+    if (cachedMessages.isEmpty() || liveMessages.isEmpty()) return cachedMessages
+
+    val positionsById = HashMap<String, Int>(cachedMessages.size * 2)
+    cachedMessages.forEachIndexed { index, message ->
+        if (message.id.isNotBlank()) positionsById[message.id] = index
+    }
+    if (positionsById.isEmpty()) return cachedMessages
+
+    var updated: MutableList<ChatMessage>? = null
+    for (index in liveMessages.indices.reversed()) {
+        val live = liveMessages[index]
+        val cachedIndex = positionsById.remove(live.id) ?: continue
+        if (cachedMessages[cachedIndex] != live) {
+            val target = updated ?: cachedMessages.toMutableList().also { updated = it }
+            target[cachedIndex] = live
+        }
+        if (positionsById.isEmpty()) break
+    }
+    return updated ?: cachedMessages
+}
+
 internal fun userCardModerationAvailability(
     data: UserCardData,
     authenticatedUserId: String?,

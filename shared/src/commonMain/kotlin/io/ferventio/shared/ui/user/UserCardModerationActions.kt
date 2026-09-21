@@ -22,7 +22,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -59,7 +58,6 @@ import io.ferventio.shared.generated.resources.user_card_warn_reason_hint
 import io.ferventio.shared.generated.resources.user_card_warn_title
 import io.ferventio.shared.runtime.LocalFerventioRuntimeState
 import io.ferventio.shared.settings.UserCardSettingsEditor
-import io.ferventio.shared.user.TwitchUserCardClient
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 
@@ -88,10 +86,7 @@ internal fun UserCardModerationActions(
     )
     if (!availability.canModerateUser && !availability.canDeleteSourceMessage) return
 
-    val banStateClient = remember { TwitchUserCardClient() }
-    DisposableEffect(banStateClient) {
-        onDispose { banStateClient.close() }
-    }
+    val userCardRuntime = runtime.userCards
     var remotePermanentBan by remember(data.channelId, data.user.id) {
         mutableStateOf<Boolean?>(null)
     }
@@ -104,7 +99,7 @@ internal fun UserCardModerationActions(
         remotePermanentBan = null
         if (authentication != null && availability.canModerateUser) {
             remotePermanentBan = runCatching {
-                banStateClient.loadPermanentBanState(
+                userCardRuntime.loadPermanentBanState(
                     authentication = authentication,
                     broadcasterId = data.channelId,
                     targetUserId = data.user.id,
@@ -394,6 +389,12 @@ internal fun UserCardModerationActions(
                                             broadcasterId = data.channelId,
                                             targetUserId = data.user.id,
                                         )
+                                        userCardRuntime.updatePermanentBanState(
+                                            authentication = currentAuthentication,
+                                            broadcasterId = data.channelId,
+                                            targetUserId = data.user.id,
+                                            isPermanentlyBanned = true,
+                                        )
                                         permanentBanOverride = true
                                     }
                                     UserCardPendingModerationAction.Unban -> {
@@ -401,6 +402,12 @@ internal fun UserCardModerationActions(
                                             authentication = currentAuthentication,
                                             broadcasterId = data.channelId,
                                             targetUserId = data.user.id,
+                                        )
+                                        userCardRuntime.updatePermanentBanState(
+                                            authentication = currentAuthentication,
+                                            broadcasterId = data.channelId,
+                                            targetUserId = data.user.id,
+                                            isPermanentlyBanned = false,
                                         )
                                         permanentBanOverride = false
                                     }

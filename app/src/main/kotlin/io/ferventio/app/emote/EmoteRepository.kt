@@ -15,7 +15,9 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import java.util.concurrent.ConcurrentHashMap
 
 /** Context shared by all providers which need authenticated Twitch API calls. */
@@ -111,21 +113,28 @@ class EmoteRepository(
             }
         }
 
+        val channelSemaphore = Semaphore(CHANNEL_REFRESH_CONCURRENCY)
         val channelResults = channels.map { channel ->
             async {
-                val providerCatalogs = activeProviders.map { provider ->
-                    async {
-                        val catalog = if (provider.id == TWITCH) {
-                            cachedTwitchChannelCatalog(context, channel.id)
-                        } else {
-                            runCatching { provider.loadChannel(context, channel).normalizedFor(provider) }
-                                .onFailure { error -> errors.putIfAbsent(provider.id, error.userMessage()) }
-                                .getOrDefault(EmoteProviderCatalog())
+                channelSemaphore.withPermit {
+                    val providerCatalogs = activeProviders.map { provider ->
+                        async {
+                            val catalog = if (provider.id == TWITCH) {
+                                cachedTwitchChannelCatalog(context, channel.id)
+                            } else {
+                                runCatching {
+                                    provider.loadChannel(context, channel).normalizedFor(provider)
+                                }
+                                    .onFailure { error ->
+                                        errors.putIfAbsent(provider.id, error.userMessage())
+                                    }
+                                    .getOrDefault(EmoteProviderCatalog())
+                            }
+                            provider.id to catalog
                         }
-                        provider.id to catalog
-                    }
-                }.awaitAll().toMap()
-                channel.id to providerCatalogs
+                    }.awaitAll().toMap()
+                    channel.id to providerCatalogs
+                }
             }
         }.awaitAll().toMap()
 
@@ -328,6 +337,7 @@ class EmoteRepository(
         message?.takeIf(String::isNotBlank) ?: this::class.simpleName.orEmpty()
 
     companion object {
+        internal const val CHANNEL_REFRESH_CONCURRENCY = 3
         const val TWITCH = "twitch"
         const val BETTER_TTV = "betterttv"
         const val FRANKER_FACE_Z = "frankerfacez"

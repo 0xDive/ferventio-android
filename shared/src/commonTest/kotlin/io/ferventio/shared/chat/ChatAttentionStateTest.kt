@@ -98,6 +98,16 @@ class ChatAttentionStateTest {
     }
 
     @Test
+    fun ordinaryUnreadDoesNotInvalidateMentionTotal() {
+        val state = ChatAttentionStateHolder()
+
+        state.recordIncoming(message("ordinary", "hello"), session, evaluator)
+
+        assertEquals(0, state.mentionUnreadCount)
+        assertEquals(1, state.attention("channel-id").unreadCount)
+    }
+
+    @Test
     fun visibleButScrolledUpStillAccumulatesUnread() {
         val state = ChatAttentionStateHolder()
         state.updateViewport("channel-id", visible = true, isAtLiveTail = false)
@@ -126,6 +136,45 @@ class ChatAttentionStateTest {
     }
 
     @Test
+    fun repeatedViewportSamplesDoNotReallocateStableSets() {
+        val state = ChatAttentionStateHolder()
+        state.updateViewport("channel-id", visible = true, isAtLiveTail = true)
+        val visible = state.visibleChannelIds
+        val liveTail = state.channelsAtLiveTail
+
+        state.updateViewport("channel-id", visible = true, isAtLiveTail = true)
+
+        assertTrue(state.visibleChannelIds === visible)
+        assertTrue(state.channelsAtLiveTail === liveTail)
+    }
+
+    @Test
+    fun attentionEntriesStayOrderedAndDeduplicateByMessageId() {
+        val state = ChatAttentionStateHolder()
+        val late = message("late", "@viewer").copy(timestampMillis = 3_000L)
+        val early = message("early", "@viewer").copy(timestampMillis = 1_000L)
+        val middle = message("middle", "@viewer").copy(timestampMillis = 2_000L)
+
+        state.recordIncoming(late, session, evaluator)
+        state.recordIncoming(early, session, evaluator)
+        state.recordIncoming(middle, session, evaluator)
+        state.recordIncoming(
+            middle.copy(text = "@viewer updated"),
+            session,
+            evaluator,
+        )
+
+        assertEquals(
+            listOf("early", "middle", "late"),
+            state.attentionEntries.map { it.messageId },
+        )
+        assertEquals(
+            "@viewer updated",
+            state.attentionEntries.single { it.messageId == "middle" }.text,
+        )
+    }
+
+    @Test
     fun returningToLiveTailMarksChannelAndAttentionEntriesRead() {
         val state = ChatAttentionStateHolder()
         state.recordIncoming(message("mention", "@viewer"), session, evaluator)
@@ -140,6 +189,44 @@ class ChatAttentionStateTest {
     }
 
     @Test
+    fun markingAlreadyReadChannelReusesAttentionEntryList() {
+        val state = ChatAttentionStateHolder()
+        state.recordIncoming(message("mention", "@viewer"), session, evaluator)
+        state.markChannelRead("channel-id")
+        val entriesBefore = state.attentionEntries
+
+        state.markChannelRead("channel-id")
+
+        assertTrue(state.attentionEntries === entriesBefore)
+    }
+
+    @Test
+    fun remapOverExistingChannelKeepsMentionTotalConsistent() {
+        val state = ChatAttentionStateHolder()
+        state.recordIncoming(
+            message("one", "@viewer"),
+            session,
+            evaluator,
+        )
+        state.recordIncoming(
+            message(
+                id = "two",
+                text = "@viewer",
+                channelId = "replacement",
+                channelLogin = "replacement",
+            ),
+            session,
+            evaluator,
+        )
+        assertEquals(2, state.mentionUnreadCount)
+
+        assertTrue(state.remapChannelId("channel-id", "replacement"))
+
+        assertEquals(1, state.mentionUnreadCount)
+        assertEquals(1, state.attention("replacement").mentionCount)
+    }
+
+    @Test
     fun navigationTargetIsConsumedOnlyByMatchingChannelAndMessage() {
         val state = ChatAttentionStateHolder()
         state.requestMessageNavigation("channel-id", "message-id")
@@ -149,6 +236,28 @@ class ChatAttentionStateTest {
         assertEquals("message-id", state.navigationTarget("channel-id"))
         assertTrue(state.consumeMessageNavigation("channel-id", "message-id"))
         assertNull(state.navigationTarget("channel-id"))
+    }
+
+    @Test
+    fun retainingUnchangedWorkspaceReusesAttentionCollections() {
+        val state = ChatAttentionStateHolder()
+        state.updateViewport("channel-id", visible = true, isAtLiveTail = false)
+        state.recordIncoming(message("one", "@viewer"), session, evaluator)
+        state.requestMessageNavigation("channel-id", "one")
+
+        val channelAttentionBefore = state.channelAttention
+        val entriesBefore = state.attentionEntries
+        val visibleBefore = state.visibleChannelIds
+        val liveTailBefore = state.channelsAtLiveTail
+        val navigationBefore = state.messageNavigationTargets
+
+        state.retainChannels(listOf(" channel-id "))
+
+        assertTrue(state.channelAttention === channelAttentionBefore)
+        assertTrue(state.attentionEntries === entriesBefore)
+        assertTrue(state.visibleChannelIds === visibleBefore)
+        assertTrue(state.channelsAtLiveTail === liveTailBefore)
+        assertTrue(state.messageNavigationTargets === navigationBefore)
     }
 
     @Test

@@ -7,14 +7,17 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
@@ -22,9 +25,12 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import io.ferventio.shared.chat.TwitchEventSubTransportRecoverySnapshot
 import io.ferventio.shared.generated.resources.*
 import io.ferventio.shared.runtime.FerventioRuntimeState
 import io.ferventio.shared.runtime.LocalFerventioRuntimeState
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.stringResource
 
 internal data class FerventioDiagnosticsSnapshot(
@@ -39,6 +45,7 @@ internal data class FerventioDiagnosticsSnapshot(
     val liveChannels: Int,
     val liveMessages: Int,
     val historyAvailable: Boolean,
+    val eventSubTransportLimitReached: Boolean,
 )
 
 internal fun FerventioRuntimeState.diagnosticsSnapshot(versionName: String): FerventioDiagnosticsSnapshot =
@@ -54,6 +61,7 @@ internal fun FerventioRuntimeState.diagnosticsSnapshot(versionName: String): Fer
         liveChannels = chat.messagesByChannel.values.count { messages -> messages.isNotEmpty() },
         liveMessages = chat.messagesByChannel.values.sumOf { messages -> messages.size },
         historyAvailable = history != null,
+        eventSubTransportLimitReached = chat.eventSubTransportLimitReached,
     )
 
 internal fun FerventioDiagnosticsSnapshot.toDiagnosticReport(): String = buildString {
@@ -62,6 +70,7 @@ internal fun FerventioDiagnosticsSnapshot.toDiagnosticReport(): String = buildSt
     appendLine("eventsub.status=$connectionStatus")
     appendLine("eventsub.attempt=$connectionAttempt")
     appendLine("eventsub.authentication_required=$authenticationRequired")
+    appendLine("eventsub.transport_limit=$eventSubTransportLimitReached")
     appendLine("workspace.status=$workspaceLoadStatus")
     appendLine("workspace.channels=$workspaceChannels")
     appendLine("workspace.moderator_channels=$moderatorChannels")
@@ -82,6 +91,113 @@ internal fun FerventioDiagnosticsSettingsSection(versionName: String) {
     var copied by remember(report) { mutableStateOf(false) }
     val yes = stringResource(Res.string.diagnostics_yes)
     val no = stringResource(Res.string.diagnostics_no)
+
+    val scope = rememberCoroutineScope()
+    val authentication = runtime.authentication.state.authentication
+    val authenticationUserId = authentication?.accessLease?.session?.userId
+    var transportSnapshot by remember(authenticationUserId) {
+        mutableStateOf<TwitchEventSubTransportRecoverySnapshot?>(null)
+    }
+    var transportBusy by remember(authenticationUserId) { mutableStateOf(false) }
+    var transportError by remember(authenticationUserId) { mutableStateOf<String?>(null) }
+    var cleanupFeedback by remember(authenticationUserId) {
+        mutableStateOf<EventSubCleanupFeedback?>(null)
+    }
+    var confirmTransportCleanup by remember(authenticationUserId) { mutableStateOf(false) }
+
+    fun refreshTransportSessions() {
+        val currentAuthentication = runtime.authentication.state.authentication ?: return
+        if (transportBusy) return
+        transportBusy = true
+        transportError = null
+        cleanupFeedback = null
+        scope.launch {
+            try {
+                transportSnapshot = runtime.eventSubMaintenance.load(currentAuthentication)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                transportError = error.message?.trim()?.takeIf(String::isNotEmpty)
+                    ?: "Unknown EventSub maintenance error"
+            } finally {
+                transportBusy = false
+            }
+        }
+    }
+
+    fun cleanupOtherTransportSessions() {
+        val currentAuthentication = runtime.authentication.state.authentication ?: return
+        if (transportBusy) return
+        transportBusy = true
+        transportError = null
+        cleanupFeedback = null
+        confirmTransportCleanup = false
+        scope.launch {
+            try {
+                val result = runtime.eventSubMaintenance.clearOtherSessions(
+                    authentication = currentAuthentication,
+                    protectedSessionId = runtime.chat.eventSubSessionId,
+                )
+                cleanupFeedback = EventSubCleanupFeedback(
+                    deletedSubscriptions = result.deletedSubscriptionCount,
+                    targetedSessions = result.targetedSessionIds.size,
+                )
+                transportSnapshot = runtime.eventSubMaintenance.load(currentAuthentication)
+                actions.onReconnect?.invoke()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
+                transportError = error.message?.trim()?.takeIf(String::isNotEmpty)
+                    ?: "Unknown EventSub maintenance error"
+            } finally {
+                transportBusy = false
+            }
+        }
+    }
+
+    val protectedSessionId = runtime.chat.eventSubSessionId
+    val transportSessions = transportSnapshot?.sessions.orEmpty()
+    val protectedSessionPresent = protectedSessionId != null &&
+        transportSessions.any { it.sessionId == protectedSessionId }
+    val cleanupTargetCount = transportSessions.count { it.sessionId != protectedSessionId }
+
+    if (confirmTransportCleanup) {
+        AlertDialog(
+            onDismissRequest = {
+                if (!transportBusy) confirmTransportCleanup = false
+            },
+            title = {
+                Text(stringResource(Res.string.diagnostics_eventsub_cleanup_confirm_title))
+            },
+            text = {
+                Text(
+                    stringResource(
+                        if (protectedSessionPresent) {
+                            Res.string.diagnostics_eventsub_cleanup_confirm_body
+                        } else {
+                            Res.string.diagnostics_eventsub_cleanup_confirm_all_body
+                        },
+                    ),
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    enabled = !transportBusy,
+                    onClick = ::cleanupOtherTransportSessions,
+                ) {
+                    Text(stringResource(Res.string.diagnostics_eventsub_cleanup_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !transportBusy,
+                    onClick = { confirmTransportCleanup = false },
+                ) {
+                    Text(stringResource(Res.string.diagnostics_eventsub_cleanup_cancel))
+                }
+            },
+        )
+    }
 
     Column {
         Text(
@@ -131,6 +247,106 @@ internal fun FerventioDiagnosticsSettingsSection(versionName: String) {
                             value = error,
                             error = true,
                         )
+                    }
+                    if (runtime.chat.eventSubTransportLimitReached) {
+                        DiagnosticRow(
+                            label = stringResource(Res.string.diagnostics_transport_limit),
+                            value = stringResource(Res.string.diagnostics_transport_limit_reached),
+                            error = true,
+                        )
+                    }
+                    runtime.chat.eventSubSessionId?.let { sessionId ->
+                        DiagnosticRow(
+                            label = stringResource(Res.string.diagnostics_eventsub_session),
+                            value = compactEventSubSessionId(sessionId),
+                        )
+                    }
+                    transportSnapshot?.let { transport ->
+                        DiagnosticRow(
+                            label = stringResource(Res.string.diagnostics_eventsub_sessions),
+                            value = transport.sessionCount.toString(),
+                            error = transport.sessionCount >= 3,
+                        )
+                        DiagnosticRow(
+                            label = stringResource(Res.string.diagnostics_eventsub_subscriptions),
+                            value = transport.subscriptionCount.toString(),
+                        )
+                        transport.sessions.forEach { session ->
+                            DiagnosticRow(
+                                label = compactEventSubSessionId(session.sessionId),
+                                value = stringResource(
+                                    Res.string.diagnostics_eventsub_session_row,
+                                    stringResource(
+                                        if (session.sessionId == protectedSessionId) {
+                                            Res.string.diagnostics_eventsub_session_current
+                                        } else {
+                                            Res.string.diagnostics_eventsub_session_other
+                                        },
+                                    ),
+                                    session.subscriptionCount,
+                                ),
+                            )
+                        }
+                    }
+                    if (transportBusy) {
+                        Text(
+                            text = stringResource(Res.string.diagnostics_eventsub_loading),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    transportError?.let { error ->
+                        Text(
+                            text = stringResource(
+                                Res.string.diagnostics_eventsub_error,
+                                error,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                    cleanupFeedback?.let { feedback ->
+                        Text(
+                            text = stringResource(
+                                Res.string.diagnostics_eventsub_cleanup_result,
+                                feedback.deletedSubscriptions,
+                                feedback.targetedSessions,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+
+                if (authentication != null) {
+                    OutlinedButton(
+                        enabled = !transportBusy,
+                        onClick = ::refreshTransportSessions,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            stringResource(
+                                if (transportSnapshot == null) {
+                                    Res.string.diagnostics_eventsub_inspect
+                                } else {
+                                    Res.string.diagnostics_eventsub_refresh
+                                },
+                            ),
+                        )
+                    }
+                    if (cleanupTargetCount > 0) {
+                        OutlinedButton(
+                            enabled = !transportBusy,
+                            onClick = { confirmTransportCleanup = true },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(
+                                text = stringResource(
+                                    Res.string.diagnostics_eventsub_cleanup,
+                                ),
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
                     }
                 }
 
@@ -250,4 +466,16 @@ private fun DiagnosticRow(
             color = if (error) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurface,
         )
     }
+}
+
+
+private data class EventSubCleanupFeedback(
+    val deletedSubscriptions: Int,
+    val targetedSessions: Int,
+)
+
+internal fun compactEventSubSessionId(value: String): String {
+    val normalized = value.trim()
+    if (normalized.length <= 16) return normalized
+    return normalized.take(8) + "…" + normalized.takeLast(6)
 }

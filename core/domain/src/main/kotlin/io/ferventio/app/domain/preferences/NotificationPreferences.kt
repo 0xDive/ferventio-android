@@ -1,0 +1,259 @@
+package io.ferventio.app.domain
+
+enum class NotificationEventType(val ruleId: String) {
+    MENTION("mention"),
+    REPLY("reply"),
+    AUTOMOD_HOLD("automod_hold"),
+    BAN("ban"),
+    TIMEOUT("timeout"),
+    HIGHLIGHT("highlight"),
+    SELECTED_USER("selected_user"),
+    STREAM_ONLINE("stream_online"),
+    TITLE_CHANGE("title_change"),
+    GAME_CHANGE("game_change"),
+    RAID("raid"),
+    REWARD("reward"),
+    SUBSCRIPTION("subscription"),
+    MODERATION_ACTION("moderation_action");
+
+    companion object {
+        val allRuleIds: List<String> = entries.map(NotificationEventType::ruleId)
+
+        fun fromRuleId(value: String): NotificationEventType? {
+            val normalized = value.trim().lowercase()
+            return entries.firstOrNull { it.ruleId == normalized }
+        }
+    }
+}
+
+data class ChannelNotificationPreferences(
+    val enabled: Boolean = true,
+    val eventOverrides: Map<String, Boolean> = emptyMap(),
+    val mutedUntilEpochMillis: Long? = null,
+) {
+    fun normalized(): ChannelNotificationPreferences = copy(
+        eventOverrides = normalizeNotificationEventOverrides(eventOverrides),
+        mutedUntilEpochMillis = mutedUntilEpochMillis?.takeIf { it > 0L },
+    )
+}
+
+data class NotificationPreferences(
+    val enabled: Boolean = true,
+    val eventOverrides: Map<String, Boolean> = emptyMap(),
+    val channelOverrides: Map<String, ChannelNotificationPreferences> = emptyMap(),
+) {
+    fun normalized(): NotificationPreferences {
+        val normalizedChannels = linkedMapOf<String, ChannelNotificationPreferences>()
+        channelOverrides.entries
+            .asSequence()
+            .mapNotNull { (rawChannelId, preferences) ->
+                rawChannelId.trim().takeIf(String::isNotEmpty)?.let { it to preferences.normalized() }
+            }
+            .distinctBy(Pair<String, ChannelNotificationPreferences>::first)
+            .take(MAX_CHANNEL_OVERRIDES)
+            .forEach { (channelId, preferences) ->
+                normalizedChannels[channelId] = preferences
+            }
+        return copy(
+            eventOverrides = normalizeNotificationEventOverrides(eventOverrides),
+            channelOverrides = normalizedChannels,
+        )
+    }
+
+    fun isEnabled(
+        ruleId: String,
+        channelId: String? = null,
+        legacyDefault: (String) -> Boolean = { true },
+    ): Boolean {
+        if (!enabled) return false
+        val normalizedRuleId = ruleId.trim().lowercase()
+        if (normalizedRuleId.isEmpty()) return false
+
+        val globalEnabled = eventOverrides[normalizedRuleId] ?: legacyDefault(normalizedRuleId)
+        val normalizedChannelId = channelId?.trim()?.takeIf(String::isNotEmpty)
+            ?: return globalEnabled
+        val channel = channelOverrides[normalizedChannelId] ?: return globalEnabled
+        if (!channel.enabled) return false
+        return channel.eventOverrides[normalizedRuleId] ?: globalEnabled
+    }
+
+    fun isDeliveryEnabled(
+        ruleId: String,
+        channelId: String? = null,
+        nowEpochMillis: Long,
+        legacyDefault: (String) -> Boolean = { true },
+    ): Boolean {
+        if (!isEnabled(ruleId, channelId, legacyDefault)) return false
+        val normalizedChannelId = channelId?.trim()?.takeIf(String::isNotEmpty)
+            ?: return true
+        val mutedUntil = channelOverrides[normalizedChannelId]?.mutedUntilEpochMillis
+            ?: return true
+        return mutedUntil <= nowEpochMillis
+    }
+
+    fun enabledRuleIds(
+        channelIds: Iterable<String>,
+        legacyDefault: (String) -> Boolean = { true },
+    ): List<String> {
+        if (!enabled) return emptyList()
+        val channels = channelIds
+            .asSequence()
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .distinct()
+            .toList()
+        return NotificationEventType.entries
+            .filter { event ->
+                if (channels.isEmpty()) {
+                    isEnabled(event.ruleId, legacyDefault = legacyDefault)
+                } else {
+                    channels.any { channelId ->
+                        isEnabled(event.ruleId, channelId, legacyDefault)
+                    }
+                }
+            }
+            .map(NotificationEventType::ruleId)
+    }
+
+    fun withEnabled(value: Boolean): NotificationPreferences =
+        copy(enabled = value).normalized()
+
+    fun withGlobalEvent(ruleId: String, value: Boolean): NotificationPreferences {
+        val event = requireNotNull(NotificationEventType.fromRuleId(ruleId)) {
+            "Unknown notification event: $ruleId"
+        }
+        return copy(
+            eventOverrides = eventOverrides + (event.ruleId to value),
+        ).normalized()
+    }
+
+    fun clearGlobalEventOverride(ruleId: String): NotificationPreferences {
+        val event = NotificationEventType.fromRuleId(ruleId) ?: return this
+        if (event.ruleId !in eventOverrides) return this
+        return copy(eventOverrides = eventOverrides - event.ruleId).normalized()
+    }
+
+    fun enableChannelOverrides(channelId: String): NotificationPreferences {
+        val normalizedChannelId = requireChannelId(channelId)
+        if (normalizedChannelId in channelOverrides) return this
+        return copy(
+            channelOverrides = channelOverrides + (
+                normalizedChannelId to ChannelNotificationPreferences()
+            ),
+        ).normalized()
+    }
+
+    fun clearChannelOverride(channelId: String): NotificationPreferences {
+        val normalizedChannelId = channelId.trim()
+        if (normalizedChannelId.isEmpty() || normalizedChannelId !in channelOverrides) return this
+        return copy(channelOverrides = channelOverrides - normalizedChannelId).normalized()
+    }
+
+    fun withChannelEnabled(channelId: String, value: Boolean): NotificationPreferences {
+        val normalizedChannelId = requireChannelId(channelId)
+        val current = channelOverrides[normalizedChannelId] ?: ChannelNotificationPreferences()
+        return copy(
+            channelOverrides = channelOverrides + (
+                normalizedChannelId to current.copy(enabled = value)
+            ),
+        ).normalized()
+    }
+
+    fun withChannelMutedUntil(
+        channelId: String,
+        mutedUntilEpochMillis: Long?,
+    ): NotificationPreferences {
+        val normalizedChannelId = requireChannelId(channelId)
+        val normalizedMute = mutedUntilEpochMillis?.takeIf { it > 0L }
+        val current = channelOverrides[normalizedChannelId] ?: ChannelNotificationPreferences()
+        if (current.mutedUntilEpochMillis == normalizedMute) return this
+        return copy(
+            channelOverrides = channelOverrides + (
+                normalizedChannelId to current.copy(mutedUntilEpochMillis = normalizedMute)
+            ),
+        ).normalized()
+    }
+    fun clearExpiredChannelMutes(nowEpochMillis: Long): NotificationPreferences {
+        var updated: LinkedHashMap<String, ChannelNotificationPreferences>? = null
+        channelOverrides.forEach { (channelId, channel) ->
+            val mutedUntil = channel.mutedUntilEpochMillis ?: return@forEach
+            if (mutedUntil > nowEpochMillis) return@forEach
+
+            val target = updated ?: LinkedHashMap(channelOverrides).also { updated = it }
+            if (channel.enabled && channel.eventOverrides.isEmpty()) {
+                target.remove(channelId)
+            } else {
+                target[channelId] = channel.copy(mutedUntilEpochMillis = null)
+            }
+        }
+        val cleaned = updated ?: return this
+        return copy(channelOverrides = cleaned).normalized()
+    }
+
+
+    fun withChannelEvent(
+        channelId: String,
+        ruleId: String,
+        value: Boolean,
+    ): NotificationPreferences {
+        val normalizedChannelId = requireChannelId(channelId)
+        val event = requireNotNull(NotificationEventType.fromRuleId(ruleId)) {
+            "Unknown notification event: $ruleId"
+        }
+        val current = channelOverrides[normalizedChannelId] ?: ChannelNotificationPreferences()
+        return copy(
+            channelOverrides = channelOverrides + (
+                normalizedChannelId to current.copy(
+                    eventOverrides = current.eventOverrides + (event.ruleId to value),
+                )
+            ),
+        ).normalized()
+    }
+
+    fun clearChannelEventOverride(
+        channelId: String,
+        ruleId: String,
+    ): NotificationPreferences {
+        val normalizedChannelId = channelId.trim()
+        val event = NotificationEventType.fromRuleId(ruleId) ?: return this
+        val current = channelOverrides[normalizedChannelId] ?: return this
+        if (event.ruleId !in current.eventOverrides) return this
+        return copy(
+            channelOverrides = channelOverrides + (
+                normalizedChannelId to current.copy(
+                    eventOverrides = current.eventOverrides - event.ruleId,
+                )
+            ),
+        ).normalized()
+    }
+    fun clearChannelEventOverrides(channelId: String): NotificationPreferences {
+        val normalizedChannelId = channelId.trim()
+        val current = channelOverrides[normalizedChannelId] ?: return this
+        if (current.eventOverrides.isEmpty()) return this
+        return copy(
+            channelOverrides = channelOverrides + (
+                normalizedChannelId to current.copy(eventOverrides = emptyMap())
+            ),
+        ).normalized()
+    }
+
+
+    private fun requireChannelId(value: String): String =
+        value.trim().takeIf(String::isNotEmpty)
+            ?: throw IllegalArgumentException("Notification channel id must not be blank")
+
+    private companion object {
+        const val MAX_CHANNEL_OVERRIDES = 100
+    }
+}
+
+private fun normalizeNotificationEventOverrides(
+    value: Map<String, Boolean>,
+): Map<String, Boolean> {
+    if (value.isEmpty()) return emptyMap()
+    val result = linkedMapOf<String, Boolean>()
+    NotificationEventType.entries.forEach { event ->
+        value[event.ruleId]?.let { enabled -> result[event.ruleId] = enabled }
+    }
+    return result
+}

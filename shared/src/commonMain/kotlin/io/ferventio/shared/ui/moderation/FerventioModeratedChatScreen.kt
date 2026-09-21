@@ -412,6 +412,10 @@ fun FerventioModeratedChatScreen(
         return true
     }
 
+    val autoModHeldMessages = remember(runtime.chat.autoModQueue, channel.id) {
+        runtime.chat.autoModHeldMessages(channel.id)
+    }
+
     Column(modifier = modifier.fillMaxSize()) {
         InteractiveChatOverlayCards(channelId = channel.id)
 
@@ -484,7 +488,7 @@ fun FerventioModeratedChatScreen(
                 }
             },
             onQuickDelete = ::deleteMessage,
-            autoModHeldMessages = runtime.chat.autoModHeldMessages(channel.id),
+            autoModHeldMessages = autoModHeldMessages,
             onAutoModDecision = if (canModerateChannel) {
                 { messageId, approve -> decideAutoModMessage(messageId, approve) }
             } else {

@@ -25,7 +25,7 @@ import kotlinx.serialization.json.longOrNull
 object SharedSettingsPayloadCodec {
     private const val MAX_PAYLOAD_CHARS = 2 * 1024 * 1024
     private const val BACKUP_FORMAT = "ferventio-settings-backup"
-    private const val CURRENT_FORMAT_VERSION = 2
+    private const val CURRENT_FORMAT_VERSION = 3
     private const val MAX_CHANNELS = 20
     private const val MAX_TAB_TITLE_LENGTH = 32
     private const val MAX_CUSTOM_COMMANDS = 100
@@ -229,6 +229,9 @@ object SharedSettingsPayloadCodec {
                 ?: defaults.replyNotificationsEnabled,
             autoModNotificationsEnabled = boolean("autoModNotificationsEnabled")
                 ?: defaults.autoModNotificationsEnabled,
+            notificationPreferences = NotificationPreferencesCodec.decodeElement(
+                this["notificationPreferences"],
+            ),
             recentMessagesEnabled = boolean("recentMessagesEnabled") ?: defaults.recentMessagesEnabled,
             localHistoryEnabled = boolean("localHistoryEnabled") ?: defaults.localHistoryEnabled,
             localHistoryLimit = int("localHistoryLimit") ?: defaults.localHistoryLimit,
@@ -266,6 +269,10 @@ object SharedSettingsPayloadCodec {
         put("showComposerEmoteImages", JsonPrimitive(preferences.showComposerEmoteImages))
         put("replyNotificationsEnabled", JsonPrimitive(preferences.replyNotificationsEnabled))
         put("autoModNotificationsEnabled", JsonPrimitive(preferences.autoModNotificationsEnabled))
+        put(
+            "notificationPreferences",
+            NotificationPreferencesCodec.encodeElement(preferences.notificationPreferences),
+        )
         put("recentMessagesEnabled", JsonPrimitive(preferences.recentMessagesEnabled))
         put("localHistoryEnabled", JsonPrimitive(preferences.localHistoryEnabled))
         put("localHistoryLimit", JsonPrimitive(preferences.localHistoryLimit))

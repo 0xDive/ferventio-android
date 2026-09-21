@@ -9,6 +9,71 @@ import kotlin.test.assertTrue
 
 class SharedMessageRulesStateTest {
     @Test
+    fun defaultDecorationsDoNotAllocateLiveDecorationEntries() {
+        val state = SharedMessageRulesStateHolder()
+
+        repeat(1_000) { index ->
+            state.recordDecoration("message-$index", MessageDecoration())
+        }
+
+        assertTrue(state.decorationsByMessageId.isEmpty())
+        assertEquals(MessageDecoration(), state.decoration("message-999"))
+    }
+
+    @Test
+    fun meaningfulDecorationsMutateStableSnapshotMapInsteadOfReplacingIt() {
+        val state = SharedMessageRulesStateHolder()
+        val decorations = state.decorationsByMessageId
+
+        state.recordDecoration(
+            "first",
+            MessageDecoration(highlightColorArgb = 0xFF112233L),
+        )
+        state.recordDecoration(
+            "second",
+            MessageDecoration(highlightColorArgb = 0xFF445566L),
+        )
+
+        assertTrue(state.decorationsByMessageId === decorations)
+        assertEquals(2, decorations.size)
+    }
+
+    @Test
+    fun clearingDecorationRemovesPreviouslyMeaningfulEntry() {
+        val state = SharedMessageRulesStateHolder()
+        state.recordDecoration(
+            "message-id",
+            MessageDecoration(highlightColorArgb = 0xFF112233L),
+        )
+
+        state.recordDecoration("message-id", MessageDecoration())
+
+        assertTrue(state.decorationsByMessageId.isEmpty())
+        assertEquals(MessageDecoration(), state.decoration("message-id"))
+    }
+
+    @Test
+    fun identicalRuleUpdatesReuseRuleLists() {
+        val highlight = HighlightRule(
+            id = "highlight",
+            type = HighlightRuleType.WORD,
+            pattern = "ping",
+        )
+        val state = SharedMessageRulesStateHolder(
+            SharedMessageRulesSnapshot(highlightRules = listOf(highlight)),
+        )
+        val highlightsBefore = state.highlightRules
+        val ignoresBefore = state.ignoreRules
+
+        state.restore(state.snapshot)
+        state.upsertHighlight(highlight)
+        state.deleteIgnore("missing")
+
+        assertTrue(state.highlightRules === highlightsBefore)
+        assertTrue(state.ignoreRules === ignoresBefore)
+    }
+
+    @Test
     fun restoringEditedRulesDoesNotReevaluateExistingDecorations() {
         val state = SharedMessageRulesStateHolder()
         val originalDecoration = MessageDecoration(

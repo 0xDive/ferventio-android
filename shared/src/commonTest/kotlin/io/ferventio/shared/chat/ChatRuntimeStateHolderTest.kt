@@ -8,6 +8,7 @@ import io.ferventio.app.domain.ChatRateLimitState
 import io.ferventio.app.domain.ChatScrollPosition
 import io.ferventio.app.domain.ConnectionStatus
 import io.ferventio.app.domain.ModerationAction
+import io.ferventio.app.domain.OutgoingMessageState
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -38,6 +39,43 @@ class ChatRuntimeStateHolderTest {
 
         assertEquals(5_000, holder.messages(CHANNEL_ID).size)
         assertEquals("updated", holder.messages(CHANNEL_ID).last().text)
+    }
+
+    @Test
+    fun mergedTimelineProjectionIsReusedUntilLiveOrHistoryChanges() {
+        val holder = ChatRuntimeStateHolder()
+        holder.prependHistory(
+            CHANNEL_ID,
+            listOf(message("history", 1L)),
+        )
+        holder.append(message("live", 2L))
+
+        val first = holder.messages(CHANNEL_ID)
+        val second = holder.messages(CHANNEL_ID)
+
+        assertTrue(first === second)
+        assertEquals(listOf("history", "live"), first.map(ChatMessage::id))
+
+        holder.append(message("next", 3L))
+        val third = holder.messages(CHANNEL_ID)
+
+        assertFalse(first === third)
+        assertEquals(listOf("history", "live", "next"), third.map(ChatMessage::id))
+    }
+
+    @Test
+    fun repeatedIdenticalHistoryPageReusesMergedTimelineProjection() {
+        val holder = ChatRuntimeStateHolder()
+        val history = message("history", 1L)
+        holder.prependHistory(CHANNEL_ID, listOf(history))
+        holder.append(message("live", 2L))
+        val first = holder.messages(CHANNEL_ID)
+
+        holder.prependHistory(CHANNEL_ID, listOf(history))
+        val second = holder.messages(CHANNEL_ID)
+
+        assertTrue(second === first)
+        assertEquals(listOf("history", "live"), second.map(ChatMessage::id))
     }
 
     @Test
@@ -174,6 +212,140 @@ class ChatRuntimeStateHolderTest {
     }
 
     @Test
+    fun retainChannelsReusesStateMapsWhenWorkspaceIsUnchanged() {
+        val holder = ChatRuntimeStateHolder()
+        holder.append(message("a", 1L))
+        holder.updateScrollPosition(
+            ChatScrollPosition(
+                channelId = CHANNEL_ID,
+                firstVisibleItemIndex = 0,
+                firstVisibleItemScrollOffset = 0,
+            ),
+        )
+        holder.updateRateLimit(CHANNEL_ID, ChatRateLimitState("slow down"))
+
+        val messagesBefore = holder.messagesByChannel
+        val scrollPositionsBefore = holder.scrollPositionsByChannel
+        val rateLimitsBefore = holder.rateLimitsByChannel
+
+        holder.retainChannels(listOf(" $CHANNEL_ID "))
+
+        assertTrue(holder.messagesByChannel === messagesBefore)
+        assertTrue(holder.scrollPositionsByChannel === scrollPositionsBefore)
+        assertTrue(holder.rateLimitsByChannel === rateLimitsBefore)
+    }
+
+    @Test
+    fun serverEchoAfterOutgoingAckReplacesPendingRowWithoutDuplicate() {
+        val holder = ChatRuntimeStateHolder()
+        holder.append(
+            message("local", 1L).copy(
+                outgoingState = OutgoingMessageState.SENDING,
+                clientNonce = "nonce-fast-path",
+            ),
+        )
+
+        assertTrue(
+            holder.markOutgoingSent(
+                channelId = CHANNEL_ID,
+                localMessageId = "local",
+                serverMessageId = "server",
+            ),
+        )
+        holder.append(message("server", 2L))
+
+        val messages = holder.messages(CHANNEL_ID)
+        assertEquals(listOf("server"), messages.map(ChatMessage::id))
+        assertEquals("nonce-fast-path", messages.single().clientNonce)
+        assertEquals("server", messages.single().serverMessageId)
+        assertEquals(OutgoingMessageState.SENT, messages.single().outgoingState)
+    }
+
+    @Test
+    fun duplicateLiveMessageStillReplacesInsteadOfAppendingWithIndexesEnabled() {
+        val holder = ChatRuntimeStateHolder()
+        holder.append(message("same", 1L, text = "first"))
+
+        holder.append(message("same", 2L, text = "updated"))
+
+        val messages = holder.messages(CHANNEL_ID)
+        assertEquals(1, messages.size)
+        assertEquals("updated", messages.single().text)
+    }
+
+    @Test
+    fun replaceChannelMessagesRebuildsLiveIdentityIndex() {
+        val holder = ChatRuntimeStateHolder()
+        holder.replaceChannelMessages(
+            CHANNEL_ID,
+            listOf(message("same", 1L, text = "first")),
+        )
+
+        holder.append(message("same", 2L, text = "updated"))
+
+        val messages = holder.messages(CHANNEL_ID)
+        assertEquals(1, messages.size)
+        assertEquals("updated", messages.single().text)
+    }
+
+    @Test
+    fun outgoingServerEchoReplacesLocalMessageWithoutRebuildingUnrelatedEntries() {
+        val holder = ChatRuntimeStateHolder()
+        holder.append(message("before", 1L))
+        holder.append(
+            message("local", 2L).copy(
+                outgoingState = OutgoingMessageState.SENDING,
+                clientNonce = "nonce-1",
+            ),
+        )
+        holder.append(message("server", 3L))
+        holder.append(message("after", 4L))
+
+        assertTrue(
+            holder.markOutgoingSent(
+                channelId = CHANNEL_ID,
+                localMessageId = "local",
+                serverMessageId = "server",
+            ),
+        )
+
+        val messages = holder.messages(CHANNEL_ID)
+        assertEquals(listOf("before", "server", "after"), messages.map(ChatMessage::id))
+        val server = messages[1]
+        assertEquals(OutgoingMessageState.SENT, server.outgoingState)
+        assertEquals("nonce-1", server.clientNonce)
+        assertEquals("server", server.serverMessageId)
+    }
+
+    @Test
+    fun outgoingAckRemovesMatchingHistoryEchoWithoutLeavingDuplicateTimelineRows() {
+        val holder = ChatRuntimeStateHolder()
+        holder.prependHistory(
+            CHANNEL_ID,
+            listOf(message("server", 1L)),
+        )
+        holder.append(
+            message("local", 2L).copy(
+                outgoingState = OutgoingMessageState.SENDING,
+                clientNonce = "nonce-history",
+            ),
+        )
+
+        assertTrue(
+            holder.markOutgoingSent(
+                channelId = CHANNEL_ID,
+                localMessageId = "local",
+                serverMessageId = "server",
+            ),
+        )
+
+        val messages = holder.messages(CHANNEL_ID)
+        assertEquals(listOf("local"), messages.map(ChatMessage::id))
+        assertEquals("server", messages.single().serverMessageId)
+        assertEquals(OutgoingMessageState.SENT, messages.single().outgoingState)
+    }
+
+    @Test
     fun autoModQueueMergesTerminalUpdatesAndFollowsChannelLifecycle() {
         val holder = ChatRuntimeStateHolder()
         holder.applyAutoMod(
@@ -206,6 +378,119 @@ class ChatRuntimeStateHolderTest {
 
         holder.retainChannels(listOf("other"))
         assertTrue(holder.autoModQueue.isEmpty())
+    }
+
+    @Test
+    fun identicalAutoModUpdateReusesQueueInstance() {
+        val holder = ChatRuntimeStateHolder()
+        val message = AutoModHeldMessage(
+            channelId = CHANNEL_ID,
+            channelLogin = "channel",
+            channelName = "Channel",
+            userId = "viewer-id",
+            userLogin = "viewer",
+            userName = "Viewer",
+            messageId = "automod-same",
+            text = "held",
+            heldAt = "2026-01-01T00:00:00Z",
+        )
+        holder.applyAutoMod(message)
+        val before = holder.autoModQueue
+
+        holder.applyAutoMod(message)
+
+        assertTrue(holder.autoModQueue === before)
+    }
+
+    @Test
+    fun newAutoModMessagesStayNewestFirstWithoutFullRenormalization() {
+        val holder = ChatRuntimeStateHolder()
+        holder.applyAutoMod(
+            AutoModHeldMessage(
+                channelId = CHANNEL_ID,
+                channelLogin = "channel",
+                channelName = "Channel",
+                userId = "viewer-1",
+                userLogin = "viewer1",
+                userName = "Viewer 1",
+                messageId = "one",
+                text = "one",
+                heldAt = "2026-01-01T00:01:00Z",
+            ),
+        )
+        holder.applyAutoMod(
+            AutoModHeldMessage(
+                channelId = CHANNEL_ID,
+                channelLogin = "channel",
+                channelName = "Channel",
+                userId = "viewer-2",
+                userLogin = "viewer2",
+                userName = "Viewer 2",
+                messageId = "two",
+                text = "two",
+                heldAt = "2026-01-01T00:03:00Z",
+            ),
+        )
+        holder.applyAutoMod(
+            AutoModHeldMessage(
+                channelId = CHANNEL_ID,
+                channelLogin = "channel",
+                channelName = "Channel",
+                userId = "viewer-3",
+                userLogin = "viewer3",
+                userName = "Viewer 3",
+                messageId = "three",
+                text = "three",
+                heldAt = "2026-01-01T00:02:00Z",
+            ),
+        )
+
+        assertEquals(listOf("two", "three", "one"), holder.autoModQueue.map { it.messageId })
+    }
+
+    @Test
+    fun staleHeldAutoModMessagesExpireWithoutDroppingTerminalHistory() {
+        val holder = ChatRuntimeStateHolder()
+        holder.applyAutoMod(
+            AutoModHeldMessage(
+                channelId = CHANNEL_ID,
+                channelLogin = "channel",
+                channelName = "Channel",
+                userId = "viewer-id",
+                userLogin = "viewer",
+                userName = "Viewer",
+                messageId = "stale",
+                text = "stale",
+                heldAt = "2026-01-01T00:00:00Z",
+            ),
+        )
+        holder.applyAutoMod(
+            AutoModHeldMessage(
+                channelId = CHANNEL_ID,
+                channelLogin = "channel",
+                channelName = "Channel",
+                userId = "viewer-id",
+                userLogin = "viewer",
+                userName = "Viewer",
+                messageId = "fresh",
+                text = "fresh",
+                heldAt = "2026-01-01T00:20:00Z",
+            ),
+        )
+
+        val expired = holder.expireStaleAutoModHolds(
+            olderThanEpochMillis = 1_767_225_900_000L,
+        )
+
+        assertEquals(1, expired)
+        assertEquals(
+            listOf("fresh"),
+            holder.autoModHeldMessages(CHANNEL_ID).map(AutoModHeldMessage::messageId),
+        )
+        assertEquals(
+            AutoModMessageStatus.EXPIRED,
+            holder.autoModQueue.first { it.messageId == "stale" }.status,
+        )
     }
 
     @Test

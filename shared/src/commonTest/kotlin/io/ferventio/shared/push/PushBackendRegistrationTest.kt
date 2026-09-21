@@ -25,6 +25,8 @@ class PushBackendRegistrationTest {
                 userId = "user-id",
                 userLogin = "viewer",
                 channelIds = listOf("channel-id"),
+                notificationChannelMutedUntilEpochMillis =
+                    mapOf("channel-id" to 12_345L),
             ),
         )
 
@@ -33,6 +35,10 @@ class PushBackendRegistrationTest {
         assertEquals("A1B2C3", request.apnsDeviceToken)
         assertEquals("user-id", request.userId)
         assertEquals(listOf("channel-id"), request.channelIds)
+        assertEquals(
+            mapOf("channel-id" to 12_345L),
+            request.notificationChannelMutedUntilEpochMillis,
+        )
         assertTrue(json.encodeToString(request).contains("\"apnsDeviceToken\":\"A1B2C3\""))
     }
 

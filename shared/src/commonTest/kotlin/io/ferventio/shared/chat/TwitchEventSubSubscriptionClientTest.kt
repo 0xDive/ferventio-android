@@ -10,6 +10,7 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.client.engine.mock.toByteArray
 import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.utils.io.ByteReadChannel
 import kotlinx.coroutines.test.runTest
@@ -56,6 +57,91 @@ class TwitchEventSubSubscriptionClientTest {
         val transport = root.getValue("transport").jsonObject
         assertEquals("websocket", transport.getValue("method").jsonPrimitive.content)
         assertEquals("socket-session", transport.getValue("session_id").jsonPrimitive.content)
+    }
+
+    @Test
+    fun listsEnabledWebsocketSubscriptionsAcrossPages() = runTest {
+        val requests = mutableListOf<HttpRequestData>()
+        val engine = MockEngine { request ->
+            requests += request
+            val after = request.url.parameters["after"]
+            val body = if (after == null) {
+                """
+                {
+                  "data": [
+                    {
+                      "id": "sub-1",
+                      "status": "enabled",
+                      "type": "channel.chat.message",
+                      "version": "1",
+                      "transport": {
+                        "method": "websocket",
+                        "session_id": "session-a",
+                        "connected_at": "2026-09-20T05:00:00Z"
+                      }
+                    }
+                  ],
+                  "pagination": {"cursor": "next-page"}
+                }
+                """.trimIndent()
+            } else {
+                """
+                {
+                  "data": [
+                    {
+                      "id": "sub-2",
+                      "status": "enabled",
+                      "type": "channel.chat.notification",
+                      "version": "1",
+                      "transport": {
+                        "method": "websocket",
+                        "session_id": "session-b",
+                        "connected_at": "2026-09-20T05:01:00Z"
+                      }
+                    }
+                  ],
+                  "pagination": {}
+                }
+                """.trimIndent()
+            }
+            respond(ByteReadChannel(body), HttpStatusCode.OK)
+        }
+        val client = TwitchEventSubSubscriptionClient(
+            HttpClient(engine) { expectSuccess = false },
+        )
+
+        val subscriptions = client.listEnabledWebSocketSubscriptions(authentication())
+
+        assertEquals(listOf("sub-1", "sub-2"), subscriptions.map { it.id })
+        assertEquals(2, requests.size)
+        assertEquals(HttpMethod.Get, requests[0].method)
+        assertEquals("enabled", requests[0].url.parameters["status"])
+        assertEquals(null, requests[0].url.parameters["first"])
+        assertEquals("next-page", requests[1].url.parameters["after"])
+        requests.forEach { request ->
+            assertEquals("Bearer access-token", request.headers[HttpHeaders.Authorization])
+            assertEquals("client-id", request.headers["Client-Id"])
+        }
+    }
+
+    @Test
+    fun deleteSubscriptionIsIdempotentForAlreadyMissingSubscription() = runTest {
+        var requestCount = 0
+        val engine = MockEngine { request ->
+            requestCount += 1
+            assertEquals(HttpMethod.Delete, request.method)
+            assertEquals("sub-1", request.url.parameters["id"])
+            respond(
+                ByteReadChannel(""),
+                if (requestCount == 1) HttpStatusCode.NoContent else HttpStatusCode.NotFound,
+            )
+        }
+        val client = TwitchEventSubSubscriptionClient(
+            HttpClient(engine) { expectSuccess = false },
+        )
+
+        assertTrue(client.deleteSubscription(authentication(), " sub-1 "))
+        assertFalse(client.deleteSubscription(authentication(), "sub-1"))
     }
 
     @Test

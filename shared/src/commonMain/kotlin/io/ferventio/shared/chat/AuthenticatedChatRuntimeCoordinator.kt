@@ -12,12 +12,17 @@ import io.ferventio.shared.settings.SharedAppSettingsStateHolder
 import io.ferventio.shared.settings.SharedMessageRulesStateHolder
 import io.ferventio.shared.workspace.WorkspaceRuntimeSnapshot
 import kotlin.Throws
+import kotlin.time.Clock
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withContext
@@ -83,6 +88,7 @@ class AuthenticatedChatRuntimeCoordinator(
     private val runGate = ChatSessionRunGate()
     private val badgeClient = TwitchChatBadgeClient()
     private val cheermoteClient = TwitchCheermoteClient()
+    private val metadataRefreshGate = ChatMetadataRefreshGate()
     private var runningClient: TwitchEventSubSocketClient? = null
     private var sessionRuntime: TwitchChatSessionRuntime? = null
     private var historyRuntime: ChatHistoryPersistenceRuntime? = null
@@ -99,6 +105,7 @@ class AuthenticatedChatRuntimeCoordinator(
             state.clearAuthenticationRequired()
             state.retainChannels(workspace.channelIds)
             attention.retainChannels(workspace.channelIds)
+            metadataRefreshGate.retainChannels(workspace.channelIds)
 
             val sessionSettings = settings
             val sessionHistory = historyStore?.let { store ->
@@ -140,6 +147,7 @@ class AuthenticatedChatRuntimeCoordinator(
             client = TwitchEventSubSocketClient(
                 onStatusChanged = runtime::onConnectionUpdate,
                 onSessionReady = runtime::onSessionReady,
+                onSessionOpened = runtime::onSessionOpened,
                 onEnvelope = { envelope -> runtime.onEnvelope(envelope) },
                 onMalformedEnvelope = { _ -> },
                 onError = runtime::onSocketError,
@@ -152,20 +160,16 @@ class AuthenticatedChatRuntimeCoordinator(
                     val auxiliaryRuntimeJob = launch {
                         coroutineScope {
                             launch {
-                                coroutineScope {
-                                    launch {
-                                        refreshBadgeAssets(
-                                            authentication = authentication,
-                                            workspace = workspace,
-                                        )
-                                    }
-                                    launch {
-                                        refreshCheermoteAssets(
-                                            authentication = authentication,
-                                            workspace = workspace,
-                                        )
-                                    }
-                                }
+                                refreshBadgeAssets(
+                                    authentication = authentication,
+                                    workspace = workspace,
+                                )
+                            }
+                            launch {
+                                refreshCheermoteAssets(
+                                    authentication = authentication,
+                                    workspace = workspace,
+                                )
                             }
                             if (sessionSettings != null && recentMessagesRuntime != null) {
                                 launch {
@@ -178,6 +182,16 @@ class AuthenticatedChatRuntimeCoordinator(
                                                 )
                                             }
                                         }
+                                }
+                            }
+                            launch {
+                                while (isActive) {
+                                    delay(AUTOMOD_STALE_SWEEP_INTERVAL_MILLIS)
+                                    state.expireStaleAutoModHolds(
+                                        olderThanEpochMillis =
+                                            Clock.System.now().toEpochMilliseconds() -
+                                                AUTOMOD_STALE_HOLD_GRACE_MILLIS,
+                                    )
                                 }
                             }
                         }
@@ -217,26 +231,34 @@ class AuthenticatedChatRuntimeCoordinator(
         authentication: StoredAuthentication,
         workspace: WorkspaceRuntimeSnapshot,
     ) {
-        bestEffort {
-            state.replaceGlobalBadgeAssets(
-                badgeClient.loadGlobal(authentication),
-            )
-        }
-        workspace.channelIds
-            .asSequence()
-            .map(String::trim)
-            .filter(String::isNotEmpty)
-            .distinct()
-            .forEach { channelId ->
+        if (metadataRefreshGate.shouldRefreshGlobalBadges()) {
+            if (
                 bestEffort {
-                    state.replaceChannelBadgeAssets(
-                        channelId = channelId,
-                        value = badgeClient.loadChannel(
-                            authentication = authentication,
-                            broadcasterId = channelId,
-                        ),
+                    state.replaceGlobalBadgeAssets(
+                        badgeClient.loadGlobal(authentication),
                     )
                 }
+            ) {
+                metadataRefreshGate.markGlobalBadgesLoaded()
+            }
+        }
+
+        val staleChannels = workspace.channelIds.filter(
+            metadataRefreshGate::shouldRefreshChannelBadges,
+        )
+        forEachChannelMetadataBatch(staleChannels) { channelId ->
+            channelId to bestEffort {
+                state.replaceChannelBadgeAssets(
+                    channelId = channelId,
+                    value = badgeClient.loadChannel(
+                        authentication = authentication,
+                        broadcasterId = channelId,
+                    ),
+                )
+            }
+        }.filter { (_, loaded) -> loaded }
+            .forEach { (channelId, _) ->
+                metadataRefreshGate.markChannelBadgesLoaded(channelId)
             }
     }
 
@@ -244,34 +266,61 @@ class AuthenticatedChatRuntimeCoordinator(
         authentication: StoredAuthentication,
         workspace: WorkspaceRuntimeSnapshot,
     ) {
-        workspace.channelIds
-            .asSequence()
-            .map(String::trim)
-            .filter(String::isNotEmpty)
-            .distinct()
-            .forEach { channelId ->
-                bestEffort {
-                    state.replaceChannelCheermoteAssets(
-                        channelId = channelId,
-                        value = cheermoteClient.load(
-                            authentication = authentication,
-                            broadcasterId = channelId,
-                        ),
-                    )
-                }
+        val staleChannels = workspace.channelIds.filter(
+            metadataRefreshGate::shouldRefreshCheermotes,
+        )
+        forEachChannelMetadataBatch(staleChannels) { channelId ->
+            channelId to bestEffort {
+                state.replaceChannelCheermoteAssets(
+                    channelId = channelId,
+                    value = cheermoteClient.load(
+                        authentication = authentication,
+                        broadcasterId = channelId,
+                    ),
+                )
+            }
+        }.filter { (_, loaded) -> loaded }
+            .forEach { (channelId, _) ->
+                metadataRefreshGate.markCheermotesLoaded(channelId)
             }
     }
 
-    private suspend fun bestEffort(block: suspend () -> Unit) {
+    private suspend fun <T> forEachChannelMetadataBatch(
+        channelIds: Iterable<String>,
+        block: suspend (String) -> T,
+    ): List<T> {
+        val normalized = channelIds
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .distinct()
+        return buildList {
+            for (batch in normalized.chunked(METADATA_REFRESH_CONCURRENCY)) {
+                addAll(
+                    coroutineScope {
+                        batch.map { channelId ->
+                            async { block(channelId) }
+                        }.awaitAll()
+                    },
+                )
+            }
+        }
+    }
+
+    private suspend fun bestEffort(block: suspend () -> Unit): Boolean =
         try {
             block()
+            true
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
             // Presentation metadata is optional; live chat must continue without it.
+            false
         }
-    }
 }
+
+private const val METADATA_REFRESH_CONCURRENCY = 4
+private const val AUTOMOD_STALE_SWEEP_INTERVAL_MILLIS = 30_000L
+private const val AUTOMOD_STALE_HOLD_GRACE_MILLIS = 24 * 60 * 60 * 1_000L
 
 internal fun shouldEmitAutoModAlert(settings: SharedAppSettingsStateHolder?): Boolean =
     settings?.preferences?.autoModNotificationsEnabled != false

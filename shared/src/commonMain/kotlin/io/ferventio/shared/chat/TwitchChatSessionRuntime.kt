@@ -31,6 +31,13 @@ internal class TwitchChatSessionRuntime(
     private var evaluatorRules = messageRules?.snapshot ?: SharedMessageRulesSnapshot()
     private var messageRuleEvaluator = compileEvaluator(evaluatorRules)
     private val autoModOrderingGuard = AutoModEventOrderingGuard()
+    private var currentEventSubSessionId: String? = null
+
+    fun onSessionOpened(sessionId: String) {
+        val normalized = sessionId.trim().takeIf(String::isNotEmpty) ?: return
+        currentEventSubSessionId = normalized
+        state.updateEventSubSessionId(normalized)
+    }
 
     suspend fun onSessionReady(sessionId: String): Int {
         supplementalSubscriptionsJob?.cancel()
@@ -163,6 +170,9 @@ internal class TwitchChatSessionRuntime(
     }
 
     fun onSocketError(error: Throwable) {
+        if (TwitchEventSubConnectionPolicy.isWebSocketTransportLimit(error)) {
+            state.markEventSubTransportLimitReached(error.message)
+        }
         if (error.isTwitchAuthenticationFailure()) {
             state.markAuthenticationRequired(error.message)
             return
@@ -179,6 +189,8 @@ internal class TwitchChatSessionRuntime(
     fun close() {
         supplementalSubscriptionsJob?.cancel()
         supplementalSubscriptionsJob = null
+        state.clearEventSubSessionId(currentEventSubSessionId)
+        currentEventSubSessionId = null
     }
 
     private fun currentMessageRuleEvaluator(): MessageRuleEvaluator {
