@@ -26,6 +26,11 @@ class EmoteUsageRanking internal constructor(
     internal val usageByKey: Map<String, EmoteUsageStat>,
 )
 
+private data class MutableEmoteUsageStat(
+    var count: Int,
+    val mostRecentIndex: Int,
+)
+
 object EmoteCatalogRanking {
     fun buildUsageRanking(
         recentEmoteKeys: List<String>,
@@ -183,16 +188,22 @@ object EmoteCatalogRanking {
 
     private fun buildUsageStats(recentEmoteKeys: List<String>): Map<String, EmoteUsageStat> {
         if (recentEmoteKeys.isEmpty()) return emptyMap()
-        val counts = recentEmoteKeys.groupingBy { it }.eachCount()
-        val newestIndex = buildMap<String, Int> {
-            recentEmoteKeys.forEachIndexed { index, key ->
-                if (!containsKey(key)) put(key, index)
+        val stats = LinkedHashMap<String, MutableEmoteUsageStat>()
+        recentEmoteKeys.forEachIndexed { index, key ->
+            val existing = stats[key]
+            if (existing == null) {
+                stats[key] = MutableEmoteUsageStat(
+                    count = 1,
+                    mostRecentIndex = index,
+                )
+            } else {
+                existing.count += 1
             }
         }
-        return counts.mapValues { (key, count) ->
+        return stats.mapValues { (_, stat) ->
             EmoteUsageStat(
-                count = count,
-                mostRecentIndex = newestIndex[key] ?: Int.MAX_VALUE,
+                count = stat.count,
+                mostRecentIndex = stat.mostRecentIndex,
             )
         }
     }

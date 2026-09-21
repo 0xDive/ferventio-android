@@ -110,6 +110,18 @@ class EmoteCatalogRankingTest {
     }
 
     @Test
+    fun usageRankingCountsInOneOrderAndKeepsNewestOccurrenceIndex() {
+        val ranking = EmoteCatalogRanking.buildUsageRanking(
+            listOf("cat", "dog", "cat", "cat", "dog"),
+        )
+
+        assertEquals(3, ranking.usageByKey.getValue("cat").count)
+        assertEquals(0, ranking.usageByKey.getValue("cat").mostRecentIndex)
+        assertEquals(2, ranking.usageByKey.getValue("dog").count)
+        assertEquals(1, ranking.usageByKey.getValue("dog").mostRecentIndex)
+    }
+
+    @Test
     fun indexedSearchRespectsProviderFilter() {
         val sevenTv = asset("1", "WaveCat", provider = "7tv")
         val twitch = asset("2", "WaveCat", provider = "twitch")
