@@ -24,6 +24,7 @@ class LegacyHistoryWriteBatchTest {
             timestampMillis = 2L,
             isRead = false,
             isDirectMention = true,
+            isHighlight = false,
         )
 
         val batch = collectLegacyHistoryWriteBatch(
