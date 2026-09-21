@@ -287,15 +287,21 @@ class PushCoordinator(
     }
 
     fun showHighlightAlert(alert: HighlightAlert) {
-        val shouldPush = alert.push &&
-            settingsStore.notificationEnabled("highlight", alert.message.channelId)
-        if (alert.playSound && !shouldPush) {
+        val decision = resolveHighlightDelivery(
+            deliveryEnabled = settingsStore.notificationEnabled(
+                "highlight",
+                alert.message.channelId,
+            ),
+            pushRequested = alert.push,
+            playSoundRequested = alert.playSound,
+        )
+        if (decision.playStandaloneSound) {
             runCatching {
                 val sound = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
                 RingtoneManager.getRingtone(appContext, sound)?.play()
             }
         }
-        if (!shouldPush) return
+        if (!decision.showNotification) return
         notificationPresenter.show(
             PushNotificationPayload(
                 type = "highlight",
@@ -305,7 +311,7 @@ class PushCoordinator(
                 channelLogin = alert.message.channelLogin,
                 messageId = alert.message.id,
                 destination = "mentions",
-                silent = !alert.playSound,
+                silent = decision.notificationSilent,
             ),
         )
     }
