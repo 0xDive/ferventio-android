@@ -6,6 +6,8 @@ object ThirdPartyEmoteParser {
         emotesByCode: Map<String, ThirdPartyEmoteAsset>,
     ): ChatMessage {
         if (emotesByCode.isEmpty()) return message
+        if (!message.hasResolvableThirdPartyToken(emotesByCode)) return message
+
         var changed = false
         val enriched = buildList {
             message.fragments.forEach { fragment ->
@@ -39,6 +41,39 @@ object ThirdPartyEmoteParser {
             }
         }
         return if (changed) message.copy(fragments = enriched) else message
+    }
+
+    private fun ChatMessage.hasResolvableThirdPartyToken(
+        emotesByCode: Map<String, ThirdPartyEmoteAsset>,
+    ): Boolean {
+        fragments.forEach { fragment ->
+            val text = (fragment as? ChatFragment.Text)?.text ?: return@forEach
+            if (text.hasResolvableThirdPartyToken(emotesByCode)) return true
+        }
+        return false
+    }
+
+    private fun String.hasResolvableThirdPartyToken(
+        emotesByCode: Map<String, ThirdPartyEmoteAsset>,
+    ): Boolean {
+        if (isEmpty()) return false
+        var start = 0
+        var whitespace = this[0].isWhitespace()
+        var index = 1
+        while (index <= length) {
+            val atEnd = index == length
+            val nextWhitespace = if (atEnd) whitespace else this[index].isWhitespace()
+            if (atEnd || nextWhitespace != whitespace) {
+                if (!whitespace) {
+                    val asset = emotesByCode[substring(start, index)]
+                    if (asset?.textResolvable == true) return true
+                }
+                start = index
+                whitespace = nextWhitespace
+            }
+            index += 1
+        }
+        return false
     }
 
     private inline fun String.forEachTokenRun(

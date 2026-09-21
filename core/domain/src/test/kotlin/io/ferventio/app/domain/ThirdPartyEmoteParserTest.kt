@@ -41,6 +41,36 @@ class ThirdPartyEmoteParserTest {
     }
 
     @Test
+    fun noMatchFastPathKeepsOriginalFragmentList() {
+        val source = message("ordinary words")
+
+        val result = ThirdPartyEmoteParser.enrich(
+            source,
+            mapOf("KEKW" to kekw),
+        )
+
+        assertTrue(result === source)
+        assertTrue(result.fragments === source.fragments)
+    }
+
+    @Test
+    fun nonTextFragmentsDoNotDefeatNoMatchFastPath() {
+        val source = message("ordinary").copy(
+            fragments = listOf(
+                ChatFragment.Text("ordinary "),
+                ChatFragment.TwitchEmote("Kappa", "25"),
+            ),
+        )
+
+        val result = ThirdPartyEmoteParser.enrich(
+            source,
+            mapOf("KEKW" to kekw),
+        )
+
+        assertTrue(result === source)
+    }
+
+    @Test
     fun doesNotReplaceInsideAnotherWordOrWithPunctuation() {
         val result = ThirdPartyEmoteParser.enrich(message("xKEKW KEKW!"), mapOf("KEKW" to kekw))
         assertTrue(result.fragments.none { it is ChatFragment.ThirdPartyEmote })
