@@ -17,6 +17,7 @@ class LegacyBoundedListTest {
         assertEquals(1_000, values.first())
         assertEquals(5_999, values.last())
         assertEquals(3_500, values[2_500])
+        assertEquals((1_000 until 6_000).toList(), values.toList())
     }
 
     @Test
@@ -42,6 +43,21 @@ class LegacyBoundedListTest {
         assertEquals(listOf("a", "b", "changed", "d"), values.toMutableList().apply {
             this[2] = "changed"
         })
+    }
+
+    @Test
+    fun chunkBoundaryAndSingleItemWindowStayCorrect() {
+        var boundary: List<Int> = emptyList()
+        repeat(130) { value ->
+            boundary = appendLegacyBounded(boundary, value, limit = 65)
+        }
+        assertEquals((65 until 130).toList(), boundary.toList())
+
+        var single: List<Int> = emptyList()
+        repeat(130) { value ->
+            single = appendLegacyBounded(single, value, limit = 1)
+        }
+        assertEquals(listOf(129), single)
     }
 
     @Test
