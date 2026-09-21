@@ -90,6 +90,20 @@ class ChatRepeatCollapserTest {
     }
 
     @Test
+    fun `normalizes mixed whitespace without changing collapse semantics`() {
+        val messages = listOf(
+            message("1", "alpha", "  Same\tMessage  ", 1_000L),
+            message("2", "beta", "same message", 2_000L),
+            message("3", "gamma", "SAME\nMESSAGE", 3_000L),
+        )
+
+        val plan = ChatRepeatCollapser.build(messages)
+
+        assertEquals(setOf("1"), plan.visibleMessageIds)
+        assertEquals(3, plan.summaryFor("1")?.count)
+    }
+
+    @Test
     fun `participant list is bounded and deduplicated`() {
         val messages = listOf(
             message("1", "alpha", "same", 1_000L),

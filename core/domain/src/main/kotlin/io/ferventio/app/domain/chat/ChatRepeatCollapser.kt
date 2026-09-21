@@ -178,11 +178,34 @@ object ChatRepeatCollapser {
         return normalized.takeIf(String::isNotBlank)
     }
 
-    private fun normalize(text: String): String = text
-        .trim()
-        .lowercase()
-        .replace(WHITESPACE, " ")
+    private fun normalize(text: String): String {
+        val lowered = text.trim().lowercase()
+        if (lowered.isEmpty()) return lowered
 
-    private val WHITESPACE = Regex("\\s+")
+        var previousWhitespace = false
+        var needsCollapse = false
+        for (char in lowered) {
+            val whitespace = char.isWhitespace()
+            if (whitespace && (char != ' ' || previousWhitespace)) {
+                needsCollapse = true
+                break
+            }
+            previousWhitespace = whitespace
+        }
+        if (!needsCollapse) return lowered
+
+        return buildString(lowered.length) {
+            var inWhitespace = false
+            lowered.forEach { char ->
+                if (char.isWhitespace()) {
+                    if (!inWhitespace) append(' ')
+                    inWhitespace = true
+                } else {
+                    append(char)
+                    inWhitespace = false
+                }
+            }
+        }
+    }
     private val PROTECTED_BADGE_SET_IDS = setOf("broadcaster", "moderator", "vip")
 }
