@@ -10,6 +10,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 
 object NotificationPreferencesCodec {
     private val json = Json { ignoreUnknownKeys = true }
@@ -33,6 +34,7 @@ object NotificationPreferencesCodec {
                 channelId to ChannelNotificationPreferences(
                     enabled = channel.boolean("enabled") ?: true,
                     eventOverrides = channel.booleanMap("eventOverrides"),
+                    mutedUntilEpochMillis = channel.long("mutedUntilEpochMillis"),
                 )
             }
             ?.toMap()
@@ -64,6 +66,9 @@ object NotificationPreferencesCodec {
                             channelId,
                             buildJsonObject {
                                 put("enabled", JsonPrimitive(channel.enabled))
+                                channel.mutedUntilEpochMillis?.let { mutedUntil ->
+                                    put("mutedUntilEpochMillis", JsonPrimitive(mutedUntil))
+                                }
                                 put(
                                     "eventOverrides",
                                     JsonObject(
@@ -82,6 +87,9 @@ object NotificationPreferencesCodec {
 
     private fun JsonObject.boolean(name: String): Boolean? =
         get(name)?.runCatching { jsonPrimitive.booleanOrNull }?.getOrNull()
+
+    private fun JsonObject.long(name: String): Long? =
+        get(name)?.runCatching { jsonPrimitive.longOrNull }?.getOrNull()
 
     private fun JsonObject.booleanMap(name: String): Map<String, Boolean> =
         (get(name) as? JsonObject)

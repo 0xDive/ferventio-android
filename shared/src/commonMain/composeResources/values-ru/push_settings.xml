@@ -16,6 +16,13 @@
     <string name="notifications_custom_channel">Индивидуальные настройки</string>
     <string name="notifications_configure_channel">Настроить события</string>
     <string name="notifications_hide_channel">Скрыть настройки</string>
+    <string name="notifications_mute_title">Пауза уведомлений</string>
+    <string name="notifications_mute_hint">Временно отключить доставку, не меняя настройки событий.</string>
+    <string name="notifications_muted_hint">Доставка временно приостановлена. После срока настройки событий восстановятся автоматически.</string>
+    <string name="notifications_mute_1h">1 ч</string>
+    <string name="notifications_mute_8h">8 ч</string>
+    <string name="notifications_mute_1d">1 день</string>
+    <string name="notifications_unmute">Снять паузу</string>
     <string name="notifications_use_global_all_events">Все события как глобально</string>
     <string name="notifications_use_global">Как глобально</string>
     <string name="notifications_channel_master">Уведомления этого канала</string>

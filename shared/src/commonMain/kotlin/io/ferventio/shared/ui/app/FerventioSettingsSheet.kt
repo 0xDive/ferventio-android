@@ -1,5 +1,6 @@
 package io.ferventio.shared.ui.app
 
+import kotlin.time.Clock
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -1134,6 +1135,76 @@ private fun NotificationsSettingsPage(
                     val channelPreferences = preferences.notificationPreferences
                         .channelOverrides
                         .getValue(channel.id)
+                    Text(
+                        text = stringResource(Res.string.notifications_mute_title),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                    Text(
+                        text = stringResource(
+                            if (
+                                channelPreferences.mutedUntilEpochMillis
+                                    ?.let { it > Clock.System.now().toEpochMilliseconds() } == true
+                            ) {
+                                Res.string.notifications_muted_hint
+                            } else {
+                                Res.string.notifications_mute_hint
+                            },
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        listOf(
+                            Res.string.notifications_mute_1h to 60 * 60 * 1_000L,
+                            Res.string.notifications_mute_8h to 8 * 60 * 60 * 1_000L,
+                            Res.string.notifications_mute_1d to 24 * 60 * 60 * 1_000L,
+                        ).forEach { (labelRes, durationMillis) ->
+                            TextButton(
+                                onClick = {
+                                    update { current ->
+                                        current.copy(
+                                            notificationPreferences =
+                                                current.notificationPreferences
+                                                    .withChannelMutedUntil(
+                                                        channelId = channel.id,
+                                                        mutedUntilEpochMillis =
+                                                            Clock.System.now()
+                                                                .toEpochMilliseconds() +
+                                                                durationMillis,
+                                                    ),
+                                        )
+                                    }
+                                },
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(stringResource(labelRes))
+                            }
+                        }
+                    }
+                    if (channelPreferences.mutedUntilEpochMillis != null) {
+                        TextButton(
+                            onClick = {
+                                update { current ->
+                                    current.copy(
+                                        notificationPreferences =
+                                            current.notificationPreferences
+                                                .withChannelMutedUntil(
+                                                    channelId = channel.id,
+                                                    mutedUntilEpochMillis = null,
+                                                ),
+                                    )
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(stringResource(Res.string.notifications_unmute))
+                        }
+                    }
                     if (channelPreferences.eventOverrides.isNotEmpty()) {
                         TextButton(
                             onClick = {

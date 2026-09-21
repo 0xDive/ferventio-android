@@ -149,6 +149,62 @@ internal fun NotificationSettingsContent(
                     val channelPreferences = state.notificationPreferences
                         .channelOverrides
                         .getValue(channel.id)
+                    LocalizedText(
+                        "Пауза уведомлений",
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    LocalizedText(
+                        if (
+                            channelPreferences.mutedUntilEpochMillis
+                                ?.let { it > System.currentTimeMillis() } == true
+                        ) {
+                            "Доставка временно приостановлена. После срока настройки событий восстановятся автоматически."
+                        } else {
+                            "Временно отключить доставку, не меняя настройки событий."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        listOf(
+                            "1 ч" to 60 * 60 * 1_000L,
+                            "8 ч" to 8 * 60 * 60 * 1_000L,
+                            "1 день" to 24 * 60 * 60 * 1_000L,
+                        ).forEach { (label, durationMillis) ->
+                            TextButton(
+                                onClick = {
+                                    controller.setNotificationPreferences(
+                                        state.notificationPreferences.withChannelMutedUntil(
+                                            channelId = channel.id,
+                                            mutedUntilEpochMillis =
+                                                System.currentTimeMillis() + durationMillis,
+                                        ),
+                                    )
+                                },
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                LocalizedText(label)
+                            }
+                        }
+                    }
+                    if (channelPreferences.mutedUntilEpochMillis != null) {
+                        TextButton(
+                            onClick = {
+                                controller.setNotificationPreferences(
+                                    state.notificationPreferences.withChannelMutedUntil(
+                                        channelId = channel.id,
+                                        mutedUntilEpochMillis = null,
+                                    ),
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            LocalizedText("Снять паузу")
+                        }
+                    }
                     if (channelPreferences.eventOverrides.isNotEmpty()) {
                         TextButton(
                             onClick = {

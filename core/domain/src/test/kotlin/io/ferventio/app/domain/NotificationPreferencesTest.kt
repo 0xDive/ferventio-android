@@ -50,6 +50,48 @@ class NotificationPreferencesTest {
     }
 
     @Test
+    fun temporaryChannelMuteSuppressesDeliveryWithoutChangingConfiguredRules() {
+        val preferences = NotificationPreferences()
+            .withGlobalEvent("reply", true)
+            .withChannelMutedUntil("channel", 10_000L)
+
+        assertFalse(
+            preferences.isDeliveryEnabled(
+                ruleId = "reply",
+                channelId = "channel",
+                nowEpochMillis = 9_999L,
+            ),
+        )
+        assertTrue(
+            preferences.isDeliveryEnabled(
+                ruleId = "reply",
+                channelId = "channel",
+                nowEpochMillis = 10_000L,
+            ),
+        )
+        assertTrue(preferences.isEnabled("reply", "channel"))
+        assertTrue("reply" in preferences.enabledRuleIds(listOf("channel")))
+    }
+
+    @Test
+    fun clearingTemporaryChannelMuteKeepsOtherOverrides() {
+        val preferences = NotificationPreferences()
+            .withChannelEvent("channel", "reply", false)
+            .withChannelMutedUntil("channel", 10_000L)
+
+        val restored = preferences.withChannelMutedUntil("channel", null)
+
+        assertEquals(
+            mapOf("reply" to false),
+            restored.channelOverrides.getValue("channel").eventOverrides,
+        )
+        assertEquals(
+            null,
+            restored.channelOverrides.getValue("channel").mutedUntilEpochMillis,
+        )
+    }
+
+    @Test
     fun disabledChannelSuppressesEveryEventWithoutExpandingOverrides() {
         val preferences = NotificationPreferences()
             .withChannelEnabled("channel", false)

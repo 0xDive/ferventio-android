@@ -44,6 +44,34 @@ class PushNotificationPolicyTest {
     }
 
     @Test
+    fun temporaryMuteBlocksLocalDeliveryButKeepsBackendRulesConfigured() {
+        val preferences = SharedAppPreferences(
+            notificationPreferences = NotificationPreferences()
+                .withChannelMutedUntil("one", 10_000L),
+        )
+
+        assertFalse(
+            policy.isEnabled(
+                preferences = preferences,
+                ruleId = "reply",
+                channelId = "one",
+                nowEpochMillis = 9_999L,
+            ),
+        )
+        assertEquals(
+            true,
+            "reply" in policy.channelRuleOverrides(
+                preferences = preferences,
+                channelIds = listOf("one"),
+            ).getValue("one"),
+        )
+        assertEquals(
+            mapOf("one" to 10_000L),
+            policy.channelMutedUntilEpochMillis(preferences, listOf("one")),
+        )
+    }
+
+    @Test
     fun sentinelIsNotARealNotificationEvent() {
         assertFalse(
             io.ferventio.app.domain.NotificationEventType.allRuleIds

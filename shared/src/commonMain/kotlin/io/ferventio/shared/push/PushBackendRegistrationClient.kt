@@ -242,6 +242,11 @@ class ApnsPushRegistrationCoordinator(
                     preferences = preferences,
                     channelIds = workspace.channelIds,
                 ),
+                notificationChannelMutedUntilEpochMillis =
+                    PushNotificationPolicy().channelMutedUntilEpochMillis(
+                        preferences = preferences,
+                        channelIds = workspace.channelIds,
+                    ),
             ),
         )
     }

@@ -16,6 +16,13 @@
     <string name="notifications_custom_channel">Custom settings</string>
     <string name="notifications_configure_channel">Configure events</string>
     <string name="notifications_hide_channel">Hide settings</string>
+    <string name="notifications_mute_title">Pause notifications</string>
+    <string name="notifications_mute_hint">Temporarily pause delivery without changing event settings.</string>
+    <string name="notifications_muted_hint">Delivery is temporarily paused. Event settings resume automatically when the pause expires.</string>
+    <string name="notifications_mute_1h">1 h</string>
+    <string name="notifications_mute_8h">8 h</string>
+    <string name="notifications_mute_1d">1 day</string>
+    <string name="notifications_unmute">Resume notifications</string>
     <string name="notifications_use_global_all_events">Use global settings for all events</string>
     <string name="notifications_use_global">Use global setting</string>
     <string name="notifications_channel_master">Notifications for this channel</string>

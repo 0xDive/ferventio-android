@@ -13,6 +13,7 @@ class NotificationPreferencesCodecTest {
             .withGlobalEvent("reply", false)
             .withChannelEnabled("channel-1", true)
             .withChannelEvent("channel-1", "reply", true)
+            .withChannelMutedUntil("channel-1", 9_999_999L)
             .withChannelEnabled("channel-2", false)
 
         val restored = NotificationPreferencesCodec.decode(
@@ -21,6 +22,10 @@ class NotificationPreferencesCodecTest {
 
         assertEquals(preferences, restored)
         assertTrue(restored.isEnabled("reply", "channel-1"))
+        assertEquals(
+            9_999_999L,
+            restored.channelOverrides.getValue("channel-1").mutedUntilEpochMillis,
+        )
         assertFalse(restored.isEnabled("reply", "channel-2"))
     }
 

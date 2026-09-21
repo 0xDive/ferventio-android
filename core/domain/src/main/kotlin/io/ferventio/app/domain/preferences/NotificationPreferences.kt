@@ -29,9 +29,11 @@ enum class NotificationEventType(val ruleId: String) {
 data class ChannelNotificationPreferences(
     val enabled: Boolean = true,
     val eventOverrides: Map<String, Boolean> = emptyMap(),
+    val mutedUntilEpochMillis: Long? = null,
 ) {
     fun normalized(): ChannelNotificationPreferences = copy(
         eventOverrides = normalizeNotificationEventOverrides(eventOverrides),
+        mutedUntilEpochMillis = mutedUntilEpochMillis?.takeIf { it > 0L },
     )
 }
 
@@ -73,6 +75,20 @@ data class NotificationPreferences(
         val channel = channelOverrides[normalizedChannelId] ?: return globalEnabled
         if (!channel.enabled) return false
         return channel.eventOverrides[normalizedRuleId] ?: globalEnabled
+    }
+
+    fun isDeliveryEnabled(
+        ruleId: String,
+        channelId: String? = null,
+        nowEpochMillis: Long,
+        legacyDefault: (String) -> Boolean = { true },
+    ): Boolean {
+        if (!isEnabled(ruleId, channelId, legacyDefault)) return false
+        val normalizedChannelId = channelId?.trim()?.takeIf(String::isNotEmpty)
+            ?: return true
+        val mutedUntil = channelOverrides[normalizedChannelId]?.mutedUntilEpochMillis
+            ?: return true
+        return mutedUntil <= nowEpochMillis
     }
 
     fun enabledRuleIds(
@@ -139,6 +155,21 @@ data class NotificationPreferences(
         return copy(
             channelOverrides = channelOverrides + (
                 normalizedChannelId to current.copy(enabled = value)
+            ),
+        ).normalized()
+    }
+
+    fun withChannelMutedUntil(
+        channelId: String,
+        mutedUntilEpochMillis: Long?,
+    ): NotificationPreferences {
+        val normalizedChannelId = requireChannelId(channelId)
+        val normalizedMute = mutedUntilEpochMillis?.takeIf { it > 0L }
+        val current = channelOverrides[normalizedChannelId] ?: ChannelNotificationPreferences()
+        if (current.mutedUntilEpochMillis == normalizedMute) return this
+        return copy(
+            channelOverrides = channelOverrides + (
+                normalizedChannelId to current.copy(mutedUntilEpochMillis = normalizedMute)
             ),
         ).normalized()
     }

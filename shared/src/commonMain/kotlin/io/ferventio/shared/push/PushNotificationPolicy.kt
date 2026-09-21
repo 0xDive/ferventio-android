@@ -2,6 +2,7 @@ package io.ferventio.shared.push
 
 import io.ferventio.app.domain.NotificationEventType
 import io.ferventio.shared.settings.SharedAppPreferences
+import kotlin.time.Clock
 
 /**
  * Shared notification policy used by native push adapters before presentation and registration.
@@ -12,9 +13,11 @@ class PushNotificationPolicy {
         preferences: SharedAppPreferences,
         ruleId: String,
         channelId: String?,
-    ): Boolean = preferences.notificationPreferences.isEnabled(
+        nowEpochMillis: Long = Clock.System.now().toEpochMilliseconds(),
+    ): Boolean = preferences.notificationPreferences.isDeliveryEnabled(
         ruleId = ruleId,
         channelId = channelId,
+        nowEpochMillis = nowEpochMillis,
         legacyDefault = { rule -> legacyDefault(preferences, rule) },
     )
 
@@ -54,6 +57,29 @@ class PushNotificationPolicy {
                     .ifEmpty { listOf(BACKEND_DISABLED_RULE) }
                 put(channelId, rules)
             }
+        }
+    }
+
+    fun channelMutedUntilEpochMillis(
+        preferences: SharedAppPreferences,
+        channelIds: List<String>,
+    ): Map<String, Long> {
+        val knownChannelIds = channelIds
+            .asSequence()
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .toSet()
+        if (knownChannelIds.isEmpty()) return emptyMap()
+        return buildMap {
+            preferences.notificationPreferences
+                .normalized()
+                .channelOverrides
+                .forEach { (channelId, channel) ->
+                    val mutedUntil = channel.mutedUntilEpochMillis
+                    if (channelId in knownChannelIds && mutedUntil != null) {
+                        put(channelId, mutedUntil)
+                    }
+                }
         }
     }
 

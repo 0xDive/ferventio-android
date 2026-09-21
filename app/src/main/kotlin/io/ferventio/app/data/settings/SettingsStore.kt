@@ -274,9 +274,10 @@ class SettingsStore(context: Context) {
             .apply()
 
     fun notificationEnabled(ruleId: String, channelId: String? = null): Boolean =
-        notificationPreferences.isEnabled(
+        notificationPreferences.isDeliveryEnabled(
             ruleId = ruleId,
             channelId = channelId,
+            nowEpochMillis = System.currentTimeMillis(),
             legacyDefault = ::legacyNotificationDefault,
         )
 

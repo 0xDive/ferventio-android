@@ -249,6 +249,7 @@ class PushBackendRegistrationClientTest {
             notificationPreferences = NotificationPreferences()
                 .withGlobalEvent("reply", false)
                 .withChannelEvent("1", "reply", true)
+                .withChannelMutedUntil("1", 12_345L)
                 .withChannelEnabled("2", false),
         )
 
@@ -266,6 +267,10 @@ class PushBackendRegistrationClientTest {
         assertEquals(
             listOf(PushNotificationPolicy.BACKEND_DISABLED_RULE),
             request.notificationChannelRules.getValue("2"),
+        )
+        assertEquals(
+            mapOf("1" to 12_345L),
+            request.notificationChannelMutedUntilEpochMillis,
         )
     }
 

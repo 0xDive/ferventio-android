@@ -120,6 +120,11 @@ class AppContainer(context: Context) {
                     preferences = notificationPreferences,
                     channelIds = channelIds,
                 ),
+                notificationChannelMutedUntilEpochMillis =
+                    pushNotificationPolicy.channelMutedUntilEpochMillis(
+                        preferences = notificationPreferences,
+                        channelIds = channelIds,
+                    ),
                 highlightPhrases = state.highlightRules
                     .filter { it.enabled && it.push && it.type in setOf(HighlightRuleType.WORD, HighlightRuleType.USERNAME) }
                     .map { it.pattern.trim() }

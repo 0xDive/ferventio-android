@@ -212,6 +212,8 @@ class PushCoordinator(
                         moderatorChannelIds = context.moderatorChannelIds,
                         notificationRules = context.notificationRules,
                         notificationChannelRules = context.notificationChannelRules,
+                        notificationChannelMutedUntilEpochMillis =
+                            context.notificationChannelMutedUntilEpochMillis,
                         highlightPhrases = context.highlightPhrases,
                         selectedUserLogins = context.selectedUserLogins,
                     )
@@ -228,6 +230,8 @@ class PushCoordinator(
                         moderatorChannelIds = context.moderatorChannelIds,
                         notificationRules = context.notificationRules,
                         notificationChannelRules = context.notificationChannelRules,
+                        notificationChannelMutedUntilEpochMillis =
+                            context.notificationChannelMutedUntilEpochMillis,
                         highlightPhrases = context.highlightPhrases,
                         selectedUserLogins = context.selectedUserLogins,
                     )

@@ -29,6 +29,7 @@ data class PushRegistrationRequest(
     val moderatorChannelIds: List<String> = emptyList(),
     val notificationRules: List<String> = emptyList(),
     val notificationChannelRules: Map<String, List<String>> = emptyMap(),
+    val notificationChannelMutedUntilEpochMillis: Map<String, Long> = emptyMap(),
     val highlightPhrases: List<String> = emptyList(),
     val selectedUserLogins: List<String> = emptyList(),
 )
@@ -40,6 +41,7 @@ data class PushRegistrationContext(
     val moderatorChannelIds: List<String> = emptyList(),
     val notificationRules: List<String> = DEFAULT_NOTIFICATION_RULES,
     val notificationChannelRules: Map<String, List<String>> = emptyMap(),
+    val notificationChannelMutedUntilEpochMillis: Map<String, Long> = emptyMap(),
     val highlightPhrases: List<String> = emptyList(),
     val selectedUserLogins: List<String> = emptyList(),
 ) {
@@ -123,6 +125,8 @@ class PushRegistrationRequestFactory {
             moderatorChannelIds = context.moderatorChannelIds,
             notificationRules = context.notificationRules,
             notificationChannelRules = context.notificationChannelRules,
+            notificationChannelMutedUntilEpochMillis =
+                context.notificationChannelMutedUntilEpochMillis,
             highlightPhrases = context.highlightPhrases,
             selectedUserLogins = context.selectedUserLogins,
         ).also(PushRegistrationValidation::requireValid)
