@@ -6712,15 +6712,7 @@ class FerventioController(
         existing: List<ChatMessage>,
         message: ChatMessage,
         limit: Int,
-    ): List<ChatMessage> {
-        if (limit <= 0) return emptyList()
-        val keepExisting = minOf(existing.size, limit - 1)
-        val fromIndex = existing.size - keepExisting
-        return ArrayList<ChatMessage>(keepExisting + 1).apply {
-            if (keepExisting > 0) addAll(existing.subList(fromIndex, existing.size))
-            add(message)
-        }
-    }
+    ): List<ChatMessage> = appendLegacyBounded(existing, message, limit)
 
     private fun refreshModeratedChannels(session: TwitchSession) {
         scope.launch {
