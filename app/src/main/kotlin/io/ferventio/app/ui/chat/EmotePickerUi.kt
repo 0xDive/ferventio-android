@@ -64,6 +64,7 @@ import coil3.compose.AsyncImage
 import io.ferventio.app.domain.EmoteCatalogRanking
 import io.ferventio.app.domain.EmoteCatalogSearchIndex
 import io.ferventio.app.domain.EmoteScope
+import io.ferventio.app.domain.EmoteUsageRanking
 import io.ferventio.app.domain.ThirdPartyEmoteAsset
 import io.ferventio.app.domain.usageKey
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -98,6 +99,7 @@ private data class ProviderScopeKey(
 private data class EmotePickerIndex(
     val catalog: List<ThirdPartyEmoteAsset>,
     val searchIndex: EmoteCatalogSearchIndex,
+    val usageRanking: EmoteUsageRanking,
     val frequent: List<ThirdPartyEmoteAsset>,
     val recent: List<ThirdPartyEmoteAsset>,
     val favorites: List<ThirdPartyEmoteAsset>,
@@ -120,6 +122,7 @@ private data class EmotePickerIndex(
                 favoriteEmoteKeys = favoriteEmoteKeys,
                 limit = MAX_SEARCH_RESULTS,
                 providerId = filter.providerId,
+                usageRanking = usageRanking,
             )
             return matches.takeIf { it.isNotEmpty() }
                 ?.let { listOf(EmotePickerSection("search", "Подходящие эмоуты", matches)) }
@@ -226,6 +229,7 @@ private data class EmotePickerIndex(
             return EmotePickerIndex(
                 catalog = unique,
                 searchIndex = EmoteCatalogRanking.buildSearchIndex(unique),
+                usageRanking = EmoteCatalogRanking.buildUsageRanking(recentEmoteKeys),
                 frequent = EmoteCatalogRanking.frequent(unique, recentEmoteKeys, MAX_FREQUENT_EMOTES),
                 recent = EmoteCatalogRanking.recent(unique, recentEmoteKeys, MAX_RECENT_EMOTES),
                 favorites = unique.asSequence()

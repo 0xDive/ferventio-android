@@ -17,7 +17,15 @@ internal data class EmoteCatalogSearchEntry(
     val normalizedCode: String,
 )
 
+class EmoteUsageRanking internal constructor(
+    internal val usageByKey: Map<String, EmoteUsageStat>,
+)
+
 object EmoteCatalogRanking {
+    fun buildUsageRanking(
+        recentEmoteKeys: List<String>,
+    ): EmoteUsageRanking = EmoteUsageRanking(buildUsageStats(recentEmoteKeys))
+
     fun buildSearchIndex(
         catalog: List<ThirdPartyEmoteAsset>,
     ): EmoteCatalogSearchIndex {
@@ -60,10 +68,11 @@ object EmoteCatalogRanking {
         favoriteEmoteKeys: Set<String> = emptySet(),
         limit: Int,
         providerId: String? = null,
+        usageRanking: EmoteUsageRanking? = null,
     ): List<ThirdPartyEmoteAsset> {
         val normalizedQuery = query.trim().lowercase()
         if (normalizedQuery.isEmpty()) return emptyList()
-        val usage = buildUsageStats(recentEmoteKeys)
+        val usage = usageRanking?.usageByKey ?: buildUsageStats(recentEmoteKeys)
         return index.candidates(normalizedQuery)
             .asSequence()
             .filter { entry ->
@@ -210,7 +219,7 @@ object EmoteCatalogRanking {
         else -> Int.MAX_VALUE
     }
 
-    private data class EmoteUsageStat(
+    internal data class EmoteUsageStat(
         val count: Int,
         val mostRecentIndex: Int,
     )

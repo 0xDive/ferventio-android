@@ -34,6 +34,7 @@ object ComposerAutocomplete {
         currentUserId: String?,
         userIndex: List<ComposerSuggestion.User>? = null,
         emoteSearchIndex: EmoteCatalogSearchIndex? = null,
+        emoteUsageRanking: EmoteUsageRanking? = null,
         limit: Int = 8,
     ): List<ComposerSuggestion> {
         val token = currentToken(input)
@@ -67,6 +68,7 @@ object ComposerAutocomplete {
                         recentEmoteKeys = recentEmoteKeys,
                         favoriteEmoteKeys = favoriteEmoteKeys,
                         limit = limit,
+                        usageRanking = emoteUsageRanking,
                     )
                 }
                 emotes.map(ComposerSuggestion::Emote)

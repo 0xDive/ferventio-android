@@ -55,15 +55,19 @@ class ComposerAutocompleteTest {
         val frequent = emote("2", "CatJam")
         val index = EmoteCatalogRanking.buildSearchIndex(listOf(regular, frequent))
 
+        val usage = EmoteCatalogRanking.buildUsageRanking(
+            listOf(frequent.usageKey, frequent.usageKey),
+        )
         val result = ComposerAutocomplete.suggestions(
             input = "hello Cat",
             messages = emptyList(),
             profilesById = emptyMap(),
             catalog = emptyList(),
-            recentEmoteKeys = listOf(frequent.usageKey, frequent.usageKey),
+            recentEmoteKeys = emptyList(),
             favoriteEmoteKeys = emptySet(),
             currentUserId = null,
             emoteSearchIndex = index,
+            emoteUsageRanking = usage,
         )
 
         assertEquals(frequent, (result.first() as ComposerSuggestion.Emote).asset)

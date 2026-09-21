@@ -90,6 +90,26 @@ class EmoteCatalogRankingTest {
     }
 
     @Test
+    fun prebuiltUsageRankingAvoidsRecountingRecentKeysPerQuery() {
+        val regular = asset("1", "CatWave")
+        val frequent = asset("2", "CatJam")
+        val index = EmoteCatalogRanking.buildSearchIndex(listOf(regular, frequent))
+        val usage = EmoteCatalogRanking.buildUsageRanking(
+            listOf(frequent.usageKey, frequent.usageKey, regular.usageKey),
+        )
+
+        val result = EmoteCatalogRanking.search(
+            query = "Cat",
+            index = index,
+            recentEmoteKeys = emptyList(),
+            usageRanking = usage,
+            limit = 8,
+        )
+
+        assertEquals(frequent, result.first())
+    }
+
+    @Test
     fun indexedSearchRespectsProviderFilter() {
         val sevenTv = asset("1", "WaveCat", provider = "7tv")
         val twitch = asset("2", "WaveCat", provider = "twitch")
