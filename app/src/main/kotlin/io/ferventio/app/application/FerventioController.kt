@@ -182,14 +182,17 @@ class FerventioController(
                 batch += next
             }
             runCatching {
+                val writeBatch = collectLegacyHistoryWriteBatch(batch)
                 historyRepository.saveMessages(
-                    messages = batch.map(HistoryWriteRequest::message),
+                    messages = writeBatch.messages,
                     enabled = settingsStore.localHistoryEnabled,
                     limitPerChannel = settingsStore.localHistoryLimit,
                     retentionDays = settingsStore.localHistoryRetentionDays,
                     maxDatabaseSizeMb = settingsStore.localHistoryMaxSizeMb,
                 )
-                historyRepository.saveAttentionEntries(batch.mapNotNull(HistoryWriteRequest::attention))
+                if (writeBatch.attentionEntries.isNotEmpty()) {
+                    historyRepository.saveAttentionEntries(writeBatch.attentionEntries)
+                }
             }.onFailure { error ->
                 mutableState.update { state ->
                     state.copy(lastConnectionError = state.lastConnectionError ?: "Room: ${error.userMessage()}")
@@ -7347,11 +7350,6 @@ private data class AnonymousBadgeSnapshot(
     val channelAssets: Map<String, Map<String, ChatBadgeAsset>>,
     val globalFfzBadges: Map<String, List<ChatBadgeAsset>>?,
     val channelFfzBadges: Map<String, Map<String, List<ChatBadgeAsset>>>,
-)
-
-private data class HistoryWriteRequest(
-    val message: ChatMessage,
-    val attention: AttentionEntry? = null,
 )
 
 private fun secureStateEquals(left: String, right: String): Boolean {
