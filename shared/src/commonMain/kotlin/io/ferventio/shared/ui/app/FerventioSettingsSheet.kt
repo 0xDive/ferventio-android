@@ -75,6 +75,8 @@ import io.ferventio.app.domain.ChatNameStyle
 import io.ferventio.app.domain.ChatChannel
 import io.ferventio.app.domain.MentionColors
 import io.ferventio.app.domain.NotificationEventType
+import io.ferventio.app.domain.NotificationMuteRemainingUnit
+import io.ferventio.app.domain.notificationMuteRemaining
 import io.ferventio.app.domain.MessageDensity
 import io.ferventio.app.domain.HighlightRule
 import io.ferventio.app.domain.IgnoreRule
@@ -1141,17 +1143,31 @@ private fun NotificationsSettingsPage(
                         fontWeight = FontWeight.SemiBold,
                         modifier = Modifier.padding(top = 4.dp),
                     )
-                    Text(
-                        text = stringResource(
-                            if (
-                                channelPreferences.mutedUntilEpochMillis
-                                    ?.let { it > Clock.System.now().toEpochMilliseconds() } == true
-                            ) {
-                                Res.string.notifications_muted_hint
-                            } else {
-                                Res.string.notifications_mute_hint
+                    val remainingMute = notificationMuteRemaining(
+                        mutedUntilEpochMillis = channelPreferences.mutedUntilEpochMillis,
+                        nowEpochMillis = Clock.System.now().toEpochMilliseconds(),
+                    )
+                    val muteHint = if (remainingMute != null) {
+                        val unit = stringResource(
+                            when (remainingMute.unit) {
+                                NotificationMuteRemainingUnit.MINUTES ->
+                                    Res.string.notifications_mute_unit_minutes
+                                NotificationMuteRemainingUnit.HOURS ->
+                                    Res.string.notifications_mute_unit_hours
+                                NotificationMuteRemainingUnit.DAYS ->
+                                    Res.string.notifications_mute_unit_days
                             },
-                        ),
+                        )
+                        stringResource(
+                            Res.string.notifications_mute_remaining,
+                            remainingMute.value,
+                            unit,
+                        )
+                    } else {
+                        stringResource(Res.string.notifications_mute_hint)
+                    }
+                    Text(
+                        text = muteHint,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

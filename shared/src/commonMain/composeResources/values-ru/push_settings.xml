@@ -18,6 +18,10 @@
     <string name="notifications_hide_channel">Скрыть настройки</string>
     <string name="notifications_mute_title">Пауза уведомлений</string>
     <string name="notifications_mute_hint">Временно отключить доставку, не меняя настройки событий.</string>
+    <string name="notifications_mute_remaining">Доставка приостановлена. Осталось ~%1$d %2$s</string>
+    <string name="notifications_mute_unit_minutes">мин.</string>
+    <string name="notifications_mute_unit_hours">ч.</string>
+    <string name="notifications_mute_unit_days">д.</string>
     <string name="notifications_muted_hint">Доставка временно приостановлена. После срока настройки событий восстановятся автоматически.</string>
     <string name="notifications_mute_1h">1 ч</string>
     <string name="notifications_mute_8h">8 ч</string>

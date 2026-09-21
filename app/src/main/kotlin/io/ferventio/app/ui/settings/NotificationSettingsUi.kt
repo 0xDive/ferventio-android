@@ -27,6 +27,8 @@ import androidx.compose.ui.unit.dp
 import io.ferventio.app.application.FerventioController
 import io.ferventio.app.domain.FerventioUiState
 import io.ferventio.app.domain.NotificationEventType
+import io.ferventio.app.domain.NotificationMuteRemainingUnit
+import io.ferventio.app.domain.notificationMuteRemaining
 import io.ferventio.app.push.PushUiState
 
 @Composable
@@ -153,12 +155,18 @@ internal fun NotificationSettingsContent(
                         "Пауза уведомлений",
                         fontWeight = FontWeight.SemiBold,
                     )
+                    val remainingMute = notificationMuteRemaining(
+                        mutedUntilEpochMillis = channelPreferences.mutedUntilEpochMillis,
+                        nowEpochMillis = System.currentTimeMillis(),
+                    )
                     LocalizedText(
-                        if (
-                            channelPreferences.mutedUntilEpochMillis
-                                ?.let { it > System.currentTimeMillis() } == true
-                        ) {
-                            "Доставка временно приостановлена. После срока настройки событий восстановятся автоматически."
+                        if (remainingMute != null) {
+                            val unit = when (remainingMute.unit) {
+                                NotificationMuteRemainingUnit.MINUTES -> "мин."
+                                NotificationMuteRemainingUnit.HOURS -> "ч."
+                                NotificationMuteRemainingUnit.DAYS -> "д."
+                            }
+                            "Доставка приостановлена. Осталось ~${remainingMute.value} $unit"
                         } else {
                             "Временно отключить доставку, не меняя настройки событий."
                         },
