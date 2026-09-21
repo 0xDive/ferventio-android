@@ -388,18 +388,11 @@ class ChatRuntimeStateHolder(
     private fun appendToBoundedLiveWindow(
         existing: List<ChatMessage>,
         message: ChatMessage,
-    ): List<ChatMessage> {
-        val retainedExisting = (MAX_MESSAGES_PER_CHANNEL - 1).coerceAtLeast(0)
-        val startIndex = (existing.size - retainedExisting).coerceAtLeast(0)
-        return ArrayList<ChatMessage>(
-            minOf(MAX_MESSAGES_PER_CHANNEL, existing.size + 1),
-        ).apply {
-            for (index in startIndex until existing.size) {
-                add(existing[index])
-            }
-            add(message)
-        }
-    }
+    ): List<ChatMessage> = appendSharedBounded(
+        source = existing,
+        value = message,
+        limit = MAX_MESSAGES_PER_CHANNEL,
+    )
 
     fun markOutgoingSending(channelId: String, localMessageId: String): Boolean =
         updateOutgoingMessage(channelId, localMessageId) { message ->
