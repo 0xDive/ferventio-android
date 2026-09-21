@@ -1017,7 +1017,11 @@ class FerventioController(
     fun recordEmoteUsage(asset: ThirdPartyEmoteAsset) {
         val key = asset.usageKey
         if (key.isBlank()) return
-        val updated = (listOf(key) + mutableState.value.recentEmoteKeys).take(MAX_RECENT_EMOTE_USES)
+        val updated = prependLegacyBoundedAllowDuplicates(
+            source = mutableState.value.recentEmoteKeys,
+            value = key,
+            maxSize = MAX_RECENT_EMOTE_USES,
+        )
         settingsStore.recentEmoteKeys = updated
         mutableState.update { state -> state.copy(recentEmoteKeys = updated) }
     }

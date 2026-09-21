@@ -100,3 +100,19 @@ internal fun <K, V> removeLegacyMapKeyIfPresent(
 } else {
     source
 }
+
+internal fun <T> prependLegacyBoundedAllowDuplicates(
+    source: List<T>,
+    value: T,
+    maxSize: Int,
+): List<T> {
+    if (maxSize <= 0) return emptyList()
+    val resultSize = minOf(maxSize, source.size + 1)
+    return ArrayList<T>(resultSize).apply {
+        add(value)
+        val retained = (resultSize - 1).coerceAtLeast(0)
+        for (index in 0 until retained) {
+            add(source[index])
+        }
+    }
+}

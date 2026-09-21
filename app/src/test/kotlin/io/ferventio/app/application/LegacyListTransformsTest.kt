@@ -118,4 +118,17 @@ class LegacyListTransformsTest {
         assertTrue(removed !== source)
         assertTrue(removed.isEmpty())
     }
+
+    @Test
+    fun boundedPrependKeepsDuplicatesForFrequencyHistoryWithoutIntermediateLists() {
+        val source = listOf("cat", "dog", "cat")
+
+        val result = prependLegacyBoundedAllowDuplicates(
+            source = source,
+            value = "cat",
+            maxSize = 3,
+        )
+
+        assertEquals(listOf("cat", "cat", "dog"), result)
+    }
 }
