@@ -147,9 +147,17 @@ internal fun NotificationSettingsContent(
                         },
                     )
                     NotificationEventType.entries.forEach { event ->
+                        val overridden = event.ruleId in state.notificationPreferences
+                            .channelOverrides
+                            .getValue(channel.id)
+                            .eventOverrides
                         SettingsSwitchRow(
                             title = notificationEventTitle(event),
-                            description = "Правило только для #${channel.displayName}.",
+                            description = if (overridden) {
+                                "Индивидуальное правило для #${channel.displayName}."
+                            } else {
+                                "Наследуется глобальная настройка."
+                            },
                             checked = state.notificationPreferences.isEnabled(
                                 ruleId = event.ruleId,
                                 channelId = channel.id,
@@ -165,6 +173,22 @@ internal fun NotificationSettingsContent(
                                 )
                             },
                         )
+                        if (overridden) {
+                            TextButton(
+                                onClick = {
+                                    controller.setNotificationPreferences(
+                                        state.notificationPreferences
+                                            .clearChannelEventOverride(
+                                                channelId = channel.id,
+                                                ruleId = event.ruleId,
+                                            ),
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                LocalizedText("Как глобально")
+                            }
+                        }
                     }
                 }
             }

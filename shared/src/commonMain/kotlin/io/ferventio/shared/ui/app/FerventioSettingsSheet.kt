@@ -1132,6 +1132,10 @@ private fun NotificationsSettingsPage(
                         },
                     )
                     NotificationEventType.entries.forEach { event ->
+                        val overridden = event.ruleId in preferences.notificationPreferences
+                            .channelOverrides
+                            .getValue(channel.id)
+                            .eventOverrides
                         SettingsSwitchRow(
                             label = notificationEventLabel(event),
                             checked = preferences.notificationPreferences.isEnabled(
@@ -1152,6 +1156,25 @@ private fun NotificationsSettingsPage(
                                 }
                             },
                         )
+                        if (overridden) {
+                            TextButton(
+                                onClick = {
+                                    update { current ->
+                                        current.copy(
+                                            notificationPreferences =
+                                                current.notificationPreferences
+                                                    .clearChannelEventOverride(
+                                                        channelId = channel.id,
+                                                        ruleId = event.ruleId,
+                                                    ),
+                                        )
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Text(stringResource(Res.string.notifications_use_global))
+                            }
+                        }
                     }
                     HorizontalDivider(modifier = Modifier.padding(bottom = 4.dp))
                 }
