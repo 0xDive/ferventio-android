@@ -687,11 +687,35 @@ internal fun ChannelChatContent(
         ffzBadgesByUser.mapValues { (_, badges) -> ImmutableBadgeAssetList(badges) }
     }
     val sentHistory = state.sentMessageHistoryByChannel[channelId].orEmpty()
-    val pinnedMessage = state.pinnedMessagesByChannel[channelId]?.takeIf { pinned ->
-        pinned.endsAt?.let { endsAt ->
-            runCatching { Instant.parse(endsAt).isAfter(Instant.now()) }.getOrDefault(false)
-        } ?: true
+    val pinnedCandidate = state.pinnedMessagesByChannel[channelId]
+    val pinnedExpiryEpochMillis = remember(pinnedCandidate?.endsAt) {
+        pinnedCandidate?.endsAt?.let { endsAt ->
+            runCatching { Instant.parse(endsAt).toEpochMilli() }
+                .getOrDefault(Long.MIN_VALUE)
+        }
     }
+    var pinnedExpired by remember(pinnedCandidate?.messageId, pinnedExpiryEpochMillis) {
+        mutableStateOf(
+            pinnedExpiryEpochMillis?.let { expiry ->
+                expiry == Long.MIN_VALUE || expiry <= System.currentTimeMillis()
+            } ?: false,
+        )
+    }
+    LaunchedEffect(pinnedCandidate?.messageId, pinnedExpiryEpochMillis) {
+        val expiry = pinnedExpiryEpochMillis ?: return@LaunchedEffect
+        if (expiry == Long.MIN_VALUE) {
+            pinnedExpired = true
+            return@LaunchedEffect
+        }
+        val remainingMillis = expiry - System.currentTimeMillis()
+        if (remainingMillis <= 0L) {
+            pinnedExpired = true
+        } else {
+            delay(remainingMillis)
+            pinnedExpired = true
+        }
+    }
+    val pinnedMessage = pinnedCandidate?.takeUnless { pinnedExpired }
     val canManagePinnedMessages = state.isAuthenticated && channelId in state.moderatedChannelIds
     LaunchedEffect(channelId) {
         onRefreshPinnedMessage(channelId)
