@@ -34,6 +34,22 @@ class NotificationPreferencesTest {
     }
 
     @Test
+    fun clearingAllChannelEventOverridesKeepsChannelMasterAndRestoresInheritance() {
+        val preferences = NotificationPreferences()
+            .withGlobalEvent("reply", false)
+            .withChannelEnabled("channel", false)
+            .withChannelEvent("channel", "reply", true)
+            .withChannelEvent("channel", "mention", false)
+
+        val restored = preferences.clearChannelEventOverrides("channel")
+
+        assertFalse(restored.channelOverrides.getValue("channel").enabled)
+        assertTrue(restored.channelOverrides.getValue("channel").eventOverrides.isEmpty())
+        assertFalse(restored.isEnabled("reply", "channel"))
+        assertFalse(restored.isEnabled("mention", "channel"))
+    }
+
+    @Test
     fun disabledChannelSuppressesEveryEventWithoutExpandingOverrides() {
         val preferences = NotificationPreferences()
             .withChannelEnabled("channel", false)

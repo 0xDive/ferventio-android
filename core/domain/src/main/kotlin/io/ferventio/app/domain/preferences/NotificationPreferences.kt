@@ -178,6 +178,17 @@ data class NotificationPreferences(
             ),
         ).normalized()
     }
+    fun clearChannelEventOverrides(channelId: String): NotificationPreferences {
+        val normalizedChannelId = channelId.trim()
+        val current = channelOverrides[normalizedChannelId] ?: return this
+        if (current.eventOverrides.isEmpty()) return this
+        return copy(
+            channelOverrides = channelOverrides + (
+                normalizedChannelId to current.copy(eventOverrides = emptyMap())
+            ),
+        ).normalized()
+    }
+
 
     private fun requireChannelId(value: String): String =
         value.trim().takeIf(String::isNotEmpty)

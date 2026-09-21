@@ -1131,6 +1131,25 @@ private fun NotificationsSettingsPage(
                             }
                         },
                     )
+                    val channelPreferences = preferences.notificationPreferences
+                        .channelOverrides
+                        .getValue(channel.id)
+                    if (channelPreferences.eventOverrides.isNotEmpty()) {
+                        TextButton(
+                            onClick = {
+                                update { current ->
+                                    current.copy(
+                                        notificationPreferences =
+                                            current.notificationPreferences
+                                                .clearChannelEventOverrides(channel.id),
+                                    )
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(stringResource(Res.string.notifications_use_global_all_events))
+                        }
+                    }
                     NotificationEventType.entries.forEach { event ->
                         val overridden = event.ruleId in preferences.notificationPreferences
                             .channelOverrides

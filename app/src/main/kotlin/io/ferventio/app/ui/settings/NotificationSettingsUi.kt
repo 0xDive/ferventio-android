@@ -146,6 +146,22 @@ internal fun NotificationSettingsContent(
                             )
                         },
                     )
+                    val channelPreferences = state.notificationPreferences
+                        .channelOverrides
+                        .getValue(channel.id)
+                    if (channelPreferences.eventOverrides.isNotEmpty()) {
+                        TextButton(
+                            onClick = {
+                                controller.setNotificationPreferences(
+                                    state.notificationPreferences
+                                        .clearChannelEventOverrides(channel.id),
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            LocalizedText("Все события как глобально")
+                        }
+                    }
                     NotificationEventType.entries.forEach { event ->
                         val overridden = event.ruleId in state.notificationPreferences
                             .channelOverrides
