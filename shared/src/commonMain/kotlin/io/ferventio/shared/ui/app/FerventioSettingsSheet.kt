@@ -993,6 +993,15 @@ private fun NotificationsSettingsPage(
 ) {
     var expandedChannelId by remember { mutableStateOf<String?>(null) }
 
+    LaunchedEffect(preferences.notificationPreferences) {
+        val cleaned = preferences.notificationPreferences.clearExpiredChannelMutes(
+            nowEpochMillis = Clock.System.now().toEpochMilliseconds(),
+        )
+        if (cleaned !== preferences.notificationPreferences) {
+            update { current -> current.copy(notificationPreferences = cleaned) }
+        }
+    }
+
     fun legacyDefault(ruleId: String): Boolean = when (ruleId) {
         NotificationEventType.REPLY.ruleId -> preferences.replyNotificationsEnabled
         NotificationEventType.AUTOMOD_HOLD.ruleId -> preferences.autoModNotificationsEnabled

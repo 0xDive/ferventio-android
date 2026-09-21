@@ -173,6 +173,23 @@ data class NotificationPreferences(
             ),
         ).normalized()
     }
+    fun clearExpiredChannelMutes(nowEpochMillis: Long): NotificationPreferences {
+        var updated: LinkedHashMap<String, ChannelNotificationPreferences>? = null
+        channelOverrides.forEach { (channelId, channel) ->
+            val mutedUntil = channel.mutedUntilEpochMillis ?: return@forEach
+            if (mutedUntil > nowEpochMillis) return@forEach
+
+            val target = updated ?: LinkedHashMap(channelOverrides).also { updated = it }
+            if (channel.enabled && channel.eventOverrides.isEmpty()) {
+                target.remove(channelId)
+            } else {
+                target[channelId] = channel.copy(mutedUntilEpochMillis = null)
+            }
+        }
+        val cleaned = updated ?: return this
+        return copy(channelOverrides = cleaned).normalized()
+    }
+
 
     fun withChannelEvent(
         channelId: String,

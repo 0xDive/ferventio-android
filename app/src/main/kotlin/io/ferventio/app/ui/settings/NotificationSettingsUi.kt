@@ -16,6 +16,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -41,6 +42,14 @@ internal fun NotificationSettingsContent(
 ) {
     val context = LocalContext.current
     var expandedChannelId by rememberSaveable { mutableStateOf<String?>(null) }
+    LaunchedEffect(state.notificationPreferences) {
+        val cleaned = state.notificationPreferences.clearExpiredChannelMutes(
+            nowEpochMillis = System.currentTimeMillis(),
+        )
+        if (cleaned !== state.notificationPreferences) {
+            controller.setNotificationPreferences(cleaned)
+        }
+    }
     val legacyDefault: (String) -> Boolean = { ruleId ->
         when (ruleId) {
             NotificationEventType.REPLY.ruleId -> state.replyNotificationsEnabled

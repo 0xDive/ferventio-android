@@ -92,6 +92,31 @@ class NotificationPreferencesTest {
     }
 
     @Test
+    fun expiredMuteRemovesOtherwiseEmptyChannelOverride() {
+        val preferences = NotificationPreferences()
+            .withChannelMutedUntil("channel", 1_000L)
+
+        val cleaned = preferences.clearExpiredChannelMutes(nowEpochMillis = 1_000L)
+
+        assertTrue("channel" !in cleaned.channelOverrides)
+    }
+
+    @Test
+    fun expiredMuteKeepsOtherChannelCustomization() {
+        val preferences = NotificationPreferences()
+            .withChannelEnabled("channel", false)
+            .withChannelEvent("channel", "reply", true)
+            .withChannelMutedUntil("channel", 1_000L)
+
+        val cleaned = preferences.clearExpiredChannelMutes(nowEpochMillis = 2_000L)
+
+        val channel = cleaned.channelOverrides.getValue("channel")
+        assertFalse(channel.enabled)
+        assertEquals(mapOf("reply" to true), channel.eventOverrides)
+        assertEquals(null, channel.mutedUntilEpochMillis)
+    }
+
+    @Test
     fun disabledChannelSuppressesEveryEventWithoutExpandingOverrides() {
         val preferences = NotificationPreferences()
             .withChannelEnabled("channel", false)
