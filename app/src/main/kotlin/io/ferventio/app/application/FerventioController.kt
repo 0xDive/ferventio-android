@@ -6643,7 +6643,9 @@ class FerventioController(
                 null
             }
             val retainedDecorations = droppedMessageId
-                ?.let(state.messageDecorationsById::minus)
+                ?.let { messageId ->
+                    removeLegacyMapKeyIfPresent(state.messageDecorationsById, messageId)
+                }
                 ?: state.messageDecorationsById
             state.copy(
                 messagesByChannel = state.messagesByChannel + (enrichedMessage.channelId to updated),
@@ -6657,11 +6659,15 @@ class FerventioController(
                     decoration.isHighlighted || decoration.isIgnored -> {
                         retainedDecorations + (enrichedMessage.id to decoration)
                     }
-                    enrichedMessage.id in retainedDecorations -> retainedDecorations - enrichedMessage.id
+                    enrichedMessage.id in retainedDecorations ->
+                        removeLegacyMapKeyIfPresent(retainedDecorations, enrichedMessage.id)
                     else -> retainedDecorations
                 },
                 rateLimitsByChannel = if (isOwnMessage) {
-                    state.rateLimitsByChannel - enrichedMessage.channelId
+                    removeLegacyMapKeyIfPresent(
+                        state.rateLimitsByChannel,
+                        enrichedMessage.channelId,
+                    )
                 } else {
                     state.rateLimitsByChannel
                 },

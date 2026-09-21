@@ -91,3 +91,12 @@ internal inline fun <T, K> prependLegacyDistinctByKeyBounded(
         }
     }
 }
+
+internal fun <K, V> removeLegacyMapKeyIfPresent(
+    source: Map<K, V>,
+    key: K,
+): Map<K, V> = if (key in source) {
+    source - key
+} else {
+    source
+}

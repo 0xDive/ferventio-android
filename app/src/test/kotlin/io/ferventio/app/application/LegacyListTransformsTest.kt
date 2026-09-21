@@ -106,4 +106,16 @@ class LegacyListTransformsTest {
         assertEquals(listOf(Item("two", 20), Item("one", 1)), moved)
         assertEquals(listOf(Item("one", 1)), cappedSame)
     }
+
+    @Test
+    fun missingMapRemovalReusesMapInstance() {
+        val source = mapOf("one" to 1)
+
+        val same = removeLegacyMapKeyIfPresent(source, "missing")
+        val removed = removeLegacyMapKeyIfPresent(source, "one")
+
+        assertTrue(same === source)
+        assertTrue(removed !== source)
+        assertTrue(removed.isEmpty())
+    }
 }
