@@ -585,6 +585,9 @@ internal fun ChannelChatContent(
         }
     }
     val catalog = state.emoteCatalogByChannel[channelId].orEmpty()
+    val emoteSearchIndex = remember(catalog) {
+        EmoteCatalogRanking.buildSearchIndex(catalog)
+    }
     val emoteCatalogByProviderAndId = remember(catalog) {
         catalog.associateBy { asset -> asset.provider to asset.id }
     }
@@ -636,7 +639,7 @@ internal fun ChannelChatContent(
     val suggestions = remember(
         input,
         userSuggestionIndex,
-        catalog,
+        emoteSearchIndex,
         state.recentEmoteKeys,
         state.favoriteEmoteKeys,
     ) {
@@ -649,6 +652,7 @@ internal fun ChannelChatContent(
             favoriteEmoteKeys = state.favoriteEmoteKeys,
             currentUserId = currentUserId,
             userIndex = userSuggestionIndex,
+            emoteSearchIndex = emoteSearchIndex,
         )
     }
     LaunchedEffect(showEmotePicker, suggestions.isNotEmpty()) {

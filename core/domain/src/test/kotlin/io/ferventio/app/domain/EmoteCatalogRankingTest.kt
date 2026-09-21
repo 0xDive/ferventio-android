@@ -64,6 +64,49 @@ class EmoteCatalogRankingTest {
     }
 
     @Test
+    fun indexedSearchMatchesDirectRanking() {
+        val exact = asset("1", "Cat")
+        val prefix = asset("2", "CatJam")
+        val contains = asset("3", "MegaCat")
+        val catalog = listOf(contains, prefix, exact)
+        val recent = listOf(prefix.usageKey, prefix.usageKey)
+
+        val direct = EmoteCatalogRanking.search(
+            query = "Cat",
+            catalog = catalog,
+            recentEmoteKeys = recent,
+            favoriteEmoteKeys = setOf(exact.usageKey),
+            limit = 8,
+        )
+        val indexed = EmoteCatalogRanking.search(
+            query = "Cat",
+            index = EmoteCatalogRanking.buildSearchIndex(catalog),
+            recentEmoteKeys = recent,
+            favoriteEmoteKeys = setOf(exact.usageKey),
+            limit = 8,
+        )
+
+        assertEquals(direct, indexed)
+    }
+
+    @Test
+    fun indexedSearchRespectsProviderFilter() {
+        val sevenTv = asset("1", "WaveCat", provider = "7tv")
+        val twitch = asset("2", "WaveCat", provider = "twitch")
+        val index = EmoteCatalogRanking.buildSearchIndex(listOf(sevenTv, twitch))
+
+        val result = EmoteCatalogRanking.search(
+            query = "Wave",
+            index = index,
+            recentEmoteKeys = emptyList(),
+            limit = 8,
+            providerId = "twitch",
+        )
+
+        assertEquals(listOf(twitch), result)
+    }
+
+    @Test
     fun recentKeepsLastUsedOrderAndRemovesDuplicates() {
         val older = asset("1", "Older")
         val newest = asset("2", "Newest")
@@ -94,10 +137,11 @@ class EmoteCatalogRankingTest {
         id: String,
         code: String,
         scope: EmoteScope = EmoteScope.GLOBAL,
+        provider: String = "7tv",
     ) = ThirdPartyEmoteAsset(
         id = id,
         code = code,
-        provider = "7tv",
+        provider = provider,
         imageType = "webp",
         animated = false,
         imageUrl1x = "https://cdn/$id/1",

@@ -50,6 +50,26 @@ class ComposerAutocompleteTest {
     }
 
     @Test
+    fun prebuiltEmoteIndexAvoidsCatalogRescanWhileTyping() {
+        val regular = emote("1", "CatWave")
+        val frequent = emote("2", "CatJam")
+        val index = EmoteCatalogRanking.buildSearchIndex(listOf(regular, frequent))
+
+        val result = ComposerAutocomplete.suggestions(
+            input = "hello Cat",
+            messages = emptyList(),
+            profilesById = emptyMap(),
+            catalog = emptyList(),
+            recentEmoteKeys = listOf(frequent.usageKey, frequent.usageKey),
+            favoriteEmoteKeys = emptySet(),
+            currentUserId = null,
+            emoteSearchIndex = index,
+        )
+
+        assertEquals(frequent, (result.first() as ComposerSuggestion.Emote).asset)
+    }
+
+    @Test
     fun slashInputDoesNotShowACommandWhitelist() {
         val result = ComposerAutocomplete.suggestions(
             input = "/anything twitch may support",
@@ -73,6 +93,20 @@ class ComposerAutocompleteTest {
 
         assertEquals("hello @alice ", result)
     }
+
+    private fun emote(
+        id: String,
+        code: String,
+    ) = ThirdPartyEmoteAsset(
+        id = id,
+        code = code,
+        provider = "7tv",
+        imageType = "webp",
+        animated = false,
+        imageUrl1x = "https://cdn/$id/1",
+        imageUrl2x = "https://cdn/$id/2",
+        imageUrl3x = "https://cdn/$id/3",
+    )
 
     private fun message(id: String, userId: String, login: String, displayName: String) = ChatMessage(
         id = id,
