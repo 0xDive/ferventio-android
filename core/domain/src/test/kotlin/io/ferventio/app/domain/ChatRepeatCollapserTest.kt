@@ -3,6 +3,7 @@ package io.ferventio.app.domain
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -33,7 +34,7 @@ class ChatRepeatCollapserTest {
 
         val plan = ChatRepeatCollapser.build(messages)
 
-        assertEquals(setOf("1", "2"), plan.visibleMessageIds)
+        assertSame(ChatRepeatCollapsePlan.Empty, plan)
         assertNull(plan.summaryFor("1"))
     }
 
@@ -48,7 +49,7 @@ class ChatRepeatCollapserTest {
 
         val plan = ChatRepeatCollapser.build(messages)
 
-        assertEquals(messages.map { it.id }.toSet(), plan.visibleMessageIds)
+        assertSame(ChatRepeatCollapsePlan.Empty, plan)
         assertTrue(plan.summariesByAnchorId.isEmpty())
     }
 
@@ -84,7 +85,7 @@ class ChatRepeatCollapserTest {
 
         val plan = ChatRepeatCollapser.build(messages, windowMillis = 10_000L)
 
-        assertEquals(setOf("1", "2", "3"), plan.visibleMessageIds)
+        assertSame(ChatRepeatCollapsePlan.Empty, plan)
         assertTrue(plan.summariesByAnchorId.isEmpty())
     }
 
