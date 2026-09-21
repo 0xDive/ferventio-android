@@ -6904,7 +6904,7 @@ class FerventioController(
         message: ChatMessage,
         state: FerventioUiState,
     ): ChatMessage {
-        val baseMessage = removeThirdPartyEmoteFragments(message)
+        val baseMessage = stripLegacyThirdPartyEmoteFragments(message)
         val emotes = parsedThirdPartyEmotesByChannel[message.channelId] ?: run {
             rebuildThirdPartyEmoteCache(state, listOf(message.channelId))
             parsedThirdPartyEmotesByChannel[message.channelId].orEmpty()
@@ -6912,39 +6912,6 @@ class FerventioController(
         return ThirdPartyEmoteParser.enrich(baseMessage, emotes)
     }
 
-    private fun removeThirdPartyEmoteFragments(message: ChatMessage): ChatMessage {
-        var changed = false
-        var previousSourceWasEmote = false
-        val fragments = buildList {
-            fun appendText(value: String) {
-                if (value.isEmpty()) return
-                val previous = lastOrNull() as? ChatFragment.Text
-                if (previous == null) add(ChatFragment.Text(value))
-                else this[lastIndex] = previous.copy(text = previous.text + value)
-            }
-
-            message.fragments.forEach { fragment ->
-                if (fragment is ChatFragment.ThirdPartyEmote) {
-                    changed = true
-                    // Parsing a composite removes the separator before the zero-width layer.
-                    // Restore one while rebuilding the source text, otherwise a future catalog
-                    // refresh would see "BaseOverlay" and could no longer resolve either token.
-                    if (fragment.zeroWidth && previousSourceWasEmote) appendText(" ")
-                    appendText(fragment.text)
-                    previousSourceWasEmote = true
-                } else {
-                    add(fragment)
-                    previousSourceWasEmote = when (fragment) {
-                        is ChatFragment.TwitchEmote,
-                        is ChatFragment.Gif,
-                        is ChatFragment.Cheermote -> true
-                        else -> false
-                    }
-                }
-            }
-        }
-        return if (changed) message.copy(fragments = fragments) else message
-    }
 
     private fun formatBytes(bytes: Long): String {
         if (bytes <= 0L) return "кэш изображений"
