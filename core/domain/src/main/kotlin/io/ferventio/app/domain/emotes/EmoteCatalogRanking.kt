@@ -17,6 +17,11 @@ internal data class EmoteCatalogSearchEntry(
     val normalizedCode: String,
 )
 
+internal data class EmoteUsageStat(
+    val count: Int,
+    val mostRecentIndex: Int,
+)
+
 class EmoteUsageRanking internal constructor(
     internal val usageByKey: Map<String, EmoteUsageStat>,
 )
@@ -219,8 +224,4 @@ object EmoteCatalogRanking {
         else -> Int.MAX_VALUE
     }
 
-    internal data class EmoteUsageStat(
-        val count: Int,
-        val mostRecentIndex: Int,
-    )
 }
