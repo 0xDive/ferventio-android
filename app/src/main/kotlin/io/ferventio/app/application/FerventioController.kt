@@ -6436,23 +6436,10 @@ class FerventioController(
             maxCount = MAX_ATTENTION_COUNT,
         )
         mutableState.update { state ->
-            val mergedChannelAttention = restoredSummary.channelAttention.entries
-                .fold(state.channelAttention) { accumulated, item ->
-                    val previous = accumulated[item.key]
-                    val restored = item.value
-                    accumulated + (
-                        item.key to if (previous == null) {
-                            restored
-                        } else {
-                            previous.copy(
-                                unreadCount = maxOf(previous.unreadCount, restored.unreadCount),
-                                mentionCount = maxOf(previous.mentionCount, restored.mentionCount),
-                                firstUnreadMessageId =
-                                    previous.firstUnreadMessageId ?: restored.firstUnreadMessageId,
-                            )
-                        }
-                    )
-                }
+            val mergedChannelAttention = mergeLegacyChannelAttention(
+                existing = state.channelAttention,
+                restored = restoredSummary.channelAttention,
+            )
             state.copy(
                 attentionEntries = remapped,
                 mentionUnreadCount = restoredSummary.unreadCount,

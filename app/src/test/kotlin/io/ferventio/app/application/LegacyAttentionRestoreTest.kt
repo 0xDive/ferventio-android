@@ -2,6 +2,7 @@ package io.ferventio.app.application
 
 import io.ferventio.app.domain.AttentionEntry
 import io.ferventio.app.domain.ChatChannel
+import io.ferventio.app.domain.ChannelAttention
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -54,6 +55,62 @@ class LegacyAttentionRestoreTest {
         assertEquals(2, summary.channelAttention.getValue("1").mentionCount)
         assertEquals("early", summary.channelAttention.getValue("1").firstUnreadMessageId)
         assertTrue("2" !in summary.channelAttention)
+    }
+
+    @Test
+    fun unchangedAttentionMergeReusesExistingMap() {
+        val existing = mapOf(
+            "1" to ChannelAttention(
+                unreadCount = 3,
+                mentionCount = 2,
+                firstUnreadMessageId = "first",
+            ),
+        )
+
+        val result = mergeLegacyChannelAttention(
+            existing = existing,
+            restored = mapOf(
+                "1" to ChannelAttention(
+                    unreadCount = 2,
+                    mentionCount = 1,
+                    firstUnreadMessageId = "restored",
+                ),
+            ),
+        )
+
+        assertTrue(result === existing)
+    }
+
+    @Test
+    fun attentionMergeCopiesOnceAndKeepsMaxCounters() {
+        val existing = mapOf(
+            "1" to ChannelAttention(
+                unreadCount = 1,
+                mentionCount = 1,
+                firstUnreadMessageId = null,
+            ),
+        )
+
+        val result = mergeLegacyChannelAttention(
+            existing = existing,
+            restored = mapOf(
+                "1" to ChannelAttention(
+                    unreadCount = 3,
+                    mentionCount = 2,
+                    firstUnreadMessageId = "first",
+                ),
+                "2" to ChannelAttention(
+                    unreadCount = 4,
+                    mentionCount = 4,
+                    firstUnreadMessageId = "second",
+                ),
+            ),
+        )
+
+        assertEquals(3, result.getValue("1").unreadCount)
+        assertEquals(2, result.getValue("1").mentionCount)
+        assertEquals("first", result.getValue("1").firstUnreadMessageId)
+        assertEquals(4, result.getValue("2").unreadCount)
     }
 
     @Test

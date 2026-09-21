@@ -1,6 +1,7 @@
 package io.ferventio.app.application
 
 import io.ferventio.app.domain.AttentionEntry
+import io.ferventio.app.domain.ChannelAttention
 import io.ferventio.app.domain.ChatChannel
 
 internal fun remapLegacyAttentionEntries(
@@ -31,7 +32,7 @@ internal fun remapLegacyAttentionEntries(
 }
 
 internal data class LegacyAttentionSummary(
-    val channelAttention: Map<String, io.ferventio.app.domain.ChannelAttention>,
+    val channelAttention: Map<String, ChannelAttention>,
     val unreadCount: Int,
 )
 
@@ -69,7 +70,7 @@ internal fun summarizeLegacyAttention(
 
     return LegacyAttentionSummary(
         channelAttention = byChannel.mapValues { (_, summary) ->
-            io.ferventio.app.domain.ChannelAttention(
+            ChannelAttention(
                 unreadCount = summary.count,
                 mentionCount = summary.count,
                 firstUnreadMessageId = summary.firstMessageId,
@@ -77,4 +78,31 @@ internal fun summarizeLegacyAttention(
         },
         unreadCount = unreadCount,
     )
+}
+
+internal fun mergeLegacyChannelAttention(
+    existing: Map<String, ChannelAttention>,
+    restored: Map<String, ChannelAttention>,
+): Map<String, ChannelAttention> {
+    if (restored.isEmpty()) return existing
+
+    var updated: MutableMap<String, ChannelAttention>? = null
+    restored.forEach { (channelId, restoredAttention) ->
+        val previous = existing[channelId]
+        val merged = if (previous == null) {
+            restoredAttention
+        } else {
+            previous.copy(
+                unreadCount = maxOf(previous.unreadCount, restoredAttention.unreadCount),
+                mentionCount = maxOf(previous.mentionCount, restoredAttention.mentionCount),
+                firstUnreadMessageId =
+                    previous.firstUnreadMessageId ?: restoredAttention.firstUnreadMessageId,
+            )
+        }
+        if (previous == merged) return@forEach
+
+        val target = updated ?: LinkedHashMap(existing).also { updated = it }
+        target[channelId] = merged
+    }
+    return updated ?: existing
 }
